@@ -1,2 +1,47 @@
+# ==========================================
+# Node.js & React Dependencies
+# ==========================================
 node_modules/
+/frontend/node_modules/
+/services/*/node_modules/
+
+# ==========================================
+# Environment Variables (CRITICAL SECURITY)
+# ==========================================
+# NEVER push your database passwords or API keys to GitHub!
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
+
+# ==========================================
+# Build Outputs
+# ==========================================
+/frontend/build/
+/frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# OS Generated Files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==========================================
+# Logs & Testing
+# ==========================================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
