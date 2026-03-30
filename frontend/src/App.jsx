@@ -4,6 +4,12 @@ import PatientRegister from './pages/patient/PatientRegister';
 import PatientLogin from './pages/patient/PatientLogin';
 import PatientDashboard from './pages/patient/PatientDashboard'; 
 
+
+import DoctorRegister from './pages/Doctor/DoctorRegister';
+
+
+
+
 function App() {
   return (
     <BrowserRouter>
@@ -12,6 +18,8 @@ function App() {
         <Route path="/register" element={<PatientRegister />} />
         <Route path="/login" element={<PatientLogin />} />
         <Route path="/dashboard" element={<PatientDashboard />} /> 
+        <Route path="/doctor/register" element={<DoctorRegister />} />
+
       </Routes>
     </BrowserRouter>
   );
