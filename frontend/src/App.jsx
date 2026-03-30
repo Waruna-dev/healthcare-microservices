@@ -1,15 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import PatientRegister from './pages/patient/PatientRegister';
+import PatientLogin from './pages/patient/PatientLogin';
 
 function App() {
   return (
     <BrowserRouter>
-      <div>
-        <h1>Healthcare Platform</h1>
-        {/* add routes here! */}
-        <Routes>
-          <Route path="/" element={<p>Welcome to the platform</p>} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/register" element={<PatientRegister />} />
+        <Route path="/login" element={<PatientLogin />} />
+      </Routes>
     </BrowserRouter>
   );
 }
