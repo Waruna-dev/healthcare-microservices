@@ -2,6 +2,8 @@
 const Patient = require('../models/Patient');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
 
 // Generate JWT Token function
 const generateToken = (id) => {
@@ -53,17 +55,18 @@ const registerPatient = async (req, res) => {
 const loginPatient = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    // 1. Find patient by email
     const patient = await Patient.findOne({ email });
 
-    // 2. Check password matches
     if (patient && (await bcrypt.compare(password, patient.password))) {
       res.json({
         _id: patient.id,
         name: patient.name,
         email: patient.email,
         token: generateToken(patient._id),
+        
+        // ---> ADD THIS ONE LINE RIGHT HERE <---
+        uploadedReports: patient.uploadedReports 
+        
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
@@ -104,4 +107,35 @@ const uploadMedicalReport = async (req, res) => {
   }
 };
 
-module.exports = { registerPatient, loginPatient, uploadMedicalReport };
+const downloadMedicalReport = async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const patient = await Patient.findById(req.patient._id);
+
+    // 1. Zero-Trust Check: Does this patient actually own this file?
+    // Multer saves paths as 'uploads/12345.pdf' or 'uploads\12345.pdf' (on Windows)
+    const ownsFile = patient.uploadedReports.some(
+      report => report.filePath.includes(filename)
+    );
+
+    if (!ownsFile) {
+      return res.status(403).json({ message: 'Unauthorized access to this medical record.' });
+    }
+
+    // 2. Locate the file on the server
+    const filePath = path.join(__dirname, '../uploads', filename);
+
+    // 3. Verify it exists physically
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File no longer exists on the server.' });
+    }
+
+    // 4. Send the file securely
+    res.download(filePath);
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving file.' });
+  }
+};
+
+module.exports = { registerPatient, loginPatient, uploadMedicalReport, downloadMedicalReport };

@@ -13,20 +13,19 @@ const PatientDashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState({ name: 'Patient' });
   
-  // Upload State Variables
+  // Upload & Records State
   const [isUploading, setIsUploading] = useState(false);
   const [reports, setReports] = useState([]);
   const fileInputRef = useRef(null);
 
-  // 1. Fetch the user's data on load
-  // 1. Fetch the user's data on load
+  // 1. Fetch the user's data and historical reports on load
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser).patient || JSON.parse(storedUser);
       setUser(parsedUser);
       
-      // FIX: Tell React to load the historical reports into the UI!
+      // Load historical reports into the UI
       if (parsedUser.uploadedReports) {
         setReports(parsedUser.uploadedReports);
       }
@@ -35,13 +34,14 @@ const PatientDashboard = () => {
     }
   }, [navigate]);
 
+  // 2. Logout Handler
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
   };
 
-  // 2. File Upload Function
+  // 3. Secure File Upload Function
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -52,7 +52,7 @@ const PatientDashboard = () => {
     }
 
     const formData = new FormData();
-    formData.append('reportFile', file); // Must match your Multer configuration!
+    formData.append('reportFile', file); 
 
     setIsUploading(true);
     try {
@@ -62,15 +62,13 @@ const PatientDashboard = () => {
         },
       });
       
-      // 1. Updates the screen instantly
+      // Update the screen instantly
       setReports(response.data.reports); 
       
-      // --- THE NEW MEMORY FIX STARTS HERE ---
-      // 2. Updates the browser's memory so it survives a refresh!
+      // Update local storage so the file survives a page refresh
       const storedUserString = localStorage.getItem('user');
       if (storedUserString) {
         const storedUser = JSON.parse(storedUserString);
-        // Handle both possible structures of your user object
         if (storedUser.patient) {
           storedUser.patient.uploadedReports = response.data.reports;
         } else {
@@ -78,7 +76,6 @@ const PatientDashboard = () => {
         }
         localStorage.setItem('user', JSON.stringify(storedUser));
       }
-      // --- THE NEW MEMORY FIX ENDS HERE ---
 
       alert("Report uploaded successfully!");
       
@@ -87,11 +84,36 @@ const PatientDashboard = () => {
       alert(error.response?.data?.message || "Failed to upload report.");
     } finally {
       setIsUploading(false);
+      // Reset input so the user can upload another file if needed
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  // Animation variants
+  // 4. Secure File Download Function
+  const handleDownload = async (file) => {
+    try {
+      const actualFilename = file.filePath.split(/[\\/]/).pop();
+
+      const response = await api.get(`/patients/reports/${actualFilename}`, {
+        responseType: 'blob' 
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', file.fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to securely download the report. It may have been moved or deleted.");
+    }
+  };
+
+  // Animation variants for smooth loading
   const containerVars = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -108,7 +130,6 @@ const PatientDashboard = () => {
       <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-12">
-            {/* FIXED: Added Link to route back to Home */}
             <Link to="/" className="text-2xl font-extrabold text-primary font-headline tracking-tighter hover:opacity-80 transition-opacity">
               CareSync
             </Link>
@@ -167,10 +188,9 @@ const PatientDashboard = () => {
           className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
           
-          {/* LEFT COLUMN: Vitals & AI Diagnostics (Task 1 & 3) */}
+          {/* LEFT COLUMN: Vitals & AI Diagnostics */}
           <div className="lg:col-span-8 space-y-8">
             
-            {/* Task 1: Real-Time Biometrics Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {[
                 { title: "Heart Rate", val: "72", unit: "bpm", icon: <Heart size={24} />, color: "text-error", bg: "bg-error-container" },
@@ -191,7 +211,6 @@ const PatientDashboard = () => {
               ))}
             </div>
 
-            {/* Task 3: AI Smart Diagnostics */}
             <motion.div variants={itemVars} className="bg-primary p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden text-on-primary shadow-elevated">
               <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
               
@@ -232,17 +251,15 @@ const PatientDashboard = () => {
             </motion.div>
           </div>
 
-          {/* RIGHT COLUMN: Records Vault & Privacy (Task 2, 4, 5) */}
+          {/* RIGHT COLUMN: Records Vault & Privacy */}
           <div className="lg:col-span-4 space-y-8">
             
-            {/* Task 2: Unified Medical Records Vault */}
             <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-primary-fixed text-primary rounded-lg"><FileText size={20} /></div>
                 <h2 className="text-xl font-bold font-headline">Records Vault</h2>
               </div>
               
-              {/* FIXED: HIDDEN FILE INPUT */}
               <input 
                 type="file" 
                 ref={fileInputRef}
@@ -251,7 +268,6 @@ const PatientDashboard = () => {
                 className="hidden" 
               />
 
-              {/* FIXED: PDF Upload Dropzone */}
               <div 
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed border-outline-variant/50 rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-surface-container-low/50 hover:bg-surface-container-low transition-colors cursor-pointer group mb-6 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
@@ -269,46 +285,39 @@ const PatientDashboard = () => {
                 <p className="text-xs text-on-surface-variant max-w-[200px]">Securely upload PDF lab results or doctor notes for AI analysis.</p>
               </div>
 
-              {/* Recent Files */}
               <div className="space-y-3">
                 <h5 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Recently Processed</h5>
                 
-                {/* Dynamically render uploaded reports if any, else show mocks */}
+                {/* Empty State Logic Applied Here */}
                 {reports.length > 0 ? (
                   reports.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+                    <div 
+                      key={idx} 
+                      onClick={() => handleDownload(file)} 
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-error-container text-error flex items-center justify-center"><FileText size={16} /></div>
                         <div>
                           <p className="text-sm font-bold text-on-surface truncate max-w-[150px]">{file.fileName}</p>
-                          <p className="text-[10px] text-on-surface-variant font-medium">Just now</p>
+                          <p className="text-[10px] text-primary font-bold uppercase tracking-wider mt-1">Click to download</p>
                         </div>
                       </div>
                       <ChevronRight size={16} className="text-outline" />
                     </div>
                   ))
                 ) : (
-                  // Mock data placeholder until they upload
-                  [
-                    { name: "Blood_Work_Q1_2026.pdf", date: "Today, 09:41 AM" },
-                    { name: "Cardiology_Consult.pdf", date: "Mar 28, 2026" }
-                  ].map((file, idx) => (
-                    <div key={`mock-${idx}`} className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-error-container text-error flex items-center justify-center"><FileText size={16} /></div>
-                        <div>
-                          <p className="text-sm font-bold text-on-surface truncate max-w-[150px]">{file.name}</p>
-                          <p className="text-[10px] text-on-surface-variant font-medium">{file.date}</p>
-                        </div>
-                      </div>
-                      <ChevronRight size={16} className="text-outline" />
+                  <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-outline-variant/20 rounded-2xl bg-surface-container-lowest/50">
+                    <div className="w-10 h-10 bg-surface-container-low rounded-full flex items-center justify-center text-outline mb-3">
+                      <FileText size={18} />
                     </div>
-                  ))
+                    <p className="text-sm font-bold text-on-surface">Vault is empty</p>
+                    <p className="text-xs text-on-surface-variant mt-1 max-w-[180px]">Your securely processed medical reports will appear here.</p>
+                  </div>
                 )}
               </div>
             </motion.div>
 
-            {/* Task 4 & 5: Zero-Trust Privacy Settings */}
             <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
                <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-secondary-container text-secondary rounded-lg"><ShieldCheck size={20} /></div>
@@ -346,7 +355,7 @@ const PatientDashboard = () => {
 // SVG Icon Helper
 const Sparkles = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
     <path d="M5 3v4M3 5h4"/>
   </svg>
 );
