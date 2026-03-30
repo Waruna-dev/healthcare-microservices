@@ -17,6 +17,14 @@ app.use(
   createProxyMiddleware({
     target: 'http://localhost:5005',
     changeOrigin: true,
+    // ADD THIS BLOCK:
+    pathRewrite: {
+      '^/api/patients': '', // This removes /api/patients from the URL before it hits port 5005
+    },
+    // OPTIONAL: Add this to see exactly what's happening in your terminal
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying]: ${req.method} ${req.url} -> http://localhost:5005${req.url.replace('/api/patients', '')}`);
+    }
   })
 );
 

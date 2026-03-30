@@ -30,8 +30,8 @@ const PatientLogin = () => {
       
       setMessage({ text: 'Authentication successful. Redirecting...', type: 'success' });
       
-      // Redirect to dashboard (uncomment when dashboard is ready)
-      // setTimeout(() => navigate('/dashboard'), 1000);
+      // The slashes are removed! Now it will wait 1 second and redirect.
+      setTimeout(() => navigate('/dashboard'), 1000);
 
     } catch (error) {
       setMessage({ 

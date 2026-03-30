@@ -17,7 +17,8 @@ app.use(express.json()); // Allows us to accept JSON data in the body
 app.use('/uploads', express.static('uploads'));
 
 // Connect our real patient routes (Registration & Login)
-app.use('/api/patients', require('./routes/patientRoutes'));
+//app.use('/api/patients', require('./routes/patientRoutes'));
+app.use('/', require('./routes/patientRoutes'));
 
 const PORT = process.env.PORT || 5005;
 
