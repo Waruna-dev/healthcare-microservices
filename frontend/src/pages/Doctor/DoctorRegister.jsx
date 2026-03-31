@@ -44,7 +44,6 @@ const DoctorRegister = () => {
       // Generate a random password since it's required by backend
       const randomPassword = Math.random().toString(36).slice(-8) + '!@#' + Date.now();
       
-      // ✅ FIXED: Changed port from 5000 to 5025
       const response = await fetch('http://localhost:5025/api/doctors/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,7 +65,8 @@ const DoctorRegister = () => {
       
       if (response.ok) {
         setMessage('✅ Doctor registered successfully! Redirecting to login...');
-        setTimeout(() => navigate('/login'), 2000);
+        // ✅ FIXED: Redirect to /doctor/login (not /login)
+        setTimeout(() => navigate('/doctor/login'), 2000);
       } else {
         setError(data.message || data.error || 'Registration failed');
       }
@@ -316,10 +316,11 @@ const DoctorRegister = () => {
                   )}
                 </button>
 
+                {/* ✅ FIXED: Sign In link now goes to /doctor/login */}
                 <div className="text-center pt-4">
                   <p className="text-gray-500 text-sm">
                     Already have an account?{' '}
-                    <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+                    <Link to="/doctor/login" className="text-blue-600 hover:text-blue-700 font-semibold">
                       Sign In
                     </Link>
                   </p>
