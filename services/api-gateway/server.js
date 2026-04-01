@@ -17,22 +17,36 @@ app.use(
   createProxyMiddleware({
     target: 'http://localhost:5005',
     changeOrigin: true,
-    // ADD THIS BLOCK:
     pathRewrite: {
       '^/api/patients': '', // This removes /api/patients from the URL before it hits port 5005
     },
-    // OPTIONAL: Add this to see exactly what's happening in your terminal
     onProxyReq: (proxyReq, req, res) => {
-      console.log(`[Proxying]: ${req.method} ${req.url} -> http://localhost:5005${req.url.replace('/api/patients', '')}`);
+      console.log(`[Proxying Patient]: ${req.method} ${req.url} -> http://localhost:5005${req.url.replace('/api/patients', '')}`);
     }
   })
 );
 
-// 3. Placeholders for your future services!
-// You will uncomment these later as you build the other services
+// 3. Admin Service Proxy (NEW)
+// Any request starting with /api/admin gets forwarded to Port 5002
+app.use(
+  '/api/admin',
+  createProxyMiddleware({
+    target: 'http://localhost:5002',
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api/admin': '', // This removes /api/admin from the URL before it hits port 5002
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying Admin]: ${req.method} ${req.url} -> http://localhost:5002${req.url.replace('/api/admin', '')}`);
+    }
+  })
+);
+
+// 4. Placeholders for your future services!
+// Notice: Shifted ports to 5003 and 5004 so they don't conflict with Admin (5002)
 /*
-app.use('/api/doctors', createProxyMiddleware({ target: 'http://localhost:5002', changeOrigin: true }));
-app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:5003', changeOrigin: true }));
+app.use('/api/doctors', createProxyMiddleware({ target: 'http://localhost:5003', changeOrigin: true }));
+app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:5004', changeOrigin: true }));
 */
 
 // Basic route to check if the Gateway is running
@@ -45,4 +59,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`API Gateway running on port ${PORT}`);
   console.log(`-> Proxying /api/patients to http://localhost:5005`);
+  console.log(`-> Proxying /api/admin to http://localhost:5002`);
 });

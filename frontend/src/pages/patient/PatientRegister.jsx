@@ -62,7 +62,7 @@ const PatientRegister = () => {
 
   return (
     <div className="bg-background text-on-surface font-body selection:bg-primary-fixed selection:text-primary min-h-screen flex flex-col">
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         
         {/* --- Left Side: Editorial Image & Branding --- */}
         <section className="hidden md:flex md:w-1/2 relative bg-primary items-center justify-center p-12 overflow-hidden">
@@ -93,8 +93,20 @@ const PatientRegister = () => {
         </section>
 
         {/* --- Right Side: Registration Form --- */}
-        <section className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-surface overflow-y-auto">
-          <div className="w-full max-w-md my-auto">
+        <section className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-surface overflow-y-auto relative">
+          
+          {/* UPDATED: Back to Home Button added here */}
+          <div className="absolute top-6 right-6 md:top-8 md:right-8 z-20">
+            <Link 
+              to="/" 
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-on-surface-variant hover:text-primary bg-surface-container-lowest hover:bg-surface-container-low rounded-full border border-outline-variant/50 transition-all shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+              Back to Home
+            </Link>
+          </div>
+
+          <div className="w-full max-w-md my-auto pt-12 md:pt-0">
             
             {/* Mobile Branding Header */}
             <div className="md:hidden flex items-center gap-2 mb-10">
@@ -191,7 +203,7 @@ const PatientRegister = () => {
                     className="absolute inset-y-0 right-0 pr-4 flex items-center text-outline hover:text-on-surface transition-colors focus:outline-none"
                   >
                     <span className="material-symbols-outlined text-lg">
-                      {showPassword ? "visibility_off" : "visibility"}
+                      {showPassword ? "visibility" : "visibility_off"}
                     </span>
                   </button>
                 </div>

@@ -143,9 +143,16 @@ const PatientDashboard = () => {
             <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all">
               <Bell size={20} />
             </button>
-            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all">
+            
+            {/* UPDATED: Settings icon is now a Link to /profile */}
+            <Link 
+              to="/profile" 
+              className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all flex items-center justify-center"
+              title="Profile Settings"
+            >
               <Settings size={20} />
-            </button>
+            </Link>
+
             <button 
               onClick={handleLogout}
               className="ml-2 flex items-center gap-2 px-4 py-2 bg-error-container text-error rounded-xl font-bold text-sm hover:opacity-80 transition-opacity"
@@ -162,7 +169,7 @@ const PatientDashboard = () => {
         <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div className="space-y-2">
             <h1 className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface">
-              Good morning, <span className="text-primary">{user.name.split(' ')[0]}</span>
+              Welcome Back, <span className="text-primary">{user.name.split(' ')[0]}</span>
             </h1>
             <p className="text-on-surface-variant font-medium text-lg">Your digital sanctuary is secure and optimized.</p>
           </div>
