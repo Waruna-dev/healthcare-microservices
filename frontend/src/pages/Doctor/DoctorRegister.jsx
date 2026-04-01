@@ -17,8 +17,10 @@ const DoctorRegister = () => {
     experience: '',
     consultationFee: '',
     address: '',
-    bio: ''
+    bio: '',
+    gender: ''
   });
+  const [profileImage, setProfileImage] = useState(null);
 
   const specialties = [
     'Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics',
@@ -34,6 +36,13 @@ const DoctorRegister = () => {
     setError('');
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setProfileImage(file);
+    setMessage('');
+    setError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -44,21 +53,25 @@ const DoctorRegister = () => {
       // Generate a random password since it's required by backend
       const randomPassword = Math.random().toString(36).slice(-8) + '!@#' + Date.now();
       
-      const response = await fetch('http://localhost:5025/api/doctors/register', {
+      const payload = new FormData();
+      payload.append('name', formData.name);
+      payload.append('email', formData.email);
+      payload.append('password', randomPassword);
+      payload.append('specialty', formData.specialty);
+      payload.append('phone', formData.phone);
+      payload.append('licenseNumber', formData.licenseNumber);
+      payload.append('experience', String(parseInt(formData.experience) || 0));
+      payload.append('consultationFee', String(parseFloat(formData.consultationFee) || 0));
+      payload.append('address', formData.address || '');
+      payload.append('bio', formData.bio || '');
+      payload.append('gender', formData.gender || '');
+      if (profileImage) {
+        payload.append('profileImage', profileImage);
+      }
+
+      const response = await fetch('/api/doctors/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: randomPassword,
-          specialty: formData.specialty,
-          phone: formData.phone,
-          licenseNumber: formData.licenseNumber,
-          experience: parseInt(formData.experience) || 0,
-          consultationFee: parseFloat(formData.consultationFee) || 0,
-          address: formData.address || '',
-          bio: formData.bio || ''
-        })
+        body: payload
       });
 
       const data = await response.json();
@@ -206,6 +219,23 @@ const DoctorRegister = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Gender
+                    </label>
+                    <select
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Phone Number *
                     </label>
                     <input
@@ -256,7 +286,7 @@ const DoctorRegister = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Consultation Fee ($)
+                      Consultation Fee (Rs.)
                     </label>
                     <input
                       type="number"
@@ -282,6 +312,18 @@ const DoctorRegister = () => {
                       placeholder="Hospital address"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Profile Image (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                 </div>
 
                 <div>

@@ -70,6 +70,14 @@ const doctorSchema = new mongoose.Schema({
         trim: true,
         maxlength: [1000, 'Bio cannot exceed 1000 characters']
     },
+    gender: {
+        type: String,
+        default: '',
+        enum: {
+            values: ['', 'male', 'female', 'other'],
+            message: '{VALUE} is not a valid gender'
+        }
+    },
     isAvailable: {
         type: Boolean,
         default: true
