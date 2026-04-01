@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
 const Availability = () => {
   const [availability, setAvailability] = useState([]);
@@ -33,9 +34,13 @@ const Availability = () => {
   const fetchAvailability = async () => {
     try {
       const token = localStorage.getItem('doctorToken');
-      const response = await fetch('http://localhost:5025/api/doctors/availability/my', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const { id: doctorId } = resolveDoctorIdForApi();
+      const response = await fetch(
+        `/api/doctors/availability/my?doctorId=${encodeURIComponent(doctorId)}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }
+      );
       const data = await response.json();
       if (data.success) {
         setAvailability(data.availability);
@@ -52,13 +57,14 @@ const Availability = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('doctorToken');
-      const response = await fetch('http://localhost:5025/api/doctors/availability', {
+      const { id: doctorId } = resolveDoctorIdForApi();
+      const response = await fetch('/api/doctors/availability', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, doctorId })
       });
       const data = await response.json();
       if (data.success) {
@@ -78,13 +84,14 @@ const Availability = () => {
   const handleUpdate = async (id, updatedData) => {
     try {
       const token = localStorage.getItem('doctorToken');
-      const response = await fetch(`http://localhost:5025/api/doctors/availability/${id}`, {
+      const { id: doctorId } = resolveDoctorIdForApi();
+      const response = await fetch(`/api/doctors/availability/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(updatedData)
+        body: JSON.stringify({ ...updatedData, doctorId })
       });
       const data = await response.json();
       if (data.success) {
@@ -103,10 +110,14 @@ const Availability = () => {
     if (window.confirm('Are you sure you want to delete this?')) {
       try {
         const token = localStorage.getItem('doctorToken');
-        const response = await fetch(`http://localhost:5025/api/doctors/availability/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const { id: doctorId } = resolveDoctorIdForApi();
+        const response = await fetch(
+          `/api/doctors/availability/${id}?doctorId=${encodeURIComponent(doctorId)}`,
+          {
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          }
+        );
         const data = await response.json();
         if (data.success) {
           setMessage({ type: 'success', text: '🗑️ Deleted successfully!' });
@@ -123,10 +134,14 @@ const Availability = () => {
   const handleToggle = async (id, currentStatus) => {
     try {
       const token = localStorage.getItem('doctorToken');
-      const response = await fetch(`http://localhost:5025/api/doctors/availability/${id}/toggle`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const { id: doctorId } = resolveDoctorIdForApi();
+      const response = await fetch(
+        `/api/doctors/availability/${id}/toggle?doctorId=${encodeURIComponent(doctorId)}`,
+        {
+          method: 'PATCH',
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }
+      );
       const data = await response.json();
       if (data.success) {
         setMessage({ type: 'success', text: data.message });

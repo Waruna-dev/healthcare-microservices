@@ -12,6 +12,7 @@ const DoctorLayout = () => {
     { path: '/doctor/doctors', name: 'All Doctors', icon: '👨‍⚕️' },
     { path: '/doctor/patients', name: 'My Patients', icon: '👥' },
     { path: '/doctor/schedule', name: 'Schedule', icon: '📆' },
+    { path: '/doctor/weekly-schedule', name: 'Weekly Schedule', icon: '📅' },
     { path: '/doctor/availability', name: 'Availability', icon: '⏰' },
     { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },

@@ -1,514 +1,567 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { resolveDoctorIdForApi } from '../../utils/doctorId';
+import { useNavigate } from 'react-router-dom';
+
+function hasDoctorId(s) {
+  return typeof s === 'string' && s.trim().length > 0;
+}
+
+function readInitialDoctorId() {
+  try {
+    const saved = localStorage.getItem('scheduleDoctorId');
+    if (saved?.trim()) return saved.trim();
+    const { id } = resolveDoctorIdForApi();
+    if (id && String(id).trim()) return String(id).trim();
+  } catch {}
+  const envId = import.meta.env.VITE_DEFAULT_DOCTOR_ID;
+  if (envId && String(envId).trim()) return String(envId).trim();
+  return '';
+}
+
+/** API date → YYYY-MM-DD (UTC calendar day, matches backend storage) */
+function ymdFromApiDate(iso) {
+  if (!iso) return null;
+  const x = new Date(iso);
+  const y = x.getUTCFullYear();
+  const m = String(x.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(x.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function monthRangeYmd(year, monthIndex) {
+  const start = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const end = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { start, end };
+}
+
+const DAYS_HEADER = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function authHeaders() {
+  const token = localStorage.getItem('doctorToken');
+  const h = { 'Content-Type': 'application/json' };
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
+}
 
 const DoctorSchedule = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [doctorId, setDoctorId] = useState(() => readInitialDoctorId());
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingSlot, setEditingSlot] = useState(null);
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [schedule, setSchedule] = useState([]);
+  const [monthSlots, setMonthSlots] = useState({});
+  const [loading, setLoading] = useState(() => {
+    const id = readInitialDoctorId();
+    return hasDoctorId(id);
+  });
+  const [calendarRefreshing, setCalendarRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const navigate = useNavigate();
 
-  const [newSlot, setNewSlot] = useState({
-    day: 'Monday',
-    start: '09:00',
-    end: '17:00',
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalYmd, setModalYmd] = useState('');
+  const [modalForm, setModalForm] = useState({
+    doctorId: '',
+    _id: null,
+    startTime: '09:00',
+    endTime: '17:00',
     slotDuration: 20,
-    breakStart: '13:00',
-    breakEnd: '14:00'
+    breakStart: '',
+    breakEnd: '',
+    consultationFee: ''
   });
 
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const slotDurations = [15, 20, 30, 45, 60];
-
-  const getDayValue = (dayName) => {
-    const mapping = {
-      'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
-      'Thursday': 4, 'Friday': 5, 'Saturday': 6
-    };
-    return mapping[dayName];
-  };
-
-  const getDayNameFromValue = (dayValue) => {
-    const mapping = {
-      0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday',
-      4: 'Thursday', 5: 'Friday', 6: 'Saturday'
-    };
-    return mapping[dayValue];
-  };
-
-  // READ - Fetch availability from backend (NO HARDCODE)
-  const fetchAvailability = async () => {
-    setLoading(true);
+  const loadSchedule = useCallback(async (idOverride, opts = {}) => {
+    const quiet = Boolean(opts.quiet);
+    const id = (typeof idOverride === 'string' ? idOverride : doctorId).trim();
+    if (!hasDoctorId(id)) {
+      setMonthSlots({});
+      setLoading(false);
+      setCalendarRefreshing(false);
+      return;
+    }
+    if (quiet) {
+      setCalendarRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setMessage({ type: '', text: '' });
     try {
-      const response = await fetch('http://localhost:5025/api/doctors/availability/my');
-      const data = await response.json();
-      
-      if (data.success && data.availability) {
-        // Format data from database - NO HARDCODE
-        const formattedSchedule = data.availability.map(slot => ({
-          id: slot._id,
-          day: slot.dayName,
-          start: slot.startTime,
-          end: slot.endTime,
-          slotDuration: slot.slotDuration,
-          active: slot.isActive,
-          breakStart: slot.breakStart || '',
-          breakEnd: slot.breakEnd || ''
-        }));
-        setSchedule(formattedSchedule);
-      } else {
-        setSchedule([]);
+      const y = currentMonth.getFullYear();
+      const m = currentMonth.getMonth();
+      const { start, end } = monthRangeYmd(y, m);
+      const res = await fetch(
+        `/api/doctors/availability/doctor/${encodeURIComponent(id)}?start=${start}&end=${end}&includeInactive=true`,
+        { headers: authHeaders() }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({ type: 'error', text: data.message || 'Could not load availability' });
+        setMonthSlots({});
+        setLoading(false);
+        setCalendarRefreshing(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching:', error);
-      setSchedule([]);
+      const map = {};
+      (data.availability || []).forEach((slot) => {
+        if (!slot.date) return;
+        const k = ymdFromApiDate(slot.date);
+        if (k) map[k] = slot;
+      });
+      setMonthSlots(map);
+    } catch (e) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Network error loading schedule' });
+      setMonthSlots({});
     } finally {
       setLoading(false);
+      setCalendarRefreshing(false);
     }
-  };
+  }, [doctorId, currentMonth]);
 
   useEffect(() => {
-    fetchAvailability();
-  }, []);
+    loadSchedule();
+  }, [loadSchedule]);
 
-  // CREATE
-  const handleCreate = async () => {
+  const openDayModal = (ymd) => {
+    const existing = monthSlots[ymd];
+    setModalYmd(ymd);
+    const idField = doctorId.trim();
+    if (existing) {
+      setModalForm({
+        doctorId: idField,
+        _id: existing._id,
+        startTime: existing.startTime || '09:00',
+        endTime: existing.endTime || '17:00',
+        slotDuration: existing.slotDuration ?? 20,
+        breakStart: existing.breakStart || '',
+        breakEnd: existing.breakEnd || '',
+        consultationFee:
+          existing.consultationFee !== undefined && existing.consultationFee !== null
+            ? String(existing.consultationFee)
+            : ''
+      });
+    } else {
+      setModalForm({
+        doctorId: idField,
+        _id: null,
+        startTime: '09:00',
+        endTime: '17:00',
+        slotDuration: 20,
+        breakStart: '',
+        breakEnd: '',
+        consultationFee: ''
+      });
+    }
+    setModalOpen(true);
+    setMessage({ type: '', text: '' });
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalYmd('');
+  };
+
+  const loadMonthFromModal = async () => {
+    const id = modalForm.doctorId.trim();
+    if (!hasDoctorId(id)) {
+      setMessage({ type: 'error', text: 'Enter a Doctor ID in the form first.' });
+      return;
+    }
+    setDoctorId(id);
+    localStorage.setItem('scheduleDoctorId', id);
     try {
-      const response = await fetch('http://localhost:5025/api/doctors/availability', {
+      await loadSchedule(id, { quiet: true });
+      setMessage({ type: 'success', text: 'Calendar loaded for this month.' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const saveDay = async (e) => {
+    e.preventDefault();
+    const id = modalForm.doctorId.trim();
+    if (!hasDoctorId(id)) {
+      setMessage({ type: 'error', text: 'Enter a Doctor ID in the form.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        doctorId: id,
+        date: modalYmd,
+        startTime: modalForm.startTime,
+        endTime: modalForm.endTime,
+        slotDuration: Number(modalForm.slotDuration) || 20,
+        breakStart: modalForm.breakStart || '',
+        breakEnd: modalForm.breakEnd || '',
+        consultationFee: (() => {
+          const s = modalForm.consultationFee;
+          if (s === '' || s === null || s === undefined) return null;
+          const n = Number.parseFloat(String(s), 10);
+          return Number.isNaN(n) ? null : n;
+        })()
+      };
+      const res = await fetch('/api/doctors/availability', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dayOfWeek: getDayValue(newSlot.day),
-          dayName: newSlot.day,
-          startTime: newSlot.start,
-          endTime: newSlot.end,
-          slotDuration: newSlot.slotDuration,
-          breakStart: newSlot.breakStart,
-          breakEnd: newSlot.breakEnd
-        })
+        headers: authHeaders(),
+        body: JSON.stringify(body)
       });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setMessage({ type: 'success', text: '✅ Created successfully!' });
-        fetchAvailability(); // Refresh from DB
-        setShowAddModal(false);
-        // Reset form
-        setNewSlot({
-          day: 'Monday',
-          start: '09:00',
-          end: '17:00',
-          slotDuration: 20,
-          breakStart: '13:00',
-          breakEnd: '14:00'
-        });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDoctorId(id);
+        localStorage.setItem('scheduleDoctorId', id);
+        setMessage({ type: 'success', text: data.message || 'Saved' });
+        closeModal();
+        await loadSchedule(id, { quiet: true });
       } else {
-        setMessage({ type: 'error', text: data.message });
+        setMessage({ type: 'error', text: data.message || 'Save failed' });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error connecting to server' });
+    } catch (err) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'Could not reach server' });
+    } finally {
+      setSaving(false);
     }
-    setTimeout(() => setMessage(''), 3000);
   };
 
-  // UPDATE (Toggle Active/Inactive)
-  const handleToggleActive = async (id) => {
+  const deleteDaySlot = async () => {
+    const id = modalForm.doctorId.trim();
+    if (!modalForm._id || !hasDoctorId(id)) return;
+    if (!window.confirm('Remove availability for this date?')) return;
+    setSaving(true);
     try {
-      const response = await fetch(`http://localhost:5025/api/doctors/availability/${id}/toggle`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setMessage({ type: 'success', text: '✅ Status updated!' });
-        fetchAvailability(); // Refresh from DB
-      } else {
-        setMessage({ type: 'error', text: data.message });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error toggling status' });
-    }
-    setTimeout(() => setMessage(''), 2000);
-  };
-
-  // UPDATE (Edit slot) - Opens modal
-  const handleEdit = (slot) => {
-    setEditingSlot(slot);
-    setNewSlot({
-      day: slot.day,
-      start: slot.start,
-      end: slot.end,
-      slotDuration: slot.slotDuration,
-      breakStart: slot.breakStart || '',
-      breakEnd: slot.breakEnd || ''
-    });
-    setShowAddModal(true);
-  };
-
-  // UPDATE (Save edited slot)
-  const handleUpdate = async () => {
-    try {
-      const response = await fetch(`http://localhost:5025/api/doctors/availability/${editingSlot.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          startTime: newSlot.start,
-          endTime: newSlot.end,
-          slotDuration: newSlot.slotDuration,
-          breakStart: newSlot.breakStart,
-          breakEnd: newSlot.breakEnd
-        })
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setMessage({ type: 'success', text: '✅ Schedule updated successfully!' });
-        fetchAvailability(); // Refresh from DB
-        setShowAddModal(false);
-        setEditingSlot(null);
-      } else {
-        setMessage({ type: 'error', text: data.message });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error updating schedule' });
-    }
-    setTimeout(() => setMessage(''), 3000);
-  };
-
-  // DELETE
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this schedule?')) {
-      try {
-        const response = await fetch(`http://localhost:5025/api/doctors/availability/${id}`, {
+      const res = await fetch(
+        `/api/doctors/availability/${modalForm._id}?doctorId=${encodeURIComponent(id)}`,
+        {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-          setMessage({ type: 'success', text: '🗑️ Deleted successfully!' });
-          fetchAvailability(); // Refresh from DB
-        } else {
-          setMessage({ type: 'error', text: data.message });
+          headers: authHeaders()
         }
-      } catch (error) {
-        setMessage({ type: 'error', text: 'Error deleting' });
+      );
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDoctorId(id);
+        localStorage.setItem('scheduleDoctorId', id);
+        setMessage({ type: 'success', text: 'Removed' });
+        closeModal();
+        await loadSchedule(id, { quiet: true });
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Delete failed' });
       }
-      setTimeout(() => setMessage(''), 3000);
+    } catch (e) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Could not reach server' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Get schedule for a specific day (from API data, no hardcode)
-  const getScheduleForDay = (dayName) => {
-    const slot = schedule.find(s => s.day === dayName);
-    if (slot && slot.active && slot.start && slot.end) {
-      return `${slot.start} - ${slot.end}`;
-    }
-    return null;
+  const prevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   };
 
-  // Calendar helpers
-  const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-  const isToday = (day) => day === new Date().getDate() && currentMonth.getMonth() === new Date().getMonth() && currentMonth.getFullYear() === new Date().getFullYear();
-
-  const generateTimeSlots = (start, end, duration) => {
-    if (!start || !end) return [];
-    const slots = [];
-    let current = new Date(`2000-01-01 ${start}`);
-    const endTime = new Date(`2000-01-01 ${end}`);
-    while (current < endTime) {
-      slots.push(current.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-      current.setMinutes(current.getMinutes() + duration);
-    }
-    return slots;
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
-  const daysInMonth = getDaysInMonth(currentMonth);
-  const firstDay = getFirstDayOfMonth(currentMonth);
-  const calendarDays = [];
-  for (let i = 0; i < firstDay; i++) calendarDays.push(null);
-  for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i);
+  const calendarDays = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const out = [];
+    for (let i = 0; i < firstDay; i++) {
+      out.push({ empty: true, key: `e-${i}` });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ymd = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const slot = monthSlots[ymd];
+      out.push({
+        empty: false,
+        key: `d-${d}`,
+        date: d,
+        ymd,
+        slot
+      });
+    }
+    return out;
+  }, [currentMonth, monthSlots]);
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-12 w-12 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+          <p className="text-sm text-slate-600">Loading schedule…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Schedule & Availability</h2>
-          <p className="text-gray-500 text-sm mt-1">Complete CRUD: Create, Read, Update, Delete your weekly schedule</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingSlot(null);
-            setNewSlot({ day: 'Monday', start: '09:00', end: '17:00', slotDuration: 20, breakStart: '13:00', breakEnd: '14:00' });
-            setShowAddModal(true);
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-        >
-          + Create New Schedule
-        </button>
-      </div>
-
-      {/* Message */}
-      {message && (
-        <div className={`p-3 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Calendar Column */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-lg">◀</button>
-              <h3 className="text-xl font-semibold text-gray-800">
-                {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-              </h3>
-              <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg">▶</button>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {weekDays.map(day => <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">{day}</div>)}
-            </div>
-
-            <div className="grid grid-cols-7 gap-1">
-              {calendarDays.map((day, index) => {
-                const date = day ? new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day) : null;
-                const dayName = date ? weekDays[date.getDay()] : '';
-                const fullDayName = dayName === 'Sun' ? 'Sunday' : 
-                                   dayName === 'Mon' ? 'Monday' :
-                                   dayName === 'Tue' ? 'Tuesday' :
-                                   dayName === 'Wed' ? 'Wednesday' :
-                                   dayName === 'Thu' ? 'Thursday' :
-                                   dayName === 'Fri' ? 'Friday' : 'Saturday';
-                const scheduleForDay = day ? getScheduleForDay(fullDayName) : null;
-                
-                return (
-                  <div key={index} className={`min-h-[100px] p-2 border rounded-lg ${day ? 'hover:shadow-md transition cursor-pointer' : 'bg-gray-50'} ${isToday(day) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
-                    {day && (
-                      <>
-                        <div className={`text-sm font-semibold ${isToday(day) ? 'text-blue-600' : 'text-gray-700'}`}>{day}</div>
-                        {scheduleForDay ? (
-                          <div className="mt-2">
-                            <div className="text-xs text-green-600 font-medium">{scheduleForDay}</div>
-                            <div className="text-xs text-gray-500 mt-1">Available</div>
-                          </div>
-                        ) : (
-                          <div className="mt-2 text-xs text-red-500">Unavailable</div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex flex-wrap gap-4 mt-6 pt-4 border-t">
-              <div className="flex items-center"><div className="w-4 h-4 bg-blue-100 border border-blue-500 rounded mr-2"></div><span className="text-sm text-gray-600">Today</span></div>
-              <div className="flex items-center"><div className="w-4 h-4 bg-green-100 border border-green-300 rounded mr-2"></div><span className="text-sm text-gray-600">Available</span></div>
-              <div className="flex items-center"><div className="w-4 h-4 bg-red-100 border border-red-300 rounded mr-2"></div><span className="text-sm text-gray-600">Unavailable</span></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Weekly Schedule Column - Shows ONLY data from DB */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">📋 Weekly Schedule (from Database)</h3>
-            <div className="space-y-3">
-              {days.map((day) => {
-                const slot = schedule.find(s => s.day === day);
-                const isActive = slot?.active && slot?.start && slot?.end;
-                
-                return (
-                  <div key={day} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-800">{day}</span>
-                        <span className={`text-sm ${isActive ? 'text-green-600' : 'text-red-500'}`}>
-                          {isActive ? `${slot.start} - ${slot.end}` : 'Not Set'}
-                        </span>
-                      </div>
-                      {isActive && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {slot.slotDuration} min slots • Break: {slot.breakStart && slot.breakEnd ? `${slot.breakStart} - ${slot.breakEnd}` : 'No break'}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {isActive && (
-                        <>
-                          <button onClick={() => handleToggleActive(slot.id)} className="px-2 py-1 text-xs rounded bg-green-100 text-green-700">
-                            Active
-                          </button>
-                          <button onClick={() => handleEdit(slot)} className="p-1 text-blue-600 hover:bg-blue-50 rounded">✏️</button>
-                          <button onClick={() => handleDelete(slot.id)} className="p-1 text-red-600 hover:bg-red-50 rounded">🗑️</button>
-                        </>
-                      )}
-                      {!isActive && (
-                        <button 
-                          onClick={() => {
-                            setEditingSlot(null);
-                            setNewSlot({ ...newSlot, day });
-                            setShowAddModal(true);
-                          }} 
-                          className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-500"
-                        >
-                          Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-6 p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-800">
-                💡 <strong>Data Source:</strong> MongoDB - No hardcoded data. All CRUD operations persist to database.
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-700 text-white p-8 shadow-xl mb-8">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-indigo-100 text-sm font-medium uppercase tracking-wide">CareSync</p>
+              <h1 className="text-3xl sm:text-4xl font-bold mt-1">Schedule by date</h1>
+              <p className="text-indigo-100 mt-2 max-w-2xl">
+                Click a date — the form includes <strong>Doctor ID</strong>, times, and fee (Rs.). Doctor ID is saved in
+                this browser after you save or load.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => navigate('/doctor/weekly-schedule')}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-xl text-white text-sm font-medium transition-colors backdrop-blur-sm"
+            >
+              📅 Weekly Schedule
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Time Slots Preview - Shows ONLY from DB */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">⏰ Time Slots Preview (from Database)</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {schedule.filter(s => s.active && s.start && s.end).map((slot) => (
-            <div key={slot.id} className="border rounded-lg p-3">
-              <div className="font-semibold text-gray-800">{slot.day}</div>
-              <div className="text-sm text-gray-600 mt-1">
-                {generateTimeSlots(slot.start, slot.end, slot.slotDuration).slice(0, 4).map((time, i) => <div key={i} className="py-0.5">{time}</div>)}
-                {generateTimeSlots(slot.start, slot.end, slot.slotDuration).length > 4 && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    +{generateTimeSlots(slot.start, slot.end, slot.slotDuration).length - 4} more
+        {message.text && (
+          <div
+            className={`mb-6 rounded-xl border px-4 py-3 text-sm whitespace-pre-wrap ${
+              message.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/80">
+            <button
+              type="button"
+              onClick={prevMonth}
+              className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 shadow-sm"
+            >
+              ← Prev
+            </button>
+            <h2 className="text-lg font-bold text-slate-800">
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </h2>
+            <button
+              type="button"
+              onClick={nextMonth}
+              className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 shadow-sm"
+            >
+              Next →
+            </button>
+          </div>
+
+          <div className="p-4">
+            <div className="grid grid-cols-7 gap-1.5 mb-2">
+              {DAYS_HEADER.map((d) => (
+                <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2">
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1.5">
+              {calendarDays.map((day) =>
+                day.empty ? (
+                  <div key={day.key} className="min-h-[96px] rounded-xl bg-slate-50/50" />
+                ) : (
+                  <div
+                    key={day.key}
+                    className={`min-h-[96px] rounded-xl border p-2 flex flex-col text-left transition ${
+                      day.slot
+                        ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100/80'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/40'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openDayModal(day.ymd)}
+                      className="flex-1 flex flex-col text-left"
+                    >
+                      <span className="text-sm font-bold text-slate-800">{day.date}</span>
+                      {day.slot ? (
+                        <>
+                          <span className="mt-1 text-[11px] font-medium text-emerald-900 leading-tight">
+                            {day.slot.startTime}–{day.slot.endTime}
+                          </span>
+                          {day.slot.consultationFee != null && (
+                            <span className="mt-auto text-[10px] text-emerald-800 font-semibold">
+                              Rs. {day.slot.consultationFee}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="mt-auto text-[10px] text-slate-400">Tap to add</span>
+                      )}
+                    </button>
+                    {day.slot && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/doctor/slots/${day.ymd}`)}
+                        className="mt-2 w-full px-2 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition-colors"
+                      >
+                        📅 View Slots
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
+                )
+              )}
             </div>
-          ))}
-          {schedule.filter(s => s.active && s.start && s.end).length === 0 && (
-            <div className="col-span-full text-center text-gray-500 py-8">
-              No schedules found in database. Click "Create New Schedule" to add one.
-            </div>
-          )}
+          </div>
         </div>
+
+        <p className="mt-6 text-xs text-slate-500 text-center">
+          Enter the doctor identifier in the form when you open a date. Use <strong>Load calendar</strong> there to
+          refresh the month without saving times.
+        </p>
       </div>
 
-      {/* CREATE/UPDATE Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">
-              {editingSlot ? '✏️ Update Schedule' : '➕ Create New Schedule'}
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Day *</label>
-                <select
-                  value={newSlot.day}
-                  onChange={(e) => setNewSlot({ ...newSlot, day: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  {days.map(day => <option key={day}>{day}</option>)}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Start Time *</label>
-                  <input
-                    type="time"
-                    value={newSlot.start}
-                    onChange={(e) => setNewSlot({ ...newSlot, start: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">End Time *</label>
-                  <input
-                    type="time"
-                    value={newSlot.end}
-                    onChange={(e) => setNewSlot({ ...newSlot, end: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Slot Duration (minutes)</label>
-                <select
-                  value={newSlot.slotDuration}
-                  onChange={(e) => setNewSlot({ ...newSlot, slotDuration: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border rounded-lg"
-                >
-                  {slotDurations.map(d => <option key={d} value={d}>{d} minutes</option>)}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Break Start (optional)</label>
-                  <input
-                    type="time"
-                    value={newSlot.breakStart}
-                    onChange={(e) => setNewSlot({ ...newSlot, breakStart: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Break End (optional)</label>
-                  <input
-                    type="time"
-                    value={newSlot.breakEnd}
-                    onChange={(e) => setNewSlot({ ...newSlot, breakEnd: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setEditingSlot(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={editingSlot ? handleUpdate : handleCreate}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  {editingSlot ? 'Update Schedule' : 'Create Schedule'}
-                </button>
-              </div>
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-200"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+              <h3 className="text-lg font-bold text-slate-800">Availability — {modalYmd}</h3>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="text-slate-500 hover:text-slate-800 text-2xl leading-none"
+              >
+                ×
+              </button>
             </div>
+            <form onSubmit={saveDay} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Doctor ID <span className="text-red-500">*</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Stored in this browser as <code className="bg-slate-100 px-1 rounded">scheduleDoctorId</code> when you
+                  save or load.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={modalForm.doctorId}
+                    onChange={(e) => setModalForm((p) => ({ ...p, doctorId: e.target.value }))}
+                    placeholder="Doctor ID"
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={loadMonthFromModal}
+                    disabled={
+                      saving || calendarRefreshing || !hasDoctorId(modalForm.doctorId)
+                    }
+                    className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm font-semibold hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {calendarRefreshing ? 'Loading…' : 'Load calendar'}
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-sm text-slate-700">
+                <span className="font-semibold text-slate-600">Date:</span> {modalYmd}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Start</label>
+                  <input
+                    type="time"
+                    value={modalForm.startTime}
+                    onChange={(e) => setModalForm((p) => ({ ...p, startTime: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">End</label>
+                  <input
+                    type="time"
+                    value={modalForm.endTime}
+                    onChange={(e) => setModalForm((p) => ({ ...p, endTime: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Slot (minutes)</label>
+                <input
+                  type="number"
+                  min={5}
+                  max={120}
+                  step={5}
+                  value={modalForm.slotDuration}
+                  onChange={(e) =>
+                    setModalForm((p) => ({ ...p, slotDuration: parseInt(e.target.value, 10) || 20 }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Break start</label>
+                  <input
+                    type="time"
+                    value={modalForm.breakStart}
+                    onChange={(e) => setModalForm((p) => ({ ...p, breakStart: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Break end</label>
+                  <input
+                    type="time"
+                    value={modalForm.breakEnd}
+                    onChange={(e) => setModalForm((p) => ({ ...p, breakEnd: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Consultation fee (Rs.) — optional
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={modalForm.consultationFee}
+                  onChange={(e) => setModalForm((p) => ({ ...p, consultationFee: e.target.value }))}
+                  placeholder="e.g. 1500"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                {modalForm._id && (
+                  <button
+                    type="button"
+                    onClick={deleteDaySlot}
+                    disabled={saving}
+                    className="px-4 py-2.5 rounded-xl border border-red-200 text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Remove this date
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

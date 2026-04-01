@@ -9,6 +9,8 @@ import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import AllDoctors from './pages/Doctor/AllDoctors';
 import DoctorProfile from './pages/Doctor/DoctorProfile';
 import DoctorSchedule from './pages/Doctor/DoctorSchedule';
+import WeeklySchedule from './pages/Doctor/WeeklySchedule';
+import SlotDisplay from './pages/Doctor/SlotDisplay';
 
 function App() {
   return (
@@ -30,6 +32,8 @@ function App() {
           <Route path="doctors" element={<AllDoctors />} />
           <Route path="profile" element={<DoctorProfile />} />
           <Route path="schedule" element={<DoctorSchedule />} />
+          <Route path="weekly-schedule" element={<WeeklySchedule />} />
+          <Route path="slots/:date" element={<SlotDisplay />} />
           <Route path="appointments" element={<div>Appointments Page</div>} />
           <Route path="patients" element={<div>My Patients Page</div>} />
           <Route path="availability" element={<div>Availability Page</div>} />

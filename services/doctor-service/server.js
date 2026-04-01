@@ -8,6 +8,7 @@ const errorHandler = require('./middleware/errorHandler');
 
 // Import routes
 const doctorRoutes = require('./routes/doctorRoutes');
+const availabilityRoutes = require('./routes/availabilityRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5025;
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => {
 
 // Doctor routes
 app.use('/api/doctors', doctorRoutes);
+app.use('/api/doctors/availability', availabilityRoutes);
 
 // 404 handler
 app.use((req, res) => {

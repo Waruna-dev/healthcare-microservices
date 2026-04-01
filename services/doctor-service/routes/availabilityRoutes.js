@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-// const auth = require('../middleware/auth'); // ← COMMENT OUT FOR TESTING
 const {
     createAvailability,
     getAvailabilityByDoctor,
@@ -12,14 +11,17 @@ const {
     bulkUpdateAvailability
 } = require('../controllers/availabilityController');
 
-// Public routes (no auth needed for testing)
+// Public — patient / booking views (add ?includeInactive=true for full week editor)
 router.get('/doctor/:doctorId', getAvailabilityByDoctor);
-router.post('/', createAvailability);
+
+// doctorId: query/body, or optional Bearer token — order matters before :id
 router.get('/my', getMyAvailability);
-router.get('/:id', getAvailabilityById);
+router.post('/bulk', bulkUpdateAvailability);
+router.post('/', createAvailability);
+
 router.put('/:id', updateAvailability);
 router.patch('/:id/toggle', toggleAvailabilityStatus);
 router.delete('/:id', deleteAvailability);
-router.post('/bulk', bulkUpdateAvailability);
+router.get('/slot/:id', getAvailabilityById);
 
 module.exports = router;
