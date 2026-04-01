@@ -4,7 +4,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Lock, Bell, AlertTriangle, ArrowLeft, 
-  Camera, Save, Trash2, Phone, Mail, ShieldAlert
+  Camera, Save, Trash2, Phone, Mail, ShieldAlert, 
+  CheckCircle, X, Info
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -13,22 +14,15 @@ const PatientProfile = () => {
   const [activeTab, setActiveTab] = useState('personal');
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
+  
+  // Custom Popup States
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [toast, setToast] = useState({ show: false, text: '', type: 'success' });
 
   // Form States
-  const [profileData, setProfileData] = useState({
-    name: '',
-    email: '',
-    contactNumber: ''
-  });
+  const [profileData, setProfileData] = useState({ name: '', email: '', contactNumber: '' });
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-
-  // Load User Data on Component Mount
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
@@ -44,7 +38,12 @@ const PatientProfile = () => {
     }
   }, [navigate]);
 
-  // Handlers for Input Changes
+  // Helper to trigger custom notifications
+  const triggerToast = (text, type = 'success') => {
+    setToast({ show: true, text, type });
+    setTimeout(() => setToast({ ...toast, show: false }), 4000);
+  };
+
   const handleProfileChange = (e) => {
     setProfileData({ ...profileData, [e.target.name]: e.target.value });
   };
@@ -56,11 +55,8 @@ const PatientProfile = () => {
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setMessage({ text: '', type: '' });
-    
     try {
       const response = await api.put('/patients/profile', profileData);
-      
       const updatedPatient = response.data;
       setUser(updatedPatient);
 
@@ -69,12 +65,9 @@ const PatientProfile = () => {
       else Object.assign(storageObj, updatedPatient);
       localStorage.setItem('user', JSON.stringify(storageObj));
       
-      setMessage({ text: 'Profile updated successfully!', type: 'success' });
+      triggerToast('Profile updated successfully!', 'success');
     } catch (error) {
-      setMessage({ 
-        text: error.response?.data?.message || 'Failed to update profile.', 
-        type: 'error' 
-      });
+      triggerToast(error.response?.data?.message || 'Failed to update profile.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -82,44 +75,36 @@ const PatientProfile = () => {
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
-    
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ text: 'New passwords do not match!', type: 'error' });
+      triggerToast('New passwords do not match!', 'error');
       return;
     }
-    
     setIsLoading(true);
-    setMessage({ text: '', type: '' });
-    
     try {
       await api.put('/patients/password', {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword
       });
-      
-      setMessage({ text: 'Password changed securely.', type: 'success' });
+      triggerToast('Password changed securely.', 'success');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
-      setMessage({ 
-        text: error.response?.data?.message || 'Failed to change password.', 
-        type: 'error' 
-      });
+      triggerToast(error.response?.data?.message || 'Failed to change password.', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteAccount = async () => {
-    const confirmDelete = window.confirm("Are you absolutely sure? This action cannot be undone and all medical records will be permanently erased.");
-    if (!confirmDelete) return;
-
+  const confirmDeleteAccount = async () => {
+    setIsLoading(true);
     try {
       await api.delete('/patients/account');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.clear();
       navigate('/register');
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to delete account. Please contact support.");
+      triggerToast("Failed to delete account.", "error");
+      setShowDeleteModal(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -133,26 +118,77 @@ const PatientProfile = () => {
   if (!user) return null;
 
   return (
-    <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col">
+    <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-x-hidden">
+      
+      {/* --- FLOATING TOAST NOTIFICATION --- */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, scale: 0.95, x: '-50%' }}
+            className={`fixed bottom-10 left-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border min-w-[320px] ${
+              toast.type === 'error' ? 'bg-error-container text-error border-error/20' : 'bg-surface-container-highest text-primary border-primary/20'
+            }`}
+          >
+            {toast.type === 'error' ? <ShieldAlert size={20}/> : <CheckCircle size={20}/>}
+            <span className="font-bold text-sm">{toast.text}</span>
+            <button onClick={() => setToast({ ...toast, show: false })} className="ml-auto p-1 hover:bg-black/5 rounded-lg transition-colors">
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- CUSTOM DELETE MODAL --- */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface-container-lowest w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl border border-outline-variant/30 relative z-10 text-center"
+            >
+              <div className="w-20 h-20 bg-error-container text-error rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-12">
+                <Trash2 size={40} />
+              </div>
+              <h3 className="text-2xl font-bold font-headline mb-3 text-error">Delete Account?</h3>
+              <p className="text-on-surface-variant text-sm leading-relaxed mb-8">
+                This will permanently erase your medical history and AI analysis. This action is <span className="text-error font-bold italic text-base">irreversible.</span>
+              </p>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={confirmDeleteAccount}
+                  className="w-full py-4 bg-error text-white font-bold rounded-2xl shadow-lg shadow-error/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                >
+                  {isLoading ? 'Processing...' : 'Yes, Delete Permanently'}
+                </button>
+                <button 
+                  onClick={() => setShowDeleteModal(false)}
+                  className="w-full py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all"
+                >
+                  Keep My Account
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30">
         <div className="flex items-center px-8 py-4 max-w-7xl mx-auto gap-6">
           <Link to="/dashboard" className="p-2 bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant">
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold font-headline">Profile & Settings</h1>
+          <h1 className="text-xl font-bold font-headline text-primary">Profile & Settings</h1>
         </div>
       </header>
 
       <main className="flex-1 py-10 px-6 md:px-8 max-w-7xl mx-auto w-full">
-        {message.text && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className={`mb-8 p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
-            message.type === 'error' ? 'bg-error-container text-error' : 'bg-secondary-container text-secondary'
-          }`}>
-            <span className="material-symbols-outlined">{message.type === 'error' ? 'error' : 'check_circle'}</span>
-            {message.text}
-          </motion.div>
-        )}
-
         <div className="flex flex-col md:flex-row gap-8">
           <div className="w-full md:w-64 shrink-0 space-y-2">
             <div className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-ambient border border-outline-variant/30 mb-6 flex flex-col items-center text-center">
@@ -172,10 +208,10 @@ const PatientProfile = () => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => { setActiveTab(tab.id); setMessage({text:'', type:''}); }}
+                  onClick={() => { setActiveTab(tab.id); }}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                     activeTab === tab.id 
-                      ? tab.id === 'danger' ? 'bg-error-container text-error' : 'bg-primary text-white shadow-md' 
+                      ? tab.id === 'danger' ? 'bg-error-container text-error shadow-sm' : 'bg-primary text-white shadow-md' 
                       : tab.id === 'danger' ? 'text-error/70 hover:bg-error-container/50' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
                   }`}
                 >
@@ -191,50 +227,40 @@ const PatientProfile = () => {
               {activeTab === 'personal' && (
                 <motion.div key="personal" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
                   <div className="mb-8">
-                    <h2 className="text-2xl font-bold font-headline">Personal Details</h2>
+                    <h2 className="text-2xl font-bold font-headline text-primary">Personal Details</h2>
                     <p className="text-on-surface-variant text-sm mt-1">Update your demographic and basic medical information.</p>
                   </div>
 
                   <form onSubmit={handleSaveProfile} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      
-                      {/* Name */}
                       <div className="space-y-2">
-                        <label className="text-sm font-bold text-on-surface ml-1">Full Name</label>
+                        <label className="text-sm font-bold text-on-surface ml-1 flex items-center gap-2">Full Name <Info size={14} className="text-outline"/></label>
                         <div className="relative">
                           <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                          <input name="name" value={profileData.name} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                          <input name="name" value={profileData.name} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
                         </div>
                       </div>
 
-                      {/* Email - FULLY FIX AND EDITABLE NOW */}
                       <div className="space-y-2">
-                        <label className="text-sm font-bold text-on-surface ml-1">Email Address</label>
+                        <label className="text-sm font-bold text-on-surface ml-1 flex items-center gap-2">Email Address <Mail size={14} className="text-outline"/></label>
                         <div className="relative">
                           <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                          <input 
-                            name="email" 
-                            type="email"
-                            value={profileData.email} 
-                            onChange={handleProfileChange} 
-                            className="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" 
-                          />
+                          <input name="email" type="email" value={profileData.email} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
                         </div>
                       </div>
 
-                      {/* Phone */}
                       <div className="space-y-2">
-                        <label className="text-sm font-bold text-on-surface ml-1">Phone Number</label>
+                        <label className="text-sm font-bold text-on-surface ml-1 flex items-center gap-2">Phone Number <Phone size={14} className="text-outline"/></label>
                         <div className="relative">
                           <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                          <input name="contactNumber" value={profileData.contactNumber} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="+1 (555) 000-0000" />
+                          <input name="contactNumber" value={profileData.contactNumber} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="+1 (555) 000-0000" />
                         </div>
                       </div>
                     </div>
 
                     <div className="pt-4 flex justify-end">
-                      <button type="submit" disabled={isLoading} className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-md hover:bg-primary-container transition-colors flex items-center gap-2">
-                        <Save size={18} /> {isLoading ? 'Saving...' : 'Save Changes'}
+                      <button type="submit" disabled={isLoading} className="px-8 py-3.5 bg-primary text-white font-bold rounded-2xl shadow-xl hover:bg-primary-container transition-all flex items-center gap-2 active:scale-95">
+                        <Save size={18} /> {isLoading ? 'Saving...' : 'Save Profile'}
                       </button>
                     </div>
                   </form>
@@ -244,7 +270,7 @@ const PatientProfile = () => {
               {activeTab === 'security' && (
                 <motion.div key="security" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
                   <div className="mb-8">
-                    <h2 className="text-2xl font-bold font-headline">Security & Password</h2>
+                    <h2 className="text-2xl font-bold font-headline text-primary">Security & Password</h2>
                     <p className="text-on-surface-variant text-sm mt-1">Ensure your sanctuary remains locked and secure.</p>
                   </div>
 
@@ -253,30 +279,30 @@ const PatientProfile = () => {
                       <label className="text-sm font-bold text-on-surface ml-1">Current Password</label>
                       <div className="relative">
                         <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                        <input type="password" name="currentPassword" required value={passwordData.currentPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                        <input type="password" name="currentPassword" required value={passwordData.currentPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
                       </div>
                     </div>
 
-                    <div className="w-full h-px bg-outline-variant/30 my-6"></div>
+                    <div className="w-full h-px bg-outline-variant/20 my-6"></div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-on-surface ml-1">New Password</label>
+                      <label className="text-sm font-bold text-on-surface ml-1 text-primary">New Password</label>
                       <div className="relative">
                         <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                        <input type="password" name="newPassword" required value={passwordData.newPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                        <input type="password" name="newPassword" required value={passwordData.newPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-on-surface ml-1">Confirm New Password</label>
+                      <label className="text-sm font-bold text-on-surface ml-1 text-primary">Confirm New Password</label>
                       <div className="relative">
                         <ShieldAlert size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                        <input type="password" name="confirmPassword" required value={passwordData.confirmPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                        <input type="password" name="confirmPassword" required value={passwordData.confirmPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
                       </div>
                     </div>
 
                     <div className="pt-4">
-                      <button type="submit" disabled={isLoading} className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-md hover:bg-primary-container transition-colors flex items-center gap-2">
+                      <button type="submit" disabled={isLoading} className="px-8 py-3.5 bg-primary text-white font-bold rounded-2xl shadow-xl hover:bg-primary-container transition-all flex items-center gap-2 active:scale-95">
                         <Lock size={18} /> {isLoading ? 'Updating...' : 'Update Password'}
                       </button>
                     </div>
@@ -284,52 +310,24 @@ const PatientProfile = () => {
                 </motion.div>
               )}
 
-              {activeTab === 'preferences' && (
-                <motion.div key="preferences" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
-                  <div className="mb-8">
-                    <h2 className="text-2xl font-bold font-headline">Communication Preferences</h2>
-                    <p className="text-on-surface-variant text-sm mt-1">Control how CareSync interacts with you.</p>
-                  </div>
-
-                  <div className="space-y-6 max-w-lg">
-                    <div className="flex items-center justify-between p-4 border border-outline-variant/50 rounded-2xl">
-                      <div>
-                        <h4 className="font-bold text-on-surface">Email Notifications</h4>
-                        <p className="text-xs text-on-surface-variant mt-1">Receive AI analysis summaries and appointment reminders via email.</p>
-                      </div>
-                      <div className="w-12 h-6 bg-primary rounded-full relative cursor-pointer flex-shrink-0 transition-colors">
-                        <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-4 border border-outline-variant/50 rounded-2xl">
-                      <div>
-                        <h4 className="font-bold text-on-surface">SMS Critical Alerts</h4>
-                        <p className="text-xs text-on-surface-variant mt-1">Get immediate text messages for abnormal biometric readings.</p>
-                      </div>
-                      <div className="w-12 h-6 bg-surface-variant rounded-full relative cursor-pointer flex-shrink-0 transition-colors">
-                        <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
               {activeTab === 'danger' && (
-                <motion.div key="danger" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-error-container/20 p-8 rounded-[2rem] border border-error/30">
+                <motion.div key="danger" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-error-container/10 p-8 rounded-[2rem] border border-error/20">
                   <div className="mb-8">
                     <h2 className="text-2xl font-bold font-headline text-error flex items-center gap-2">
                       <AlertTriangle size={24} /> Danger Zone
                     </h2>
-                    <p className="text-on-surface-variant text-sm mt-1">Permanent and irreversible account actions.</p>
+                    <p className="text-error/70 text-sm mt-1 font-medium">Permanent and irreversible account actions.</p>
                   </div>
 
-                  <div className="bg-white/50 p-6 rounded-2xl border border-error/20">
-                    <h4 className="font-bold text-on-surface mb-2">Delete Patient Account</h4>
-                    <p className="text-sm text-on-surface-variant mb-6 leading-relaxed max-w-2xl">
-                      Once you delete your account, there is no going back. All of your uploaded medical records, AI insights, and connected biometric data will be permanently wiped from our servers to comply with HIPAA and GDPR regulations.
+                  <div className="bg-white/40 p-8 rounded-3xl border border-error/10">
+                    <h4 className="font-bold text-on-surface text-lg mb-2">Delete Patient Account</h4>
+                    <p className="text-sm text-on-surface-variant mb-8 leading-relaxed max-w-2xl">
+                      Once you delete your account, there is no going back. All of your uploaded medical records, AI insights, and connected biometric data will be permanently wiped from our servers to comply with HIPAA regulations.
                     </p>
-                    <button onClick={handleDeleteAccount} className="px-6 py-3 bg-error text-white font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity flex items-center gap-2">
+                    <button 
+                      onClick={() => setShowDeleteModal(true)} 
+                      className="px-8 py-4 bg-error text-white font-bold rounded-2xl shadow-xl shadow-error/20 hover:bg-error/90 transition-all flex items-center gap-2 active:scale-95"
+                    >
                       <Trash2 size={18} /> Permanently Delete Account
                     </button>
                   </div>
