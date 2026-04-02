@@ -6,6 +6,8 @@ import {
   LogOut, Menu, X, Bell, ShieldCheck 
 } from 'lucide-react';
 import ManagePatients from './ManagePatients';
+import PlatformOverview from './PlatformOverview';
+import SystemSettings from './SystemSettings';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -143,21 +145,14 @@ const AdminDashboard = () => {
           {activeTab === 'patients' && <ManagePatients />}
           
           {/* Placeholders for future pages */}
-          {activeTab === 'overview' && (
-            <div className="flex items-center justify-center h-full text-on-surface-variant font-bold">
-              Dashboard Overview Analytics Coming Soon...
-            </div>
-          )}
+          {activeTab === 'overview' && <PlatformOverview />}
+          
           {activeTab === 'doctors' && (
             <div className="flex items-center justify-center h-full text-on-surface-variant font-bold">
               Doctor Management Module Coming Soon...
             </div>
           )}
-          {activeTab === 'settings' && (
-            <div className="flex items-center justify-center h-full text-on-surface-variant font-bold">
-              System Settings Coming Soon...
-            </div>
-          )}
+          {activeTab === 'settings' && <SystemSettings />}
         </div>
       </main>
 
