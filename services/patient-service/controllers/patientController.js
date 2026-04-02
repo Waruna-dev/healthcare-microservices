@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Generate JWT Token function
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -28,7 +28,7 @@ const registerPatient = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      contactNumber // Saves to database
+      contactNumber 
     });
 
     if (patient) {
@@ -36,7 +36,7 @@ const registerPatient = async (req, res) => {
         _id: patient.id,
         name: patient.name,
         email: patient.email,
-        contactNumber: patient.contactNumber, // <-- ADDED THIS!
+        contactNumber: patient.contactNumber,
         token: generateToken(patient._id),
       });
     } else {
@@ -59,7 +59,7 @@ const loginPatient = async (req, res) => {
         _id: patient.id,
         name: patient.name,
         email: patient.email,
-        contactNumber: patient.contactNumber, // <-- ADDED THIS!
+        contactNumber: patient.contactNumber, 
         token: generateToken(patient._id),
         uploadedReports: patient.uploadedReports 
       });
@@ -71,9 +71,10 @@ const loginPatient = async (req, res) => {
   }
 };
 
+// @desc    Upload report & run AI Analysis
+// @route   POST /api/patients/upload-report
 const uploadMedicalReport = async (req, res) => {
   try {
-    // req.patient comes from the 'protect' middleware!
     const patient = await Patient.findById(req.patient._id);
 
     if (!patient) {
@@ -84,31 +85,95 @@ const uploadMedicalReport = async (req, res) => {
       return res.status(400).json({ message: 'Please upload a PDF file' });
     }
 
-    // Add the new file to the patient's uploadedReports array
+    // 1. Save the initial report data
     const newReport = {
       fileName: req.file.originalname,
-      filePath: req.file.path
+      filePath: req.file.path,
+      aiAnalysis: { status: 'pending' }
     };
-
+    
     patient.uploadedReports.push(newReport);
+    const reportIndex = patient.uploadedReports.length - 1;
     await patient.save();
 
+// 2. Start the AI Analysis process using NATIVE Gemini PDF support
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash", // Reverting to the stable 1.5-flash for best JSON support
+        generationConfig: { 
+          responseMimeType: "application/json",
+          // CRITICAL FIX FOR CONSISTENCY: 
+          // Temperature 0 forces the AI to pick the most probable answer every time, removing randomness.
+          temperature: 0, 
+          topK: 1,
+          topP: 0.1
+        } 
+      });
+
+      const pdfBuffer = fs.readFileSync(req.file.path);
+      const pdfPart = {
+        inlineData: {
+          data: pdfBuffer.toString("base64"),
+          mimeType: "application/pdf"
+        }
+      };
+
+      // TIGHTENED PROMPT: Removed ambiguity and added strict extraction rules
+      const prompt = `
+        You are a highly precise medical data extraction assistant. Your task is to analyze the attached medical lab report PDF and extract key clinical data objectively.
+        Do NOT invent, hallucinate, or creatively rephrase information. Stick strictly to the text provided in the document.
+
+        Return ONLY a JSON object with the following exact keys and strict formatting rules:
+        - "summaryTitle": A clinical, 3-4 word title summarizing the primary test type or main finding (e.g., "Comprehensive Metabolic Panel", "Elevated Lipid Profile").
+        - "summaryDescription": A direct, objective 1-2 sentence summary of the flagged or notable results. Do not provide medical advice.
+        - "abnormalitiesFound": An array of strings listing ONLY the specific metrics marked as "High", "Low", "Elevated", "Abnormal", or "Flag" along with their values (e.g., ["Total Cholesterol: 245 mg/dL", "Fasting Glucose: 118 mg/dL"]). If everything is normal, return an empty array [].
+        - "recommendedSpecialization": Based purely on the abnormalities, suggest ONE standard medical specialization for follow-up (e.g., "Cardiologist", "Endocrinologist", "General Physician"). If all is normal, output "General Physician".
+        - "urgencyLevel": Must be exactly one of: "low", "medium", or "high". Evaluate strictly: High = critical/life-threatening out-of-range values, Medium = elevated/flagged chronic markers (like high cholesterol or prediabetes), Low = normal/healthy results.
+      `;
+
+      const result = await model.generateContent([prompt, pdfPart]);
+      let rawText = result.response.text();
+
+      rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const aiResponse = JSON.parse(rawText);
+
+      // 3. Update the database with the AI results
+      patient.uploadedReports[reportIndex].aiAnalysis = {
+        status: 'completed',
+        summaryTitle: aiResponse.summaryTitle,
+        summaryDescription: aiResponse.summaryDescription,
+        abnormalitiesFound: aiResponse.abnormalitiesFound,
+        recommendedSpecialization: aiResponse.recommendedSpecialization,
+        urgencyLevel: aiResponse.urgencyLevel
+      };
+
+      await patient.save();
+
+    } catch (aiError) {
+      console.error("AI Analysis Failed:", aiError);
+      patient.uploadedReports[reportIndex].aiAnalysis.status = 'failed';
+      await patient.save();
+    }
+
     res.status(200).json({ 
-      message: 'Report uploaded successfully', 
+      message: 'Report uploaded and analyzed successfully', 
       reports: patient.uploadedReports 
     });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
+// @desc    Download a specific medical report
+// @route   GET /api/patients/reports/:filename
 const downloadMedicalReport = async (req, res) => {
   try {
     const filename = req.params.filename;
     const patient = await Patient.findById(req.patient._id);
 
-    // 1. Zero-Trust Check: Does this patient actually own this file?
-    // Multer saves paths as 'uploads/12345.pdf' or 'uploads\12345.pdf' (on Windows)
     const ownsFile = patient.uploadedReports.some(
       report => report.filePath.includes(filename)
     );
@@ -117,17 +182,13 @@ const downloadMedicalReport = async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized access to this medical record.' });
     }
 
-    // 2. Locate the file on the server
     const filePath = path.join(__dirname, '../uploads', filename);
 
-    // 3. Verify it exists physically
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'File no longer exists on the server.' });
     }
 
-    // 4. Send the file securely
     res.download(filePath);
-
   } catch (error) {
     res.status(500).json({ message: 'Error retrieving file.' });
   }
@@ -135,25 +196,18 @@ const downloadMedicalReport = async (req, res) => {
 
 // @desc    Update patient profile details
 // @route   PUT /api/patients/profile
-// @access  Private
 const updatePatientProfile = async (req, res) => {
   try {
     const patientId = req.patient._id || req.patient.id; 
     const patient = await Patient.findById(patientId);
 
-    if (!patient) {
-      return res.status(404).json({ message: 'Patient not found' });
-    }
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    // Check if they are trying to use an email that belongs to someone else
     if (req.body.email && req.body.email !== patient.email) {
       const emailExists = await Patient.findOne({ email: req.body.email });
-      if (emailExists) {
-        return res.status(400).json({ message: 'That email address is already in use.' });
-      }
+      if (emailExists) return res.status(400).json({ message: 'That email address is already in use.' });
     }
 
-    // Update fields
     patient.name = req.body.name || patient.name;
     patient.email = req.body.email || patient.email;
     patient.contactNumber = req.body.contactNumber || patient.contactNumber;
@@ -170,72 +224,55 @@ const updatePatientProfile = async (req, res) => {
     });
     
   } catch (error) {
-    console.error("Profile Update Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
 
 // @desc    Update patient password
 // @route   PUT /api/patients/password
-// @access  Private
 const updatePatientPassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
-    // 1. Basic validation
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Please provide both passwords.' });
     }
 
-    // 2. Find the patient
     const patient = await Patient.findById(req.patient._id);
-    if (!patient) {
-      return res.status(404).json({ message: 'Patient not found' });
-    }
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    // 3. Compare the entered password with the database hash
     const isMatch = await bcrypt.compare(currentPassword, patient.password);
     
     if (!isMatch) {
-      // CRITICAL FIX: This MUST be 400. If it is 401, React will auto-logout!
       return res.status(400).json({ message: 'Incorrect current password. Please try again.' });
     }
 
-    // 4. Hash the new password and save it
     const salt = await bcrypt.genSalt(10);
     patient.password = await bcrypt.hash(newPassword, salt);
     
     await patient.save();
-    
     return res.status(200).json({ message: 'Password updated successfully' });
 
   } catch (error) {
-    console.error("Password Update Error:", error);
     return res.status(500).json({ message: 'Server error updating password' });
   }
 };
+
 // @desc    Delete patient account completely
 // @route   DELETE /api/patients/account
-// @access  Private
 const deletePatientAccount = async (req, res) => {
   try {
     const patient = await Patient.findById(req.patient._id);
 
     if (patient) {
-      // 1. Delete all of their uploaded PDFs from the server to save space
       if (patient.uploadedReports && patient.uploadedReports.length > 0) {
         patient.uploadedReports.forEach(report => {
-          // Adjust path resolution based on where your uploads folder is
           const filePath = path.join(__dirname, '../', report.filePath); 
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath); 
-          }
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath); 
         });
       }
 
-      // 2. Delete the user from the database
       await patient.deleteOne();
-      
       res.json({ message: 'Patient account and all associated records permanently deleted.' });
     } else {
       res.status(404).json({ message: 'Patient not found' });
@@ -251,26 +288,19 @@ const updatePatientById = async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
-    if (!patient) {
-      return res.status(404).json({ message: 'Patient not found' });
-    }
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    // Update the basic fields
     patient.name = req.body.name || patient.name;
     patient.email = req.body.email || patient.email;
     patient.contactNumber = req.body.contactNumber || patient.contactNumber;
 
-    // NEW: If the Admin typed a new password, encrypt it and save it!
     if (req.body.password && req.body.password.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
       patient.password = await bcrypt.hash(req.body.password, salt);
     }
 
     const updatedPatient = await patient.save();
-    
-    // We do NOT send the password back to the frontend for security
     updatedPatient.password = undefined; 
-    
     res.json(updatedPatient);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -283,11 +313,8 @@ const deletePatientById = async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
-    if (!patient) {
-      return res.status(404).json({ message: 'Patient not found' });
-    }
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    // Clean up their uploaded PDFs to save server space
     if (patient.uploadedReports && patient.uploadedReports.length > 0) {
       patient.uploadedReports.forEach(report => {
         const filePath = path.join(__dirname, '../', report.filePath); 
@@ -304,10 +331,8 @@ const deletePatientById = async (req, res) => {
 
 // @desc    ADMIN: Get all patients
 // @route   GET /api/patients/
-// @access  Internal (Called by Admin Service)
 const getAllPatients = async (req, res) => {
   try {
-    // Fetch all patients from the database, sort by newest first, and hide passwords
     const patients = await Patient.find({}).select('-password').sort({ createdAt: -1 });
     res.json(patients);
   } catch (error) {
@@ -315,7 +340,6 @@ const getAllPatients = async (req, res) => {
   }
 };
 
-// DON'T FORGET TO EXPORT THEM AT THE BOTTOM!
 module.exports = { 
   registerPatient, 
   loginPatient, 

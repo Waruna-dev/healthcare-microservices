@@ -15,7 +15,16 @@ const patientSchema = new mongoose.Schema({
   uploadedReports: [{
     fileName: String,
     filePath: String,
-    uploadDate: { type: Date, default: Date.now }
+    uploadDate: { type: Date, default: Date.now },
+    // --- NEW: AI Analysis Data ---
+    aiAnalysis: {
+      status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
+      summaryTitle: { type: String },
+      summaryDescription: { type: String },
+      abnormalitiesFound: [{ type: String }],
+      recommendedSpecialization: { type: String },
+      urgencyLevel: { type: String, enum: ['low', 'medium', 'high'] }
+    }
   }]
 }, { timestamps: true });
 
