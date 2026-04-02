@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
 function hasDoctorId(s) {
   return typeof s === 'string' && s.trim().length > 0;
@@ -9,11 +8,7 @@ function readInitialDoctorId() {
   try {
     const saved = localStorage.getItem('scheduleDoctorId');
     if (saved?.trim()) return saved.trim();
-    const { id } = resolveDoctorIdForApi();
-    if (id && String(id).trim()) return String(id).trim();
   } catch {}
-  const envId = import.meta.env.VITE_DEFAULT_DOCTOR_ID;
-  if (envId && String(envId).trim()) return String(envId).trim();
   return '';
 }
 

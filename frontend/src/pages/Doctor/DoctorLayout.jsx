@@ -33,7 +33,7 @@ const DoctorLayout = () => {
           {isSidebarOpen ? (
             <div className="flex items-center space-x-2">
               <span className="text-2xl">🩺</span>
-              <span className="font-bold text-lg">MediConnect</span>
+              <span className="font-bold text-lg">CareSync</span>
             </div>
           ) : (
             <span className="text-2xl mx-auto">🩺</span>

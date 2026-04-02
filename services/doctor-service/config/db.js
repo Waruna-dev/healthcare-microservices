@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
+        const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/doctor-service';
+        await mongoose.connect(mongoURI);
         console.log(`✅ MongoDB Connected Successfully`);
 
         // Legacy index { doctorId: 1, date: 1 } without partial rules breaks bulk weekly inserts

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import img1 from '../../assets/images/1e73cdf4e73454e4db41a709b9163cac.jpg';
 import img2 from '../../assets/images/9339706cc8079c7b463d4fb452f097d3.jpg';
 
@@ -15,12 +16,15 @@ const DoctorRegister = () => {
     phone: '',
     licenseNumber: '',
     experience: '',
-    consultationFee: '',
     address: '',
-    bio: '',
-    gender: ''
+    about: '',
+    gender: '',
+    qualifications: [''],
+    specializations: ['']
   });
   const [profileImage, setProfileImage] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
 
   const specialties = [
     'Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics',
@@ -31,7 +35,25 @@ const DoctorRegister = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Handle nested fields for qualifications and specializations
+    if (name.startsWith('qualification') || name.startsWith('specialization')) {
+      const [fieldName, index] = name.split('_');
+      const fieldIndex = parseInt(index);
+      
+      if (name.startsWith('qualification')) {
+        const updatedQualifications = [...formData.qualifications];
+        updatedQualifications[fieldIndex] = value;
+        setFormData(prev => ({ ...prev, qualifications: updatedQualifications }));
+      } else if (name.startsWith('specialization')) {
+        const updatedSpecializations = [...formData.specializations];
+        updatedSpecializations[fieldIndex] = value;
+        setFormData(prev => ({ ...prev, specializations: updatedSpecializations }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
     setMessage('');
     setError('');
   };
@@ -41,6 +63,76 @@ const DoctorRegister = () => {
     setProfileImage(file);
     setMessage('');
     setError('');
+    
+    // Auto-upload image when selected
+    if (file) {
+      uploadToCloudinary(file);
+    }
+  };
+
+  const uploadToCloudinary = async (file) => {
+    setImageUploading(true);
+    setError('');
+    
+    try {
+      // First try without preset to see if the issue is preset-related
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", "ml_unsigned");
+      formData.append("folder", "doctor_profiles"); // Organize images in folder
+      
+      console.log('Uploading to Cloudinary...');
+      
+      const res = await fetch(
+        "https://api.cloudinary.com/v1_1/dsvrla6zk/image/upload",
+        { method: "POST", body: formData }
+      );
+      
+      const data = await res.json();
+      console.log('Cloudinary response:', data);
+      
+      if (data.secure_url) {
+        setImageUrl(data.secure_url);
+        setMessage('✅ Image uploaded successfully!');
+      } else {
+        console.error('Cloudinary error details:', data);
+        throw new Error(data.error?.message || `Upload failed: ${res.status}`);
+      }
+    } catch (err) {
+      console.error('Cloudinary upload error:', err);
+      setError(`Failed to upload image: ${err.message}. You can continue without an image.`);
+      setImageUrl('');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const addQualification = () => {
+    setFormData(prev => ({
+      ...prev,
+      qualifications: [...prev.qualifications, '']
+    }));
+  };
+
+  const removeQualification = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      qualifications: prev.qualifications.filter((_, i) => i !== index)
+    }));
+  };
+
+  const addSpecialization = () => {
+    setFormData(prev => ({
+      ...prev,
+      specializations: [...prev.specializations, '']
+    }));
+  };
+
+  const removeSpecialization = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      specializations: prev.specializations.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -50,26 +142,31 @@ const DoctorRegister = () => {
     setError('');
 
     try {
-      // Generate a random password since it's required by backend
-      const randomPassword = Math.random().toString(36).slice(-8) + '!@#' + Date.now();
-      
       const payload = new FormData();
       payload.append('name', formData.name);
       payload.append('email', formData.email);
-      payload.append('password', randomPassword);
       payload.append('specialty', formData.specialty);
       payload.append('phone', formData.phone);
       payload.append('licenseNumber', formData.licenseNumber);
       payload.append('experience', String(parseInt(formData.experience) || 0));
-      payload.append('consultationFee', String(parseFloat(formData.consultationFee) || 0));
       payload.append('address', formData.address || '');
-      payload.append('bio', formData.bio || '');
+      payload.append('about', formData.about || '');
       payload.append('gender', formData.gender || '');
-      if (profileImage) {
-        payload.append('profileImage', profileImage);
+      
+      // Add qualifications as JSON string
+      const validQualifications = formData.qualifications.filter(q => q.trim() !== '');
+      payload.append('qualifications', JSON.stringify(validQualifications));
+      
+      // Add specializations as JSON string
+      const validSpecializations = formData.specializations.filter(s => s.trim() !== '');
+      payload.append('specializations', JSON.stringify(validSpecializations));
+      
+      // Add profile image URL only if uploaded to Cloudinary
+      if (imageUrl) {
+        payload.append('profileImageUrl', imageUrl);
       }
 
-      const response = await fetch('/api/doctors/register', {
+      const response = await fetch('http://localhost:5025/api/doctors/register', {
         method: 'POST',
         body: payload
       });
@@ -78,7 +175,6 @@ const DoctorRegister = () => {
       
       if (response.ok) {
         setMessage('✅ Doctor registered successfully! Redirecting to login...');
-        // ✅ FIXED: Redirect to /doctor/login (not /login)
         setTimeout(() => navigate('/doctor/login'), 2000);
       } else {
         setError(data.message || data.error || 'Registration failed');
@@ -233,7 +329,9 @@ const DoctorRegister = () => {
                       <option value="other">Other</option>
                     </select>
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Phone Number *
@@ -244,13 +342,11 @@ const DoctorRegister = () => {
                       value={formData.phone}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                       placeholder="+1 234 567 8900"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       License Number *
@@ -261,11 +357,13 @@ const DoctorRegister = () => {
                       value={formData.licenseNumber}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                       placeholder="LIC-12345"
                     />
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Years of Experience
@@ -283,61 +381,150 @@ const DoctorRegister = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Consultation Fee (Rs.)
-                    </label>
-                    <input
-                      type="number"
-                      name="consultationFee"
-                      value={formData.consultationFee}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="150"
-                      min="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Address
-                    </label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Hospital address"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Hospital address"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Profile Image (Optional)
                   </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <div className="space-y-3">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      disabled={imageUploading}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                    />
+                    {imageUploading && (
+                      <div className="flex items-center space-x-2 text-blue-600 text-sm">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        <span>Uploading image to Cloudinary...</span>
+                      </div>
+                    )}
+                    {imageUrl && (
+                      <div className="flex items-center space-x-3 p-3 bg-green-50 border border-green-200 rounded-xl">
+                        <img 
+                          src={imageUrl} 
+                          alt="Profile preview" 
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm text-green-700 font-medium">Image uploaded successfully!</p>
+                          <p className="text-xs text-green-600">Will be saved to Cloudinary</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Professional Bio
+                    About You
                   </label>
                   <textarea
-                    name="bio"
-                    value={formData.bio}
+                    name="about"
+                    value={formData.about}
                     onChange={handleChange}
                     rows="3"
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    placeholder="Share your experience, education, and specialties..."
+                    placeholder="Tell patients about your approach to medicine and patient care..."
                   />
+                </div>
+
+                {/* Qualifications Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-semibold text-gray-700">
+                      Qualifications
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addQualification}
+                      className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      + Add Qualification
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {formData.qualifications.map((qual, index) => (
+                      <div key={index} className="flex gap-2 p-3 border border-gray-200 rounded-xl">
+                        <div className="flex-1">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Qualification</label>
+                          <input
+                            type="text"
+                            name={`qualification_${index}`}
+                            value={qual}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            placeholder="e.g., MBBS, MS Ortho"
+                          />
+                        </div>
+                        {formData.qualifications.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeQualification(index)}
+                            className="mt-6 px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-xs"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Specializations Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-semibold text-gray-700">
+                      Specializations
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addSpecialization}
+                      className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      + Add Specialization
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {formData.specializations.map((spec, index) => (
+                      <div key={index} className="flex gap-2">
+                        <input
+                          type="text"
+                          name={`specialization_${index}`}
+                          value={spec}
+                          onChange={handleChange}
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          placeholder="e.g., Joint Replacement, Sports Medicine"
+                        />
+                        {formData.specializations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSpecialization(index)}
+                            className="px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-xs"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <button
@@ -358,7 +545,6 @@ const DoctorRegister = () => {
                   )}
                 </button>
 
-                {/* ✅ FIXED: Sign In link now goes to /doctor/login */}
                 <div className="text-center pt-4">
                   <p className="text-gray-500 text-sm">
                     Already have an account?{' '}

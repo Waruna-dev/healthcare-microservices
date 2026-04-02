@@ -10,11 +10,7 @@ function readInitialDoctorId() {
   try {
     const saved = localStorage.getItem('scheduleDoctorId');
     if (saved?.trim()) return saved.trim();
-    const { id } = resolveDoctorIdForApi();
-    if (id && String(id).trim()) return String(id).trim();
   } catch {}
-  const envId = import.meta.env.VITE_DEFAULT_DOCTOR_ID;
-  if (envId && String(envId).trim()) return String(envId).trim();
   return '';
 }
 
@@ -125,10 +121,9 @@ const DoctorSchedule = () => {
   const openDayModal = (ymd) => {
     const existing = monthSlots[ymd];
     setModalYmd(ymd);
-    const idField = doctorId.trim();
     if (existing) {
       setModalForm({
-        doctorId: idField,
+        doctorId: '', // Always allow user to enter their own Doctor ID
         _id: existing._id,
         startTime: existing.startTime || '09:00',
         endTime: existing.endTime || '17:00',
@@ -142,7 +137,7 @@ const DoctorSchedule = () => {
       });
     } else {
       setModalForm({
-        doctorId: idField,
+        doctorId: '',
         _id: null,
         startTime: '09:00',
         endTime: '17:00',
@@ -153,7 +148,6 @@ const DoctorSchedule = () => {
       });
     }
     setModalOpen(true);
-    setMessage({ type: '', text: '' });
   };
 
   const closeModal = () => {

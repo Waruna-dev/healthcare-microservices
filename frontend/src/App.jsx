@@ -11,6 +11,8 @@ import DoctorProfile from './pages/Doctor/DoctorProfile';
 import DoctorSchedule from './pages/Doctor/DoctorSchedule';
 import WeeklySchedule from './pages/Doctor/WeeklySchedule';
 import SlotDisplay from './pages/Doctor/SlotDisplay';
+import DoctorListing from './pages/Doctor/Doctorlisting';
+import ShowDoctorDetails from './pages/Doctor/Showdoctordetails';
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
         
         {/* Doctor Routes - NO LOGIN REQUIRED */}
         <Route path="/doctor/register" element={<DoctorRegister />} />
+        <Route path="/doctor/listing" element={<DoctorListing />} />
+        <Route path="/doctor/:id" element={<ShowDoctorDetails />} />
         
         {/* Doctor Panel with Sidebar - DIRECT ACCESS, NO AUTH */}
         <Route path="/doctor" element={<DoctorLayout />}>

@@ -58,23 +58,33 @@ const doctorSchema = new mongoose.Schema({
         default: 0,
         min: [0, 'Consultation fee cannot be negative']
     },
+    status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected', 'suspended'],
+        default: 'pending'
+    },
+    role: {
+        type: String,
+        enum: ['doctor', 'admin', 'superadmin'],
+        default: 'doctor'
+    },
     address: {
         type: String,
         default: '',
         trim: true,
         maxlength: [500, 'Address cannot exceed 500 characters']
     },
-    bio: {
+    about: {
         type: String,
         default: '',
         trim: true,
-        maxlength: [1000, 'Bio cannot exceed 1000 characters']
+        maxlength: [2000, 'About section cannot exceed 2000 characters']
     },
     gender: {
         type: String,
         default: '',
         enum: {
-            values: ['', 'male', 'female', 'other'],
+            values: ['', 'male', 'female', 'other', 'non-binary', 'prefer not to say', 'transgender', 'intersex'],
             message: '{VALUE} is not a valid gender'
         }
     },
@@ -84,12 +94,18 @@ const doctorSchema = new mongoose.Schema({
     },
     profilePicture: {
         type: String,
-        default: ''
+        default: '',
+        maxlength: [1000000, 'Profile image is too large'] // Allow up to ~1MB base64
     },
     qualifications: [{
-        degree: String,
-        institution: String,
-        year: Number
+        type: String,
+        trim: true,
+        maxlength: [200, 'Qualification cannot exceed 200 characters']
+    }],
+    specializations: [{
+        type: String,
+        trim: true,
+        maxlength: [100, 'Specialization cannot exceed 100 characters']
     }],
     workingHours: {
         start: { type: String, default: '09:00' },
