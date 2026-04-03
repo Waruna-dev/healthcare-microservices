@@ -91,7 +91,7 @@ npm install
 2. Create `.env` file with Resend configuration:
 
 ```
-MESSAGE_SERVICE_PORT=5005
+MESSAGE_SERVICE_PORT=5007
 RESEND_API_KEY=your-resend-api-key-here
 RESEND_FROM_EMAIL=noreply@yourdomain.com
 DOCTOR_LOGIN_URL=http://localhost:3000/doctor/login
@@ -105,7 +105,7 @@ npm run dev
 
 ## Environment Variables
 
-- `MESSAGE_SERVICE_PORT`: Port on which the service runs (default: 5005)
+- `MESSAGE_SERVICE_PORT`: Port on which the service runs (default: 5007)
 - `RESEND_API_KEY`: Your Resend API key (get from [resend.com](https://resend.com))
 - `RESEND_FROM_EMAIL`: Email address to send from (must be verified in Resend)
 - `DOCTOR_LOGIN_URL`: URL for doctor login (used in email template)

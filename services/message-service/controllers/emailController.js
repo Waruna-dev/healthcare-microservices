@@ -1,4 +1,4 @@
-const { getResendClient } = require("../utils/emailConfig");
+const { getResendClient, getSenderEmail } = require("../utils/emailConfig");
 
 /**
  * Send doctor approval email
@@ -12,6 +12,7 @@ const sendDoctorApprovalEmail = async (emailData) => {
   }
 
   const resend = getResendClient();
+  const fromEmail = getSenderEmail();
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px;">
@@ -31,8 +32,10 @@ const sendDoctorApprovalEmail = async (emailData) => {
   `;
 
   try {
+    console.log(`[message-service] Sending doctor approval email to ${email}`);
+
     const data = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+      from: fromEmail,
       to: email,
       subject: "CareSync: Your Account is Approved!",
       html: htmlContent,
@@ -62,6 +65,7 @@ const sendDoctorRejectionEmail = async (emailData) => {
   }
 
   const resend = getResendClient();
+  const fromEmail = getSenderEmail();
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px;">
@@ -84,8 +88,10 @@ const sendDoctorRejectionEmail = async (emailData) => {
   `;
 
   try {
+    console.log(`[message-service] Sending doctor rejection email to ${email}`);
+
     const data = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+      from: fromEmail,
       to: email,
       subject: "CareSync Registration Update",
       html: htmlContent,
