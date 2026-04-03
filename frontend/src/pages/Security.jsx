@@ -1,20 +1,10 @@
-// src/pages/public/Security.jsx
-import React from 'react';
-import { Link } from 'react-router-dom';
 
 const Security = () => {
   return (
     <div className="bg-background text-on-surface font-body min-h-screen flex flex-col selection:bg-primary-fixed selection:text-primary">
-      <nav className="p-6 flex justify-between items-center bg-surface border-b border-outline-variant/30">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="bg-primary p-2 rounded-lg">
-            <span className="material-symbols-outlined text-white">health_and_safety</span>
-          </div>
-          <span className="font-headline font-bold text-2xl text-primary tracking-tight">CareSync</span>
-        </Link>
-        <Link to="/" className="text-sm font-bold text-on-surface-variant hover:text-primary transition-colors">Back to Home</Link>
-      </nav>
-
+      <br />
+      <br />
+      
       <main className="flex-1 max-w-4xl mx-auto w-full py-16 px-6 text-center">
         <span className="material-symbols-outlined text-6xl text-secondary mb-6 inline-block">shield_lock</span>
         <h1 className="font-headline font-black text-4xl md:text-5xl text-primary mb-6">Enterprise-Grade Security</h1>

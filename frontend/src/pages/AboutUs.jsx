@@ -5,36 +5,18 @@ import { Link } from 'react-router-dom';
 const AboutUs = () => {
   return (
     <div className="bg-background text-on-surface font-body min-h-screen flex flex-col selection:bg-primary-fixed selection:text-primary">
-      {/* Navigation Bar (Optional, adapt to your actual navbar) */}
-      <nav className="p-6 flex justify-between items-center bg-surface border-b border-outline-variant/30">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="bg-primary p-2 rounded-lg">
-            <span className="material-symbols-outlined text-white">health_and_safety</span>
-          </div>
-          <span className="font-headline font-bold text-2xl text-primary tracking-tight">CareSync</span>
-        </Link>
-        <Link to="/" className="text-sm font-bold text-on-surface-variant hover:text-primary transition-colors">
-          Back to Home
-        </Link>
-      </nav>
 
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="relative bg-primary py-24 px-6 overflow-hidden flex flex-col items-center text-center">
-          <div className="absolute inset-0 z-0">
-            <img 
-              alt="Medical Professionals" 
-              className="w-full h-full object-cover opacity-20 mix-blend-luminosity" 
-              src="https://images.unsplash.com/photo-1551076805-e18690c5e53b?auto=format&fit=crop&q=80"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/80 to-primary"></div>
-          </div>
+        {/* UPDATED: Clean Light Hero Section to respect the Navbar */}
+        <section className="relative py-24 px-6 overflow-hidden flex flex-col items-center text-center">
+          {/* Subtle background glow so it isn't boring, but doesn't clash with Navbar */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
           
-          <div className="relative z-10 max-w-3xl mx-auto">
-            <h1 className="font-headline font-black text-5xl md:text-6xl text-white tracking-tight mb-6">
+          <div className="relative z-10 max-w-4xl mx-auto pt-8">
+            <h1 className="font-headline font-black text-5xl md:text-6xl text-primary tracking-tight mb-6">
               Bridging the Gap Between <br className="hidden md:block"/> Data and Compassion.
             </h1>
-            <p className="text-primary-fixed text-lg md:text-xl leading-relaxed">
+            <p className="text-on-surface-variant text-lg md:text-xl leading-relaxed max-w-2xl mx-auto">
               CareSync is a state-of-the-art digital health platform designed to unify patient records, empower doctors with AI-driven insights, and redefine the standard of clinical excellence in Sri Lanka and beyond.
             </p>
           </div>
@@ -94,10 +76,6 @@ const AboutUs = () => {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="py-8 text-center text-on-surface-variant text-sm border-t border-outline-variant/30">
-        <p>&copy; {new Date().getFullYear()} CareSync. Quality Care by Design.</p>
-      </footer>
     </div>
   );
 };

@@ -5,18 +5,8 @@ import { Link } from 'react-router-dom';
 const PrivacyPolicy = () => {
   return (
     <div className="bg-background text-on-surface font-body min-h-screen flex flex-col selection:bg-primary-fixed selection:text-primary">
-      {/* Navigation Bar */}
-      <nav className="p-6 flex justify-between items-center bg-surface border-b border-outline-variant/30">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="bg-primary p-2 rounded-lg">
-            <span className="material-symbols-outlined text-white">health_and_safety</span>
-          </div>
-          <span className="font-headline font-bold text-2xl text-primary tracking-tight">CareSync</span>
-        </Link>
-        <Link to="/" className="text-sm font-bold text-on-surface-variant hover:text-primary transition-colors">
-          Back to Home
-        </Link>
-      </nav>
+      <br />
+      <br />
 
       <main className="flex-1 max-w-4xl mx-auto w-full py-12 px-6">
         <header className="mb-12 border-b border-outline-variant/30 pb-8">
@@ -82,10 +72,7 @@ const PrivacyPolicy = () => {
 
         </article>
       </main>
-
-      <footer className="py-8 text-center text-on-surface-variant text-sm border-t border-outline-variant/30 mt-12">
-        <p>&copy; {new Date().getFullYear()} CareSync. Quality Care by Design.</p>
-      </footer>
+      
     </div>
   );
 };

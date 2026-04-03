@@ -4,9 +4,6 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Activity, Stethoscope, Fingerprint, Sparkles } from 'lucide-react';
 
-// Import our new separated components!
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 
 const Home = () => {
   // Framer Motion Animation Variants
@@ -22,9 +19,6 @@ const Home = () => {
 
   return (
     <div className="mesh-bg min-h-screen text-on-surface overflow-hidden flex flex-col">
-      
-      {/* 1. Header Component */}
-      <Navbar />
 
       {/* 2. Main Content */}
       <main className="pt-32 pb-20 flex-grow">
@@ -54,11 +48,11 @@ const Home = () => {
             
             <motion.div variants={fadeUp} className="flex flex-wrap gap-5 pt-4">
               <Link to="/register" className="group flex items-center gap-3 bg-primary text-on-primary px-8 py-4 rounded-full font-bold text-lg shadow-elevated hover:-translate-y-1 transition-all duration-300">
-                Create Account
+                Join as a Patient
                 <ArrowRight className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link to="/doctor/register" className="flex items-center gap-3 glass-card px-8 py-4 rounded-full text-on-surface font-bold text-lg hover:bg-surface-bright transition-all duration-300">
-                Apply for Doctor
+                Apply as a Doctor
               </Link>
             </motion.div>
           </motion.div>
@@ -144,9 +138,6 @@ const Home = () => {
         </section>
 
       </main>
-
-      {/* 3. Footer Component */}
-      <Footer />
       
     </div>
   );
