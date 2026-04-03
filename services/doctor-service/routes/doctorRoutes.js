@@ -11,6 +11,8 @@ router.get('/health', (req, res) => {
 // ==================== DOCTOR REGISTRATION ====================
 router.post('/register', uploadDoctorImage.single('profileImage'), doctorController.registerDoctor);
 
+router.post('/login', doctorController.loginDoctor);
+
 // ==================== GET ALL DOCTORS ====================
 router.get('/', doctorController.getAllDoctors);
 

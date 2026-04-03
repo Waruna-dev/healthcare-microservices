@@ -57,8 +57,8 @@ const Home = () => {
                 Create Account
                 <ArrowRight className="group-hover:translate-x-1 transition-transform" />
               </Link>
-              <Link to="/login" className="flex items-center gap-3 glass-card px-8 py-4 rounded-full text-on-surface font-bold text-lg hover:bg-surface-bright transition-all duration-300">
-                Patient Login
+              <Link to="/doctor/register" className="flex items-center gap-3 glass-card px-8 py-4 rounded-full text-on-surface font-bold text-lg hover:bg-surface-bright transition-all duration-300">
+                Apply for Doctor
               </Link>
             </motion.div>
           </motion.div>

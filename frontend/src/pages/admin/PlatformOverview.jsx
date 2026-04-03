@@ -319,7 +319,8 @@ const PlatformOverview = () => {
                       </div>
                       <button 
                         onClick={() => handleReviewClick(doc._id)} 
-                        className="px-3 py-1.5 text-xs font-bold text-primary bg-primary-container rounded-lg hover:bg-primary hover:text-white transition-colors shrink-0"
+                        // 🔥 THE FIX: Changed 'text-primary' to 'text-white' and 'bg-primary-container' to 'bg-primary'
+                        className="px-4 py-2 text-xs font-bold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors shadow-sm shrink-0 active:scale-95"
                       >
                         Review
                       </button>
