@@ -92,24 +92,26 @@ const PlatformOverview = () => {
 
   // --- 3. REJECT DOCTOR ---
   const handleReject = async () => {
-    const confirmReject = window.confirm("Are you sure you want to reject this registration?");
+    // Make the warning more explicit since data will be deleted
+    const confirmReject = window.confirm("Are you sure you want to reject and permanently delete this registration?");
     if (!confirmReject) return;
 
     setIsActionLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
+      // Passed name and email to backend so it can trigger the Resend email
       const response = await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}/reject`, 
-        {}, 
+        { name: selectedDoctor.name, email: selectedDoctor.email }, 
         { headers: { Authorization: `Bearer ${token}` }}
       );
 
       if (response.data.success) {
-        showToast("Doctor registration rejected.", "error");
+        showToast("Doctor registration rejected and data deleted.", "error");
         setIsModalOpen(false);
         fetchDashboardStats(); // Refresh the list
       }
     } catch (error) {
-      showToast("Failed to reject doctor", "error");
+      showToast(error.response?.data?.message || "Failed to reject doctor", "error");
     } finally {
       setIsActionLoading(false);
     }
@@ -219,7 +221,6 @@ const PlatformOverview = () => {
           
           {/* --- 1. NETWORK GROWTH CARD --- */}
           <motion.div variants={itemVars} className="bg-[#4338CA] text-white p-8 rounded-[2rem] shadow-lg flex flex-col justify-between relative overflow-hidden h-full min-h-[400px]">
-            {/* (Unchanged from your previous version) */}
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
             <div className="relative z-10">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 inline-flex text-xs font-bold uppercase tracking-widest mb-6 backdrop-blur-sm">
@@ -251,7 +252,6 @@ const PlatformOverview = () => {
 
           {/* --- 2. DEMOGRAPHICS CARD --- */}
           <motion.div variants={itemVars} className="bg-white p-8 rounded-[2rem] shadow-lg border border-gray-100">
-             {/* (Unchanged from your previous version) */}
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Users size={20} /></div>
               <h2 className="text-xl font-bold font-headline text-gray-900">Demographics</h2>
@@ -270,7 +270,7 @@ const PlatformOverview = () => {
 
               <div>
                 <div className="flex justify-between text-sm font-bold mb-2">
-                  <span className="text-gray-700">Specialists</span>
+                  <span className="text-gray-700">Doctors</span>
                   <span className="text-emerald-600">{stats.demographics.specialists.toLocaleString()}</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-3">
@@ -318,8 +318,9 @@ const PlatformOverview = () => {
                         </div>
                       </div>
                       <button 
-                        onClick={() => handleReviewClick(doc._id)} // <-- UPDATED CLICK HANDLER
-                        className="px-3 py-1.5 text-xs font-bold text-primary bg-primary-container rounded-lg hover:bg-primary hover:text-white transition-colors shrink-0"
+                        onClick={() => handleReviewClick(doc._id)} 
+                        // 🔥 THE FIX: Changed 'text-primary' to 'text-white' and 'bg-primary-container' to 'bg-primary'
+                        className="px-4 py-2 text-xs font-bold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors shadow-sm shrink-0 active:scale-95"
                       >
                         Review
                       </button>

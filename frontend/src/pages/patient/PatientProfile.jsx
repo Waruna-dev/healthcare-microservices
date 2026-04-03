@@ -22,6 +22,13 @@ const PatientProfile = () => {
   // Form States
   const [profileData, setProfileData] = useState({ name: '', email: '', contactNumber: '' });
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  
+  // --- NEW: Password Visibility States ---
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -52,11 +59,37 @@ const PatientProfile = () => {
     setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
   };
 
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  // --- NEW: Password Validation Logic ---
+  const passwordRules = {
+    length: passwordData.newPassword.length >= 8,
+    number: /\d/.test(passwordData.newPassword),
+    special: /[!@#$%^&*(),.?":{}|<>]/.test(passwordData.newPassword)
+  };
+  const strengthScore = Object.values(passwordRules).filter(Boolean).length;
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+
+    let cleanPhone = '';
+    if (profileData.contactNumber) {
+      cleanPhone = profileData.contactNumber.trim().replace(/\s+/g, '');
+      const slPhoneRegex = /^(?:0|\+94)\d{9}$/;
+      
+      if (!slPhoneRegex.test(cleanPhone)) {
+        triggerToast('Please enter a valid Sri Lankan phone number.', 'error');
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-      const response = await api.put('/patients/profile', profileData);
+      const payload = { ...profileData, contactNumber: cleanPhone };
+      const response = await api.put('/patients/profile', payload);
+      
       const updatedPatient = response.data;
       setUser(updatedPatient);
 
@@ -75,10 +108,18 @@ const PatientProfile = () => {
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
+    
+    // --- NEW: Block submission if password is too weak ---
+    if (strengthScore < 3) {
+      triggerToast('Please meet all new password requirements.', 'error');
+      return;
+    }
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       triggerToast('New passwords do not match!', 'error');
       return;
     }
+    
     setIsLoading(true);
     try {
       await api.put('/patients/password', {
@@ -87,6 +128,7 @@ const PatientProfile = () => {
       });
       triggerToast('Password changed securely.', 'success');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswords({ current: false, new: false, confirm: false }); // Reset eyes
     } catch (error) {
       triggerToast(error.response?.data?.message || 'Failed to change password.', 'error');
     } finally {
@@ -120,7 +162,7 @@ const PatientProfile = () => {
   return (
     <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-x-hidden">
       
-      {/* --- FLOATING TOAST NOTIFICATION --- */}
+      {/* FLOATING TOAST NOTIFICATION */}
       <AnimatePresence>
         {toast.show && (
           <motion.div 
@@ -140,7 +182,7 @@ const PatientProfile = () => {
         )}
       </AnimatePresence>
 
-      {/* --- CUSTOM DELETE MODAL --- */}
+      {/* CUSTOM DELETE MODAL */}
       <AnimatePresence>
         {showDeleteModal && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
@@ -253,7 +295,7 @@ const PatientProfile = () => {
                         <label className="text-sm font-bold text-on-surface ml-1 flex items-center gap-2">Phone Number <Phone size={14} className="text-outline"/></label>
                         <div className="relative">
                           <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                          <input name="contactNumber" value={profileData.contactNumber} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="+1 (555) 000-0000" />
+                          <input name="contactNumber" value={profileData.contactNumber} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="0712345678 or +94712345678" />
                         </div>
                       </div>
                     </div>
@@ -275,29 +317,94 @@ const PatientProfile = () => {
                   </div>
 
                   <form onSubmit={handleUpdatePassword} className="space-y-6 max-w-lg">
+                    
+                    {/* CURRENT PASSWORD */}
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-on-surface ml-1">Current Password</label>
-                      <div className="relative">
-                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                        <input type="password" name="currentPassword" required value={passwordData.currentPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                      <div className="relative group">
+                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors" />
+                        <input 
+                          type={showPasswords.current ? "text" : "password"} 
+                          name="currentPassword" required 
+                          value={passwordData.currentPassword} onChange={handlePasswordChange} 
+                          className="w-full pl-12 pr-12 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" 
+                        />
+                        <button 
+                          type="button" onClick={() => togglePasswordVisibility('current')}
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-outline hover:text-on-surface transition-colors focus:outline-none"
+                        >
+                          <span className="material-symbols-outlined text-lg">
+                            {showPasswords.current ? "visibility" : "visibility_off"}
+                          </span>
+                        </button>
                       </div>
                     </div>
 
                     <div className="w-full h-px bg-outline-variant/20 my-6"></div>
 
+                    {/* NEW PASSWORD & STRENGTH CHECKER */}
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-on-surface ml-1 text-primary">New Password</label>
-                      <div className="relative">
-                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                        <input type="password" name="newPassword" required value={passwordData.newPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                      <div className="relative group">
+                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors" />
+                        <input 
+                          type={showPasswords.new ? "text" : "password"} 
+                          name="newPassword" required 
+                          value={passwordData.newPassword} onChange={handlePasswordChange} 
+                          className="w-full pl-12 pr-12 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" 
+                        />
+                        <button 
+                          type="button" onClick={() => togglePasswordVisibility('new')}
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-outline hover:text-on-surface transition-colors focus:outline-none"
+                        >
+                          <span className="material-symbols-outlined text-lg">
+                            {showPasswords.new ? "visibility" : "visibility_off"}
+                          </span>
+                        </button>
                       </div>
+
+                      {/* Password Strength UI */}
+                      {passwordData.newPassword.length > 0 && (
+                        <div className="pt-2 px-1">
+                          <div className="flex gap-1 mb-2">
+                            <div className={`h-1.5 flex-1 rounded-full transition-colors ${strengthScore >= 1 ? 'bg-error' : 'bg-surface-container-high'}`}></div>
+                            <div className={`h-1.5 flex-1 rounded-full transition-colors ${strengthScore >= 2 ? 'bg-tertiary' : 'bg-surface-container-high'}`}></div>
+                            <div className={`h-1.5 flex-1 rounded-full transition-colors ${strengthScore >= 3 ? 'bg-secondary' : 'bg-surface-container-high'}`}></div>
+                          </div>
+                          <div className="flex flex-col gap-1 mt-2 text-xs text-on-surface-variant font-medium">
+                            <span className={`flex items-center gap-1 ${passwordRules.length ? 'text-secondary' : ''}`}>
+                              <span className="material-symbols-outlined text-[14px]">{passwordRules.length ? 'check_circle' : 'radio_button_unchecked'}</span> 8+ characters
+                            </span>
+                            <span className={`flex items-center gap-1 ${passwordRules.number ? 'text-secondary' : ''}`}>
+                              <span className="material-symbols-outlined text-[14px]">{passwordRules.number ? 'check_circle' : 'radio_button_unchecked'}</span> At least one number
+                            </span>
+                            <span className={`flex items-center gap-1 ${passwordRules.special ? 'text-secondary' : ''}`}>
+                              <span className="material-symbols-outlined text-[14px]">{passwordRules.special ? 'check_circle' : 'radio_button_unchecked'}</span> One special character (!@#$)
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="space-y-2">
+                    {/* CONFIRM NEW PASSWORD */}
+                    <div className="space-y-2 pt-2">
                       <label className="text-sm font-bold text-on-surface ml-1 text-primary">Confirm New Password</label>
-                      <div className="relative">
-                        <ShieldAlert size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                        <input type="password" name="confirmPassword" required value={passwordData.confirmPassword} onChange={handlePasswordChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+                      <div className="relative group">
+                        <ShieldAlert size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors" />
+                        <input 
+                          type={showPasswords.confirm ? "text" : "password"} 
+                          name="confirmPassword" required 
+                          value={passwordData.confirmPassword} onChange={handlePasswordChange} 
+                          className="w-full pl-12 pr-12 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" 
+                        />
+                        <button 
+                          type="button" onClick={() => togglePasswordVisibility('confirm')}
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-outline hover:text-on-surface transition-colors focus:outline-none"
+                        >
+                          <span className="material-symbols-outlined text-lg">
+                            {showPasswords.confirm ? "visibility" : "visibility_off"}
+                          </span>
+                        </button>
                       </div>
                     </div>
 

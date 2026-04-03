@@ -1,4 +1,6 @@
 const Doctor = require('../models/Doctor');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // ==================== GET ALL DOCTORS ====================
 const getAllDoctors = async (req, res) => {
@@ -147,6 +149,66 @@ const registerDoctor = async (req, res) => {
             success: false,
             message: 'Server error during registration'
         });
+    }
+};
+
+// ==================== DOCTOR LOGIN ====================
+const loginDoctor = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: 'Please provide email and password' });
+        }
+
+        // 1. Find the doctor
+        const doctor = await Doctor.findOne({ email }).select('+password');
+        
+        if (!doctor) {
+            return res.status(401).json({ success: false, message: 'Invalid email or password' });
+        }
+        
+        // 2. Check Approval Status
+        if (doctor.status === 'pending') {
+            return res.status(403).json({ success: false, message: 'Your account is still pending admin approval.' });
+        }
+        if (doctor.status === 'rejected') {
+            return res.status(403).json({ success: false, message: 'Your application was rejected. Please reapply.' });
+        }
+
+        if (!doctor.password) {
+            return res.status(401).json({ success: false, message: 'Account missing password. Please contact an administrator.' });
+        }
+
+        // 3. Check password
+        const isMatch = await bcrypt.compare(password, doctor.password);
+
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: 'Invalid email or password' });
+        }
+
+        // 4. Generate Token
+        const token = jwt.sign(
+            { id: doctor._id, role: doctor.role }, 
+            process.env.JWT_SECRET || 'your_fallback_secret_key', 
+            { expiresIn: '30d' }
+        );
+
+        res.status(200).json({
+            success: true,
+            token,
+            doctor: {
+                _id: doctor._id,
+                name: doctor.name,
+                email: doctor.email,
+                role: doctor.role,
+                status: doctor.status,
+                profilePicture: doctor.profilePicture
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ success: false, message: 'Server error during login' });
     }
 };
 
@@ -323,9 +385,10 @@ module.exports = {
     getAllDoctors,
     getDoctorById,
     registerDoctor,
+    loginDoctor, 
     updateDoctor,
     deleteDoctor,
     findDoctorsBySpecialty,
     toggleDoctorAvailability,
-    adminUpdateDoctor // <-- Added here!
+    adminUpdateDoctor
 };

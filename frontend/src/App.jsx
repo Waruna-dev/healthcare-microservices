@@ -1,7 +1,15 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import MainLayout from './components/MainLayout';
+
+import Home from './pages/Home';
+import AboutUs from './pages/AboutUs';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import ContactSupport from './pages/ContactSupport';
+import Features from './pages/Features';
+import Integration from './pages/Integration';
+import Security from './pages/Security';
 
 // --- Patient Pages ---
-import Home from './pages/Home';
 import PatientRegister from './pages/patient/PatientRegister';
 import PatientLogin from './pages/patient/PatientLogin';
 import PatientDashboard from './pages/patient/PatientDashboard';
@@ -28,7 +36,15 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Home />} />
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<AboutUs />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/contact-support" element={<ContactSupport />} />
+          <Route path="/features" element={<Features />} />
+          <Route path="/security" element={<Security />} />
+          <Route path="/integration" element={<Integration />} />
+        </Route>
 
         {/* Patient Routes */}
         <Route path="/register" element={<PatientRegister />} />
