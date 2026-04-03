@@ -8,6 +8,7 @@ import {
 import ManagePatients from './ManagePatients';
 import PlatformOverview from './PlatformOverview';
 import SystemSettings from './SystemSettings';
+import ManageDoctor from './ManageDoctor';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -147,11 +148,8 @@ const AdminDashboard = () => {
           {/* Placeholders for future pages */}
           {activeTab === 'overview' && <PlatformOverview />}
           
-          {activeTab === 'doctors' && (
-            <div className="flex items-center justify-center h-full text-on-surface-variant font-bold">
-              Doctor Management Module Coming Soon...
-            </div>
-          )}
+          {activeTab === 'doctors' && <ManageDoctor />}
+
           {activeTab === 'settings' && <SystemSettings />}
         </div>
       </main>
