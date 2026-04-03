@@ -57,29 +57,18 @@ const getDoctorById = async (req, res) => {
 const registerDoctor = async (req, res) => {
     try {
         const {
-            name,
-            email,
-            specialty,
-            phone,
-            licenseNumber,
-            experience,
-            address,
-            about,
-            gender,
-            qualifications,
-            specializations,
-            profileImageUrl
+            name, email, specialty, phone, licenseNumber,
+            experience, address, about, gender, qualifications,
+            specializations, profileImageUrl
         } = req.body;
 
         let profilePicture = profileImageUrl || '';
         
         if (req.file) {
-            // Convert image to base64 and store in database
             const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
             profilePicture = base64Image;
         }
 
-        // Check if doctor already exists
         const existingDoctor = await Doctor.findOne({
             $or: [{ email }, { licenseNumber }]
         });
@@ -93,7 +82,6 @@ const registerDoctor = async (req, res) => {
             });
         }
 
-        // Parse qualifications and specializations from form data
         let parsedQualifications = [];
         let parsedSpecializations = [];
         
@@ -101,8 +89,6 @@ const registerDoctor = async (req, res) => {
             try {
                 parsedQualifications = typeof qualifications === 'string' ? JSON.parse(qualifications) : qualifications;
             } catch (e) {
-                console.error('Error parsing qualifications:', e);
-                // If parsing fails, treat as simple string
                 parsedQualifications = [qualifications];
             }
         }
@@ -111,19 +97,12 @@ const registerDoctor = async (req, res) => {
             try {
                 parsedSpecializations = typeof specializations === 'string' ? JSON.parse(specializations) : specializations;
             } catch (e) {
-                console.error('Error parsing specializations:', e);
-                // If parsing fails, treat as simple string
                 parsedSpecializations = [specializations];
             }
         }
 
-        // Create new doctor
         const doctor = new Doctor({
-            name,
-            email,
-            specialty,
-            phone,
-            licenseNumber,
+            name, email, specialty, phone, licenseNumber,
             experience: parseInt(experience) || 0,
             address: address || '',
             about: about || '',
@@ -131,13 +110,12 @@ const registerDoctor = async (req, res) => {
             profilePicture,
             qualifications: parsedQualifications,
             specializations: parsedSpecializations,
-            status: 'pending', // Default status
-            role: 'doctor' // Default role
+            status: 'pending', 
+            role: 'doctor' 
         });
 
         await doctor.save();
 
-        // Return doctor data without password
         const doctorResponse = doctor.toJSON();
 
         res.status(201).json({
@@ -148,7 +126,6 @@ const registerDoctor = async (req, res) => {
     } catch (error) {
         console.error('Registration error:', error);
         
-        // Handle validation errors
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
             return res.status(400).json({
@@ -158,7 +135,6 @@ const registerDoctor = async (req, res) => {
             });
         }
 
-        // Handle duplicate key errors
         if (error.code === 11000) {
             const field = Object.keys(error.keyPattern)[0];
             return res.status(400).json({
@@ -187,7 +163,6 @@ const updateDoctor = async (req, res) => {
             });
         }
 
-        // Remove sensitive fields that shouldn't be updated via this endpoint
         delete updates.password;
         delete updates.createdAt;
         
@@ -319,6 +294,31 @@ const toggleDoctorAvailability = async (req, res) => {
     }
 };
 
+// ==========================================
+// ADMIN UPDATE DOCTOR (Allows password/status changes)
+// ==========================================
+const adminUpdateDoctor = async (req, res) => {
+    try {
+        const updatedDoctor = await Doctor.findByIdAndUpdate(
+            req.params.id,
+            {
+                $set: req.body 
+            },
+            { new: true }
+        );
+
+        if (!updatedDoctor) {
+            return res.status(404).json({ success: false, message: 'Doctor not found' });
+        }
+
+        res.status(200).json({ success: true, data: updatedDoctor });
+    } catch (error) {
+        console.error("Admin Update Error:", error);
+        res.status(500).json({ success: false, message: 'Failed to update doctor' });
+    }
+};
+
+// ==================== EXPORTS ====================
 module.exports = {
     getAllDoctors,
     getDoctorById,
@@ -326,5 +326,6 @@ module.exports = {
     updateDoctor,
     deleteDoctor,
     findDoctorsBySpecialty,
-    toggleDoctorAvailability
+    toggleDoctorAvailability,
+    adminUpdateDoctor // <-- Added here!
 };
