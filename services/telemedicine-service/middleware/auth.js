@@ -1,29 +1,52 @@
 const jwt = require('jsonwebtoken');
 
-const TEST_PATIENT_ID = "69ca62e05e3a7704da16fd45";
-const TEST_DOCTOR_ID = "67e8a1b2c3d4e5f6a7b8c9d0";
-
 const protect = async (req, res, next) => {
-  let token;
-  
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.userId = decoded.id;
-      req.userRole = decoded.role || 'patient';
-    } catch (error) {
-      console.log('Token verification failed, using test user');
-      req.userId = TEST_PATIENT_ID;
-      req.userRole = 'patient';
+    let token;
+    
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            
+            // Try to find patient first
+            const Patient = require('../models/Patient');
+            const patient = await Patient.findById(decoded.id).select('-password');
+            
+            if (patient) {
+                req.patient = patient;
+                req.userType = 'patient';
+                return next();
+            }
+            
+            // Try to find doctor
+            const Doctor = require('../models/Doctor');
+            const doctor = await Doctor.findById(decoded.id).select('-password');
+            
+            if (doctor) {
+                req.doctor = doctor;
+                req.userType = 'doctor';
+                return next();
+            }
+            
+            return res.status(401).json({
+                success: false,
+                message: 'Not authorized, user not found'
+            });
+        } catch (error) {
+            console.error('Auth error:', error);
+            return res.status(401).json({
+                success: false,
+                message: 'Not authorized, token failed'
+            });
+        }
     }
-  } else {
-    console.log('No token provided, using test user');
-    req.userId = TEST_PATIENT_ID;
-    req.userRole = 'patient';
-  }
-  
-  next();
+    
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: 'Not authorized, no token'
+        });
+    }
 };
 
 module.exports = { protect };

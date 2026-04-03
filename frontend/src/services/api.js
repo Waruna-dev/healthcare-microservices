@@ -8,47 +8,48 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // Add timeout
 });
 
-// Request interceptor - add token
+// Single request interceptor (combine both into one)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// 2. Request Interceptor (SMART TOKEN INJECTION)
-api.interceptors.request.use(
-  (config) => {
-    // If the API request is going to an admin route, use the adminToken
-    if (config.url.includes('/admin')) {
+    // For admin routes
+    if (config.url && config.url.includes('/admin')) {
       const adminToken = localStorage.getItem('adminToken');
       if (adminToken) {
         config.headers.Authorization = `Bearer ${adminToken}`;
       }
-    } else {
-      // Otherwise, use the standard patient token
-      const token = localStorage.getItem('token');
+    } 
+    // For patient routes (default)
+    else {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
+    
+    // Debug logging
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('Request interceptor error:', error);
+    return Promise.reject(error);
+  }
 );
 
-// 3. Response Interceptor (SMART REDIRECT)
+// Response interceptor
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`API Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
   (error) => {
+    console.error('API Error:', error.response?.status, error.response?.data);
+    
     if (error.response && error.response.status === 401) {
-      
       // Check if the user is currently in the Admin Portal
       if (window.location.pathname.includes('/admin')) {
         localStorage.removeItem('adminToken');
@@ -61,7 +62,9 @@ api.interceptors.response.use(
       else {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/register' && window.location.pathname !== '/') {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        if (!['/login', '/register', '/'].includes(window.location.pathname)) {
           window.location.href = '/login';
         }
       }
@@ -69,54 +72,50 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 // Appointment API
 export const appointmentAPI = {
-  // Get available slots for a doctor
-  getAvailableSlots: async (doctorId) => {
-    const response = await api.get(`/appointments/available-slots?doctorId=${doctorId}`);
-    return response.data;
-  },
-  
-  // Create appointment
-  createAppointment: async (appointmentData) => {
-    const response = await api.post('/appointments', appointmentData);
-    return response.data;
-  },
-  
-  // Get patient appointments
   getPatientAppointments: async (patientId) => {
     const response = await api.get(`/appointments/patient/${patientId}`);
     return response.data;
   },
-  
-  // Update appointment status
-  updateAppointmentStatus: async (appointmentId, status, notes) => {
-    const response = await api.put(`/appointments/${appointmentId}/status`, { status, notes });
+  getDoctorAppointments: async (doctorId) => {
+    const response = await api.get(`/appointments/doctor/${doctorId}`);
     return response.data;
   },
-  
-  // Process payment
-  processPayment: async (appointmentId, paymentMethod) => {
-    const response = await api.post(`/appointments/${appointmentId}/payment`, { paymentMethod });
+  getAppointmentById: async (appointmentId) => {
+    const response = await api.get(`/appointments/${appointmentId}`);
     return response.data;
   },
+  createAppointment: async (appointmentData) => {
+    // Use JSON instead of FormData for simpler handling
+    const response = await api.post('/appointments', appointmentData);
+    return response.data;
+  },
+  updateStatus: async (appointmentId, status, rejectionReason) => {
+    const response = await api.put(`/appointments/${appointmentId}/status`, { status, rejectionReason });
+    return response.data;
+  },
+  processPayment: async (appointmentId, paymentData) => {
+    const response = await api.post(`/appointments/${appointmentId}/payment`, paymentData);
+    return response.data;
+  },
+  cancelAppointment: async (appointmentId, reason) => {
+    const response = await api.put(`/appointments/${appointmentId}/cancel`, { reason });
+    return response.data;
+  }
 };
 
-// Telemedicine Service APIs
+// Telemedicine API
 export const telemedicineAPI = {
-  // Get or create telemedicine session
   getSession: async (appointmentId) => {
     const response = await api.get(`/telemedicine/${appointmentId}`);
     return response.data;
   },
-  
-  // Start session
   startSession: async (appointmentId) => {
     const response = await api.post(`/telemedicine/${appointmentId}/start`);
     return response.data;
   },
-  
-  // End session with prescription
   endSession: async (appointmentId, notes, prescription) => {
     const response = await api.post(`/telemedicine/${appointmentId}/end`, {
       consultationNotes: notes,
@@ -124,8 +123,6 @@ export const telemedicineAPI = {
     });
     return response.data;
   },
-  
-  // Get prescription
   getPrescription: async (appointmentId) => {
     const response = await api.get(`/telemedicine/${appointmentId}/prescription`);
     return response.data;

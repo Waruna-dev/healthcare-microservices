@@ -22,6 +22,8 @@ import SlotDisplay from './pages/Doctor/SlotDisplay';
 import DoctorListing from './pages/Doctor/Doctorlisting';
 import ShowDoctorDetails from './pages/Doctor/Showdoctordetails';
 
+import TelemedicineSession from './components/telemedicine/TelemedicineSession';
+
 
 import AppointmentBook from './components/appointment/AppointmentBooking';
 function App() {
@@ -45,6 +47,8 @@ function App() {
         <Route path="/doctor/register" element={<DoctorRegister />} />
         <Route path="/doctor/listing" element={<DoctorListing />} />
         <Route path="/doctor/:id" element={<ShowDoctorDetails />} />
+
+<Route path="/telemedicine/:appointmentId" element={<TelemedicineSession />} />
 
         <Route path="/doctor" element={<DoctorLayout />}>
           <Route index element={<DoctorDashboard />} />

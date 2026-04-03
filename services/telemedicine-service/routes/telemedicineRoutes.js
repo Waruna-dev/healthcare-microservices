@@ -1,19 +1,17 @@
+// routes/telemedicineRoutes.js
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
 const {
-  getOrCreateSession,
-  startSession,
-  endSession,
-  getPrescription
+    startSession,
+    endSession,
+    getSession,
+    getPrescription
 } = require('../controllers/telemedicineController');
+const { protect } = require('../middleware/auth');
 
-// All routes require authentication
-router.use(protect);
-
-router.get('/:appointmentId', getOrCreateSession);
-router.post('/:appointmentId/start', startSession);
-router.post('/:appointmentId/end', endSession);
-router.get('/:appointmentId/prescription', getPrescription);
+router.get('/:appointmentId', protect, getSession);
+router.post('/:appointmentId/start', protect, startSession);
+router.post('/:appointmentId/end', protect, endSession);
+router.get('/:appointmentId/prescription', protect, getPrescription);
 
 module.exports = router;

@@ -1,279 +1,199 @@
-const TelemedicineSession = require('../models/TelemedicineSession');
-const Prescription = require('../models/Prescription');
-const axios = require('axios');
-
-// Generate Jitsi meeting link
-const generateMeetingLink = (appointmentId) => {
-  const roomName = `healthcare_${appointmentId}_${Date.now()}`;
-  return {
-    roomName,
-    url: `https://meet.jit.si/${roomName}`,
-    config: {
-      startWithAudioMuted: false,
-      startWithVideoMuted: false,
-      prejoinPageEnabled: true
-    }
-  };
-};
-
-// @desc    Get or create telemedicine session
-// @route   GET /api/telemedicine/:appointmentId
-const getOrCreateSession = async (req, res) => {
-  try {
-    const { appointmentId } = req.params;
-    const userId = req.userId;
-    const userRole = req.userRole;
-    
-    // Check if session exists
-    let session = await TelemedicineSession.findOne({ appointmentId });
-    
-    if (!session) {
-      // Get appointment details from appointment service
-      let appointment;
-      try {
-        const appointmentRes = await axios.get(`${process.env.APPOINTMENT_SERVICE_URL}/api/appointments/${appointmentId}`);
-        appointment = appointmentRes.data.appointment;
-      } catch (error) {
-        return res.status(404).json({ message: 'Appointment not found' });
-      }
-      
-      // Check authorization
-      if (userRole === 'patient' && appointment.patientId.toString() !== userId) {
-        return res.status(403).json({ message: 'Unauthorized' });
-      }
-      if (userRole === 'doctor' && appointment.doctorId.toString() !== userId) {
-        return res.status(403).json({ message: 'Unauthorized' });
-      }
-      
-      // Check payment status
-      if (appointment.paymentStatus !== 'paid') {
-        return res.status(400).json({ message: 'Payment required to access telemedicine' });
-      }
-      
-      // Generate meeting link
-      const meeting = generateMeetingLink(appointmentId);
-      
-      // Create session
-      session = await TelemedicineSession.create({
-        appointmentId,
-        patientId: appointment.patientId,
-        doctorId: appointment.doctorId,
-        meetingLink: meeting.url,
-        roomName: meeting.roomName,
-        status: 'scheduled'
-      });
-    }
-    
-    // Check if it's time for consultation
-    let appointment;
-    try {
-      const appointmentRes = await axios.get(`${process.env.APPOINTMENT_SERVICE_URL}/api/appointments/${appointmentId}`);
-      appointment = appointmentRes.data.appointment;
-    } catch (error) {
-      return res.status(404).json({ message: 'Appointment not found' });
-    }
-    
-    const now = new Date();
-    const appointmentDate = new Date(appointment.date);
-    const [hours, minutes] = appointment.timeSlot.start.split(':');
-    appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0);
-    
-    const joinTime = new Date(appointmentDate.getTime() - 15 * 60000);
-    const endTime = new Date(appointmentDate.getTime() + 60 * 60000);
-    
-    if (now < joinTime) {
-      return res.json({
-        success: true,
-        canJoin: false,
-        message: `You can join 15 minutes before appointment`,
-        scheduledTime: appointment.timeSlot.start,
-        meetingLink: session.meetingLink
-      });
-    }
-    
-    res.json({
-      success: true,
-      canJoin: true,
-      session: {
-        meetingLink: session.meetingLink,
-        roomName: session.roomName,
-        status: session.status
-      },
-      appointment: {
-        date: appointment.date,
-        timeSlot: appointment.timeSlot,
-        doctor: appointment.doctorName,
-        patient: appointment.patientName
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
+const Appointment = require('../models/Appointment');
 
 // @desc    Start telemedicine session
 // @route   POST /api/telemedicine/:appointmentId/start
 const startSession = async (req, res) => {
-  try {
-    const { appointmentId } = req.params;
-    const userId = req.userId;
-    const userRole = req.userRole;
-    
-    let session = await TelemedicineSession.findOne({ appointmentId });
-    
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
+    try {
+        const { appointmentId } = req.params;
+        
+        const appointment = await Appointment.findById(appointmentId)
+            .populate('doctorId', 'name email')
+            .populate('patientId', 'name email');
+
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+
+        if (appointment.paymentStatus !== 'completed') {
+            return res.status(400).json({
+                success: false,
+                message: 'Payment required to start telemedicine session'
+            });
+        }
+
+        if (!appointment.telemedicineLink) {
+            return res.status(400).json({
+                success: false,
+                message: 'Telemedicine link not generated'
+            });
+        }
+
+        // Check if session time is valid
+        const now = new Date();
+        const appointmentDate = new Date(appointment.date);
+        const [startHour, startMinute] = appointment.startTime.split(':');
+        appointmentDate.setHours(parseInt(startHour), parseInt(startMinute), 0);
+        
+        const appointmentEnd = new Date(appointmentDate);
+        const [endHour, endMinute] = appointment.endTime.split(':');
+        appointmentEnd.setHours(parseInt(endHour), parseInt(endMinute), 0);
+        
+        if (now < appointmentDate) {
+            return res.status(400).json({
+                success: false,
+                message: `Session starts at ${appointment.startTime}. Please join at the scheduled time.`
+            });
+        }
+        
+        if (now > appointmentEnd) {
+            return res.status(400).json({
+                success: false,
+                message: 'This session has ended'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Session ready to start',
+            telemedicineLink: appointment.telemedicineLink,
+            telemedicineRoomId: appointment.telemedicineRoomId,
+            appointment: {
+                id: appointment._id,
+                doctor: appointment.doctorId,
+                patient: appointment.patientId,
+                startTime: appointment.startTime,
+                endTime: appointment.endTime
+            }
+        });
+    } catch (error) {
+        console.error('Start session error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-    
-    // Check authorization
-    if (userRole === 'patient' && session.patientId.toString() !== userId) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-    if (userRole === 'doctor' && session.doctorId.toString() !== userId) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-    
-    // Update participant status
-    if (userRole === 'patient') {
-      session.participants.patientJoined = true;
-      session.participants.patientJoinTime = new Date();
-    } else if (userRole === 'doctor') {
-      session.participants.doctorJoined = true;
-      session.participants.doctorJoinTime = new Date();
-    }
-    
-    // Start session if first participant joins
-    if (session.status === 'scheduled' && (session.participants.patientJoined || session.participants.doctorJoined)) {
-      session.status = 'active';
-      session.startTime = new Date();
-    }
-    
-    await session.save();
-    
-    res.json({
-      success: true,
-      session: {
-        meetingLink: session.meetingLink,
-        status: session.status
-      },
-      message: `${userRole} has joined the session`
-    });
-    
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
-// @desc    End session and add prescription
+// @desc    End telemedicine session
 // @route   POST /api/telemedicine/:appointmentId/end
 const endSession = async (req, res) => {
-  try {
-    const { appointmentId } = req.params;
-    const { consultationNotes, prescription } = req.body;
-    const userId = req.userId;
-    
-    const session = await TelemedicineSession.findOne({ appointmentId });
-    
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
-    }
-    
-    // Only doctor can end session
-    if (session.doctorId.toString() !== userId) {
-      return res.status(403).json({ message: 'Only doctor can end the consultation' });
-    }
-    
-    // End session
-    await session.endSession(consultationNotes, prescription);
-    
-    // Save prescription if provided
-    let savedPrescription = null;
-    if (prescription) {
-      savedPrescription = await Prescription.create({
-        appointmentId,
-        patientId: session.patientId,
-        doctorId: session.doctorId,
-        ...prescription
-      });
-    }
-    
-    // Update appointment in appointment service
     try {
-      await axios.put(`${process.env.APPOINTMENT_SERVICE_URL}/api/appointments/${appointmentId}/status`, {
-        status: 'completed',
-        consultationNotes,
-        prescription: savedPrescription
-      });
+        const { appointmentId } = req.params;
+        const { consultationNotes, prescription } = req.body;
+        
+        const appointment = await Appointment.findById(appointmentId);
+        
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+
+        appointment.status = 'completed';
+        appointment.consultationNotes = consultationNotes || appointment.consultationNotes;
+        appointment.prescription = prescription || null;
+        appointment.updatedAt = new Date();
+        
+        await appointment.save();
+
+        res.json({
+            success: true,
+            message: 'Session ended successfully',
+            appointment
+        });
     } catch (error) {
-      console.log('Error updating appointment:', error.message);
+        console.error('End session error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-    
-    // Send notification to patient
+};
+
+// @desc    Get session info
+// @route   GET /api/telemedicine/:appointmentId
+const getSession = async (req, res) => {
     try {
-      await axios.post(`${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/send`, {
-        userId: session.patientId,
-        userType: 'patient',
-        type: 'consultation_completed',
-        title: 'Consultation Completed',
-        message: 'Your consultation has been completed. Please check your prescriptions.',
-        appointmentId
-      });
+        const { appointmentId } = req.params;
+        
+        const appointment = await Appointment.findById(appointmentId)
+            .populate('doctorId', 'name email specialty profilePicture')
+            .populate('patientId', 'name email contactNumber');
+
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+
+        if (appointment.paymentStatus !== 'completed') {
+            return res.status(400).json({
+                success: false,
+                message: 'Payment required to access telemedicine session'
+            });
+        }
+
+        res.json({
+            success: true,
+            telemedicineLink: appointment.telemedicineLink,
+            telemedicineRoomId: appointment.telemedicineRoomId,
+            appointment: {
+                id: appointment._id,
+                date: appointment.date,
+                startTime: appointment.startTime,
+                endTime: appointment.endTime,
+                doctor: appointment.doctorId,
+                patient: appointment.patientId,
+                status: appointment.status
+            }
+        });
     } catch (error) {
-      console.log('Notification error:', error.message);
+        console.error('Get session error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-    
-    res.json({
-      success: true,
-      message: 'Consultation ended successfully',
-      session: {
-        duration: session.duration,
-        endTime: session.endTime
-      },
-      prescription: savedPrescription
-    });
-    
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
 // @desc    Get prescription
 // @route   GET /api/telemedicine/:appointmentId/prescription
 const getPrescription = async (req, res) => {
-  try {
-    const { appointmentId } = req.params;
-    const userId = req.userId;
-    const userRole = req.userRole;
-    
-    const prescription = await Prescription.findOne({ appointmentId });
-    
-    if (!prescription) {
-      return res.status(404).json({ message: 'Prescription not found' });
+    try {
+        const { appointmentId } = req.params;
+        
+        const appointment = await Appointment.findById(appointmentId);
+        
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            prescription: appointment.prescription,
+            consultationNotes: appointment.consultationNotes,
+            appointmentId: appointment._id
+        });
+    } catch (error) {
+        console.error('Get prescription error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-    
-    // Check authorization
-    if (userRole === 'patient' && prescription.patientId.toString() !== userId) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-    if (userRole === 'doctor' && prescription.doctorId.toString() !== userId) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-    
-    res.json({
-      success: true,
-      prescription
-    });
-    
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
 module.exports = {
-  getOrCreateSession,
-  startSession,
-  endSession,
-  getPrescription
+    startSession,
+    endSession,
+    getSession,
+    getPrescription
 };

@@ -1,3 +1,4 @@
+// server.js - API Gateway (PORT: 5000) - COMPLETE WORKING VERSION
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -5,81 +6,64 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// Enable CORS
-app.use(cors());
+// Enable CORS for frontend
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
+  credentials: true
+}));
 
-// 1. Patient Service Proxy
-app.use(
-  '/api/patients',
-  createProxyMiddleware({
-    target: 'http://localhost:5005',
-    changeOrigin: true,
-    pathRewrite: { '^/api/patients': '' },
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`[Proxying Patient]: ${req.method} ${req.url}`);
-    }
-  })
-);
+// Logging
+app.use((req, res, next) => {
+  console.log(`[Gateway] ${req.method} ${req.url}`);
+  next();
+});
 
-// 2. Doctor Service Proxy - IMPORTANT: Keep full path
-app.use(
-  '/api/doctors',
-  createProxyMiddleware({
-    target: 'http://localhost:5025',
-    changeOrigin: true,
-    // DO NOT rewrite path - keep /api/doctors prefix
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`[Proxying Doctor]: ${req.method} ${req.url} -> http://localhost:5025${req.url}`);
-    },
-    onError: (err, req, res) => {
-      console.error('Doctor Service Error:', err.message);
-      res.status(500).json({ error: 'Doctor service is unavailable' });
-    }
-  })
-);
+// Patient Service Proxy
+app.use('/api/patients', createProxyMiddleware({
+  target: 'http://localhost:5005',
+  changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Proxy] Forwarding to patient service: ${req.method} ${req.url}`);
+  },
+  onError: (err, req, res) => {
+    console.error('Proxy error:', err.message);
+    res.status(503).json({ error: 'Patient service unavailable' });
+  }
+}));
 
-// 3. YOUR Appointment Service
-app.use(
-  '/api/appointments',
-  createProxyMiddleware({
-    target: 'http://localhost:5015',
-    changeOrigin: true,
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`[Proxying Appointment]: ${req.method} ${req.url} -> http://localhost:5015${req.url}`);
-    }
-  })
-);
+// Doctor Service Proxy
+app.use('/api/doctors', createProxyMiddleware({
+  target: 'http://localhost:5025',
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    res.status(503).json({ error: 'Doctor service unavailable' });
+  }
+}));
 
-// 4. YOUR Telemedicine Service
-app.use(
-  '/api/telemedicine',
-  createProxyMiddleware({
-    target: 'http://localhost:5018',
-    changeOrigin: true,
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`[Proxying Telemedicine]: ${req.method} ${req.url} -> http://localhost:5018${req.url}`);
-    }
-  })
-);
+// Appointment Service Proxy
+app.use('/api/appointments', createProxyMiddleware({
+  target: 'http://localhost:5015',
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    res.status(503).json({ error: 'Appointment service unavailable' });
+  }
+}));
+
+// Telemedicine Service Proxy
+app.use('/api/telemedicine', createProxyMiddleware({
+  target: 'http://localhost:5018',
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    res.status(503).json({ error: 'Telemedicine service unavailable' });
+  }
+}));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ status: 'OK', gateway: 'running' });
 });
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'CareSync API Gateway is running!',
-    endpoints: {
-      patient: 'http://localhost:5005/api/patients',
-      doctor: 'http://localhost:5025/api/doctors',
-      appointment: 'http://localhost:5015/api/appointments',
-      telemedicine: 'http://localhost:5018/api/telemedicine'
-    }
-  });
-});
-
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`✅ API Gateway running on port ${PORT}`);
 });
