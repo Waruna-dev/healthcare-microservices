@@ -67,7 +67,7 @@ const PrivacyPolicy = () => {
             <p className="text-on-surface-variant">
               If there are any questions regarding this privacy policy or if you wish to exercise your right to have your data completely erased from our system, you may contact our Data Protection Officer at:
             </p>
-            <p className="font-bold mt-2 text-primary">privacy@caresync.lk</p>
+            <p className="font-bold mt-2 text-primary">support@caresync.lk</p>
           </section>
 
         </article>
