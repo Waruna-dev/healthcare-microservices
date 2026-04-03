@@ -157,12 +157,7 @@ const loginDoctor = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        console.log("\n=== 🕵️‍♂️ LOGIN DEBUG ===");
-        console.log(`1. Email typed: "${email}"`);
-        console.log(`2. Password typed: "${password}"`);
-
         if (!email || !password) {
-            console.log("❌ Failed: Missing email or password");
             return res.status(400).json({ success: false, message: 'Please provide email and password' });
         }
 
@@ -170,16 +165,11 @@ const loginDoctor = async (req, res) => {
         const doctor = await Doctor.findOne({ email }).select('+password');
         
         if (!doctor) {
-            console.log("❌ Failed: Could not find any doctor with that exact email in the DB.");
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
         
-        console.log(`3. Doctor found! Name: Dr. ${doctor.name}`);
-        console.log(`4. Account Status: ${doctor.status}`);
-
         // 2. Check Approval Status
         if (doctor.status === 'pending') {
-            console.log("❌ Failed: Account is still pending");
             return res.status(403).json({ success: false, message: 'Your account is still pending admin approval.' });
         }
         if (doctor.status === 'rejected') {
@@ -187,20 +177,15 @@ const loginDoctor = async (req, res) => {
         }
 
         if (!doctor.password) {
-            console.log("❌ Failed: This doctor has NO password saved in the DB!");
             return res.status(401).json({ success: false, message: 'Account missing password. Please contact an administrator.' });
         }
 
         // 3. Check password
-        console.log(`5. DB Password Hash: ${doctor.password}`);
         const isMatch = await bcrypt.compare(password, doctor.password);
-        console.log(`6. Do passwords match? ${isMatch ? "✅ YES!" : "❌ NO!"}`);
 
         if (!isMatch) {
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
-
-        console.log("✅ SUCCESS: Generating token and logging in...\n");
 
         // 4. Generate Token
         const token = jwt.sign(
