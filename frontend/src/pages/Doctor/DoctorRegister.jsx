@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import img1 from '../../assets/images/1e73cdf4e73454e4db41a709b9163cac.jpg';
@@ -9,6 +9,19 @@ const DoctorRegister = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showVerificationPopup, setShowVerificationPopup] = useState(false);
+  const [countdown, setCountdown] = useState(8);
+
+  // Countdown effect
+  useEffect(() => {
+    if (showVerificationPopup && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [showVerificationPopup, countdown]);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -185,8 +198,12 @@ const DoctorRegister = () => {
       const data = await response.json();
       
       if (response.ok) {
-        setMessage('✅ Doctor registered successfully! Redirecting to login...');
-        setTimeout(() => navigate('/doctor/login'), 2000);
+        setShowVerificationPopup(true);
+        // No automatic redirect - user can click to go to homepage
+        setTimeout(() => {
+          setShowVerificationPopup(false);
+          navigate('/'); // Redirect to homepage after 15 seconds
+        }, 15000);
       } else {
         setError(data.message || data.error || 'Registration failed');
       }
@@ -259,7 +276,7 @@ const DoctorRegister = () => {
             {/* RIGHT SIDE - FORM */}
             <div className="p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
               <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-800 mb-2">Create Account</h2>
+                <h2 className="text-3xl font-bold text-gray-800 mb-2">Register</h2>
                 <p className="text-gray-500">Fill in your professional details to get started</p>
               </div>
 
@@ -552,7 +569,7 @@ const DoctorRegister = () => {
                       Registering...
                     </span>
                   ) : (
-                    'Create Account'
+                    'Register'
                   )}
                 </button>
 
@@ -569,7 +586,83 @@ const DoctorRegister = () => {
           </div>
         </div>
       </div>
-    </div>
+
+    {showVerificationPopup && (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 transform transition-all">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">🎉 Registration Successful!</h3>
+            <p className="text-gray-600 mb-4">Welcome to CareSync Medical Community!</p>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center mb-2">
+                <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 4.26a2 2 0 002.22 0l7.89-4.26 2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm text-blue-800 font-semibold">📧 Email Verification</span>
+              </div>
+              <p className="text-sm text-blue-700">We will send you an email with verification details</p>
+              <p className="text-xs text-blue-600 mt-1">Check your inbox at: {formData.email}</p>
+            </div>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center mb-2">
+                <svg className="w-5 h-5 text-amber-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm text-amber-800 font-semibold">🔍 Admin Verification Process</span>
+              </div>
+              <div className="text-left space-y-1 text-sm text-amber-700">
+                <p>• Our admin team will verify your credentials</p>
+                <p>• We will notify you via email once approved</p>
+                <p>• You'll receive login credentials after verification</p>
+                <p>• Process usually takes 24-48 hours</p>
+              </div>
+            </div>
+            
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center mb-2">
+                <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm text-green-800 font-semibold">💡 What's Next?</span>
+              </div>
+              <p className="text-sm text-green-700">Keep an eye on your email for verification status updates</p>
+            </div>
+            
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-purple-800 font-semibold mb-1">🏥 Join 5000+ Healthcare Professionals</p>
+              <p className="text-sm text-purple-700">Thank you for choosing our platform for your medical practice!</p>
+            </div>
+            
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={() => {
+                  setShowVerificationPopup(false);
+                  navigate('/');
+                }}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg"
+              >
+                Go to Homepage
+              </button>
+              
+              <div className="flex items-center justify-center">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-purple-600 text-sm font-bold">{countdown}</span>
+                </div>
+                <p className="text-sm text-gray-500">Auto-redirect in {countdown} seconds...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
   );
 };
 
