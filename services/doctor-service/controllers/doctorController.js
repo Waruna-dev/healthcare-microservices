@@ -3,11 +3,53 @@ const Doctor = require('../models/Doctor');
 // ==================== GET ALL DOCTORS ====================
 const getAllDoctors = async (req, res) => {
     try {
-        const doctors = await Doctor.find({}).select('-password').sort({ createdAt: -1 });
+        const {
+            page = 1,
+            limit = 10,
+            specialty,
+            search,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
+        } = req.query;
+
+        // Build query
+        const query = {};
         
+        // Filter by specialty
+        if (specialty) {
+            query.specialty = specialty;
+        }
+
+        // Search by name or email
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { specialty: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Sort options
+        const sort = {};
+        sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+        // Execute query with pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const doctors = await Doctor.find(query)
+            .select('-password')
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        // Get total count for pagination
+        const total = await Doctor.countDocuments(query);
+
         res.status(200).json({
             success: true,
             count: doctors.length,
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / parseInt(limit)),
             doctors: doctors
         });
     } catch (error) {

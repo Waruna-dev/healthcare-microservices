@@ -13,6 +13,7 @@ import DoctorLayout from './pages/Doctor/DoctorLayout';
 import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import AllDoctors from './pages/Doctor/AllDoctors';
 import DoctorProfile from './pages/Doctor/DoctorProfile';
+import DoctorProfileEdit from './pages/Doctor/Doctorprofile_edit';
 import DoctorSchedule from './pages/Doctor/DoctorSchedule';
 import WeeklySchedule from './pages/Doctor/WeeklySchedule';
 import SlotDisplay from './pages/Doctor/SlotDisplay';
@@ -40,6 +41,7 @@ function App() {
         <Route path="/doctor/register" element={<DoctorRegister />} />
         <Route path="/doctor/listing" element={<DoctorListing />} />
         <Route path="/doctor/:id" element={<ShowDoctorDetails />} />
+        <Route path="/doctor/edit-profile/:doctorId" element={<DoctorProfileEdit />} />
 
         {/* Doctor Panel with Sidebar */}
         <Route path="/doctor" element={<DoctorLayout />}>

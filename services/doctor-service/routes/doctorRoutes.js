@@ -1,19 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { uploadDoctorImage } = require('../middleware/upload');
+const { cacheMiddleware } = require('../middleware/cache');
 const doctorController = require('../controllers/doctorController');
 
 // ==================== DOCTOR REGISTRATION ====================
 router.post('/register', uploadDoctorImage.single('profileImage'), doctorController.registerDoctor);
 
-// ==================== GET ALL DOCTORS ====================
-router.get('/', doctorController.getAllDoctors);
+// ==================== GET ALL DOCTORS (with caching) ====================
+router.get('/', cacheMiddleware(60), doctorController.getAllDoctors); // Cache for 1 minute
 
 // ==================== GET DOCTOR BY ID ====================
 router.get('/:id', doctorController.getDoctorById);
 
 // ==================== FIND DOCTORS BY SPECIALTY ====================
-router.get('/specialty/:specialty', doctorController.findDoctorsBySpecialty);
+router.get('/specialty/:specialty', cacheMiddleware(120), doctorController.findDoctorsBySpecialty); // Cache for 2 minutes
 
 // ==================== UPDATE DOCTOR ====================
 router.put('/:id', doctorController.updateDoctor);

@@ -75,16 +75,19 @@ const DoctorRegister = () => {
     setError('');
     
     try {
-      // First try without preset to see if the issue is preset-related
+      // Use environment variables for Cloudinary
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dsvrla6zk';
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_unsigned';
+      
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", "ml_unsigned");
+      formData.append("upload_preset", uploadPreset);
       formData.append("folder", "doctor_profiles"); // Organize images in folder
       
-      console.log('Uploading to Cloudinary...');
+      console.log('Uploading to Cloudinary...', { cloudName, uploadPreset });
       
       const res = await fetch(
-        "https://api.cloudinary.com/v1_1/dsvrla6zk/image/upload",
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         { method: "POST", body: formData }
       );
       
@@ -164,6 +167,14 @@ const DoctorRegister = () => {
       // Add profile image URL only if uploaded to Cloudinary
       if (imageUrl) {
         payload.append('profileImageUrl', imageUrl);
+        console.log('Adding profileImageUrl to payload:', imageUrl);
+      } else {
+        console.log('No imageUrl to add to payload');
+      }
+
+      console.log('FormData contents:');
+      for (let [key, value] of payload.entries()) {
+        console.log(key, value);
       }
 
       const response = await fetch('http://localhost:5025/api/doctors/register', {
