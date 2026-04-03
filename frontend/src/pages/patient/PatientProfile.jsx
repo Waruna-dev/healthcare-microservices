@@ -54,9 +54,25 @@ const PatientProfile = () => {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+
+    // --- NEW: Phone Number Validation ---
+    let cleanPhone = '';
+    if (profileData.contactNumber) {
+      cleanPhone = profileData.contactNumber.trim().replace(/\s+/g, '');
+      const slPhoneRegex = /^(?:0|\+94)\d{9}$/;
+      
+      if (!slPhoneRegex.test(cleanPhone)) {
+        triggerToast('Please enter a valid phone number.', 'error');
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-      const response = await api.put('/patients/profile', profileData);
+      // Use the cleaned phone number in the payload
+      const payload = { ...profileData, contactNumber: cleanPhone };
+      const response = await api.put('/patients/profile', payload);
+      
       const updatedPatient = response.data;
       setUser(updatedPatient);
 
@@ -253,7 +269,8 @@ const PatientProfile = () => {
                         <label className="text-sm font-bold text-on-surface ml-1 flex items-center gap-2">Phone Number <Phone size={14} className="text-outline"/></label>
                         <div className="relative">
                           <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" />
-                          <input name="contactNumber" value={profileData.contactNumber} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="+1 (555) 000-0000" />
+                          {/* UPDATED: Changed placeholder to show Sri Lankan format */}
+                          <input name="contactNumber" value={profileData.contactNumber} onChange={handleProfileChange} className="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="0712345678 or +94712345678" />
                         </div>
                       </div>
                     </div>
