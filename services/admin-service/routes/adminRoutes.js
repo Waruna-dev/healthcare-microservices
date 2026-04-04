@@ -1,3 +1,4 @@
+// routes/adminRoutes.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -8,6 +9,14 @@ const bcrypt = require('bcryptjs');
 
 const { protectAdmin } = require('../middleware/authAdmin');
 const sendEmail = require('../utils/sendEmail');
+
+// --- NEW: Import Message Controllers ---
+const { 
+  submitMessage, 
+  getAllMessages, 
+  updateMessageStatus, 
+  deleteMessage 
+} = require('../controllers/messageController');
 
 // Fetch the Admin model we defined in server.js
 const Admin = mongoose.model('Admin');
@@ -108,7 +117,6 @@ router.get('/demographics', protectAdmin, async (req, res) => {
         
         let allDoctors = [];
         
-        // Target the specific "doctors" array from your service
         if (doctorRes.data.doctors && Array.isArray(doctorRes.data.doctors)) {
             allDoctors = doctorRes.data.doctors;
         } else if (doctorRes.data.data && Array.isArray(doctorRes.data.data)) {
@@ -117,11 +125,9 @@ router.get('/demographics', protectAdmin, async (req, res) => {
             allDoctors = doctorRes.data; 
         }
         
-        // 🔥 THE FIX: Filter out pending/rejected doctors, count ONLY approved ones
         const approvedDoctors = allDoctors.filter(doc => doc.status === 'approved');
         specialistsCount = approvedDoctors.length;
 
-        // Extract the pending doctors
         pendingDoctorsList = allDoctors
           .filter(doc => doc.status === 'pending')
           .map(doc => ({
@@ -171,10 +177,7 @@ router.get('/demographics', protectAdmin, async (req, res) => {
 router.get('/doctors/:id', protectAdmin, async (req, res) => {
   try {
     const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${req.params.id}`);
-    
-    // Accommodate different potential response structures
     const doctorData = response.data.data || response.data.doctor || response.data;
-    
     res.status(200).json({ success: true, data: doctorData });
   } catch (error) {
     console.error("Failed to fetch doctor details:", error.message);
@@ -213,60 +216,10 @@ router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
         email: email,
         subject: 'CareSync: Your Account is Approved!',
         message: `Welcome Dr. ${name}! Your account is approved. Your temporary password is: ${tempPassword}`,
-        html: `
-          <div style="background-color: #f9fafb; padding: 50px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-              
-              <h1 style="font-size: 28px; font-weight: 800; color: #111827; margin-bottom: 30px; letter-spacing: -0.025em;">
-                CareSync
-              </h1>
-
-              <p style="font-size: 16px; color: #374151; margin-bottom: 24px; text-align: left;">
-                Hello Dr. ${name},
-              </p>
-
-              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 30px; text-align: left;">
-                We are pleased to inform you that your medical registration has been verified and approved. You are now a certified member of the CareSync network.
-              </p>
-
-              <div style="background-color: #f3f4f6; padding: 20px; border-radius: 12px; margin-bottom: 30px;">
-                <p style="font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">
-                  Your Temporary Password
-                </p>
-                <p style="font-size: 24px; font-weight: 700; color: #111827; margin: 0; letter-spacing: 0.1em;">
-                  ${tempPassword}
-                </p>
-              </div>
-
-              <div style="margin-bottom: 35px;">
-                <a href="http://localhost:5173/login" style="display: inline-block; padding: 16px 36px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 9999px; font-size: 16px; font-weight: 700; transition: background-color 0.2s;">
-                  Access Dashboard
-                </a>
-              </div>
-
-              <p style="font-size: 13px; color: #9ca3af; margin-bottom: 8px;">
-                Or copy and paste this link into your browser:
-              </p>
-              <p style="font-size: 13px; color: #4F46E5; word-break: break-all; margin-bottom: 40px;">
-                <a href="http://localhost:5173/login" style="color: #4F46E5; text-decoration: underline;">http://localhost:5173/login</a>
-              </p>
-
-              <hr style="border: 0; border-top: 1px solid #f3f4f6; margin-bottom: 30px;" />
-
-              <footer style="text-align: center;">
-                <p style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
-                  © ${new Date().getFullYear()} CareSync. Quality Care by Design.
-                </p>
-                <p style="font-size: 11px; color: #d1d5db; line-height: 1.4;">
-                  If you did not expect this approval, please contact our support team immediately.
-                </p>
-              </footer>
-            </div>
-          </div>
-        `
+        html: `<p>Welcome Dr. ${name}!</p><p>Your temporary password is: <strong>${tempPassword}</strong></p>`
       });
     } catch (emailError) {
-      console.error("Resend Email failed:", emailError);
+      console.error("Email failed:", emailError);
       return res.status(200).json({
         success: true,
         message: 'Doctor approved, but failed to send the notification email.',
@@ -297,7 +250,6 @@ router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
       return res.status(400).json({ message: "Doctor email and name are required to send the rejection email." });
     }
     
-    // 1. Tell the Doctor Microservice to DELETE this doctor from the DB entirely
     try {
       await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
     } catch (err) {
@@ -305,57 +257,15 @@ router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
       return res.status(500).json({ message: "Failed to delete doctor from the database." });
     }
 
-    // 2. Send Rejection & Reapply Email via Resend
     try {
       await sendEmail({
         email: email,
         subject: 'CareSync: Application Update',
-        message: `Dear Dr. ${name}, we regret to inform you that your application to join CareSync has been declined. You are welcome to reapply.`,
-        html: `
-          <div style="background-color: #f9fafb; padding: 50px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-              
-              <h1 style="font-size: 28px; font-weight: 800; color: #111827; margin-bottom: 30px; letter-spacing: -0.025em;">
-                CareSync
-              </h1>
-
-              <p style="font-size: 16px; color: #374151; margin-bottom: 24px; text-align: left;">
-                Hello Dr. ${name},
-              </p>
-
-              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 20px; text-align: left;">
-                Thank you for your interest in joining the CareSync network. After careful review of your application and credentials by our administration team, we regret to inform you that we are unable to approve your registration at this time.
-              </p>
-              
-              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 30px; text-align: left;">
-                To protect your privacy, any personal data, documents, and information submitted during your registration process has been <strong>permanently deleted</strong> from our systems.
-              </p>
-
-              <div style="background-color: #f3f4f6; border-left: 4px solid #4F46E5; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
-                <p style="font-size: 15px; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 10px;">
-                  We invite you to reapply
-                </p>
-                <p style="font-size: 14px; line-height: 1.5; color: #4b5563; margin-bottom: 20px;">
-                  If you have updated credentials, obtained a new medical license, or believe your application was rejected in error due to missing information, you are welcome to submit a new application.
-                </p>
-                <a href="http://localhost:5173/doctor/register" style="display: inline-block; padding: 12px 24px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600; transition: background-color 0.2s;">
-                  Submit New Application
-                </a>
-              </div>
-
-              <hr style="border: 0; border-top: 1px solid #f3f4f6; margin-bottom: 30px;" />
-
-              <footer style="text-align: center;">
-                <p style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
-                  © ${new Date().getFullYear()} CareSync. Quality Care by Design.
-                </p>
-              </footer>
-            </div>
-          </div>
-        `
+        message: `Dear Dr. ${name}, we regret to inform you that your application to join CareSync has been declined.`,
+        html: `<p>Dear Dr. ${name}, your application was declined.</p>`
       });
     } catch (emailError) {
-      console.error("Resend Email failed:", emailError);
+      console.error("Email failed:", emailError);
       return res.status(200).json({
         success: true,
         message: 'Doctor deleted from database, but failed to send the notification email.'
@@ -450,7 +360,6 @@ router.get('/doctors', protectAdmin, async (req, res) => {
   try {
     const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
     
-    // Extract the array properly based on how the Doctor Service sends it
     let allDoctors = [];
     if (response.data.doctors && Array.isArray(response.data.doctors)) {
         allDoctors = response.data.doctors;
@@ -472,15 +381,13 @@ router.get('/doctors', protectAdmin, async (req, res) => {
 // ==========================================
 router.put('/doctors/:id', protectAdmin, async (req, res) => {
   try {
-    // If they typed a password to reset, we must hash it first!
     if (req.body.password) {
       const salt = await bcrypt.genSalt(10);
       req.body.password = await bcrypt.hash(req.body.password, salt);
     } else {
-      delete req.body.password; // Don't send empty passwords
+      delete req.body.password; 
     }
 
-    // Call the /admin/:id route so it accepts the password change if there is one
     const response = await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${req.params.id}`, req.body);
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
@@ -501,5 +408,17 @@ router.delete('/doctors/:id', protectAdmin, async (req, res) => {
     res.status(500).json({ message: "Failed to delete doctor." });
   }
 });
+
+// ==========================================
+// SUPPORT INBOX ROUTES (NEW)
+// ==========================================
+
+// PUBLIC: Submit a message from the Contact Us page
+router.post('/contact', submitMessage);
+
+// PRIVATE: Admin message management
+router.get('/messages', protectAdmin, getAllMessages);
+router.put('/messages/:id', protectAdmin, updateMessageStatus);
+router.delete('/messages/:id', protectAdmin, deleteMessage);
 
 module.exports = router;

@@ -1,6 +1,7 @@
-// src/pages/public/ContactSupport.jsx
+// src/pages/ContactSupport.jsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../services/api';
 
 const ContactSupport = () => {
   const [formData, setFormData] = useState({
@@ -10,23 +11,42 @@ const ContactSupport = () => {
     message: ''
   });
   const [status, setStatus] = useState('idle'); // 'idle', 'submitting', 'success', 'error'
+  const [errorMessage, setErrorMessage] = useState(''); // NEW: To show validation errors
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Clear error message when user starts typing again
+    if (errorMessage) setErrorMessage('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage('');
+
+    // --- NEW: Strict Email Validation ---
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      setErrorMessage('Please enter a valid email address (e.g., name@example.com).');
+      setStatus('error');
+      return;
+    }
+
     setStatus('submitting');
 
-    // Simulate an API call to your backend
-    setTimeout(() => {
+    try {
+      // --- NEW: Hit the real backend Admin route ---
+      await api.post('/admin/contact', formData);
+      
       setStatus('success');
       setFormData({ name: '', email: '', subject: '', message: '' });
       
       // Reset success message after 5 seconds
       setTimeout(() => setStatus('idle'), 5000);
-    }, 1500);
+    } catch (error) {
+      console.error("Failed to send message", error);
+      setStatus('error');
+      setErrorMessage(error.response?.data?.message || 'Failed to send message. Please try again later.');
+    }
   };
 
   return (
@@ -51,10 +71,19 @@ const ContactSupport = () => {
           <div className="lg:col-span-3 bg-surface p-8 md:p-10 rounded-[2rem] shadow-sm border border-outline-variant/30">
             <h2 className="font-headline font-bold text-2xl mb-6">Send us a message</h2>
             
+            {/* SUCCESS BANNER */}
             {status === 'success' && (
-              <div className="mb-8 p-4 bg-secondary-container text-secondary rounded-xl font-medium flex items-center gap-3">
+              <div className="mb-8 p-4 bg-secondary-container text-secondary rounded-xl font-medium flex items-center gap-3 transition-all">
                 <span className="material-symbols-outlined">check_circle</span>
                 Your message has been sent successfully. We will get back to you shortly!
+              </div>
+            )}
+
+            {/* ERROR BANNER */}
+            {errorMessage && (
+              <div className="mb-8 p-4 bg-error-container text-error rounded-xl font-medium flex items-center gap-3 transition-all">
+                <span className="material-symbols-outlined">error</span>
+                {errorMessage}
               </div>
             )}
 
@@ -74,7 +103,9 @@ const ContactSupport = () => {
                   <input 
                     id="email" name="email" type="email" required
                     value={formData.email} onChange={handleChange}
-                    className="block w-full px-4 py-3.5 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
+                    className={`block w-full px-4 py-3.5 bg-surface-container-lowest border-0 rounded-xl ring-1 transition-all placeholder:text-outline outline-none text-on-surface ${
+                      errorMessage && status === 'error' ? 'ring-error focus:ring-2 focus:ring-error' : 'ring-outline-variant focus:ring-2 focus:ring-primary'
+                    }`}
                     placeholder="jane@example.com" 
                   />
                 </div>
