@@ -134,8 +134,8 @@ export const createCheckoutSession = async (req, res) => {
           orderId,
         },
       },
-      success_url: `${getClientUrl()}?payment=success&orderId=${orderId}`,
-      cancel_url: `${getClientUrl()}?payment=cancel&orderId=${orderId}`,
+      success_url: `${getClientUrl()}/payment?payment=success&orderId=${orderId}`,
+      cancel_url: `${getClientUrl()}/payment?payment=cancel&orderId=${orderId}`,
     });
 
     const payment = await Payment.create({

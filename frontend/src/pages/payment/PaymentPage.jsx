@@ -57,10 +57,44 @@ const formatCurrency = (value) =>
     minimumFractionDigits: 2,
   }).format(value);
 
+const parseResponseBody = async (response) => {
+  const rawBody = await response.text();
+
+  if (!rawBody) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    return {
+      success: false,
+      message: rawBody,
+    };
+  }
+};
+
+const getResponseErrorMessage = (response, data, fallbackMessage) => {
+  const message =
+    data?.message ||
+    data?.error ||
+    fallbackMessage ||
+    `Request failed with status ${response.status}`;
+
+  if (
+    typeof message === "string" &&
+    message.toLowerCase().includes("error occurred while trying to proxy")
+  ) {
+    return "Payment service is unavailable right now. Please make sure the API gateway and payment service are running, then try again.";
+  }
+
+  return message;
+};
+
 function PaymentPage() {
   const apiBaseUrl =
     import.meta.env.VITE_PAYMENT_API_URL ??
-    "http://localhost:5000/api/payments";
+    "http://localhost:5040/api/payments";
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -88,10 +122,16 @@ function PaymentPage() {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
           const response = await fetch(`${apiBaseUrl}/${orderId}`);
-          const data = await response.json();
+          const data = await parseResponseBody(response);
 
           if (!response.ok || !data.success) {
-            throw new Error(data.message || "Unable to load payment status");
+            throw new Error(
+              getResponseErrorMessage(
+                response,
+                data,
+                "Unable to load payment status",
+              ),
+            );
           }
 
           if (isCancelled) {
@@ -155,11 +195,15 @@ function PaymentPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const data = await parseResponseBody(response);
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.message || "Unable to create appointment checkout session",
+          getResponseErrorMessage(
+            response,
+            data,
+            "Unable to create appointment checkout session",
+          ),
         );
       }
 

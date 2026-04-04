@@ -6,7 +6,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const app = express();
 
 const PAYMENT_SERVICE_URL =
-  process.env.PAYMENT_SERVICE_URL || "http://localhost:5004";
+  process.env.PAYMENT_SERVICE_URL || "http://localhost:5040";
 const PORT = process.env.PORT || 5000;
 
 // Enable CORS
