@@ -5,6 +5,10 @@ import api from '../../services/api';
 
 const PatientLogin = () => {
   const navigate = useNavigate();
+  
+  // --- NEW: Role State (Defaults to 'patient') ---
+  const [role, setRole] = useState('patient'); 
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -23,14 +27,24 @@ const PatientLogin = () => {
     setMessage({ text: '', type: '' });
 
     try {
-      const response = await api.post('/patients/login', formData);
+      // 🔥 DYNAMIC ENDPOINT: Hits the right API based on the selected role
+      const endpoint = role === 'doctor' ? '/doctors/login' : '/patients/login';
+      const response = await api.post(endpoint, formData);
       
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data));
+      // Store user data and explicit role for easy access in your app
+      localStorage.setItem('user', JSON.stringify({ ...response.data, role }));
       
       setMessage({ text: 'Authentication successful. Redirecting...', type: 'success' });
       
-      setTimeout(() => navigate('/dashboard'), 1000);
+      // 🔥 DYNAMIC REDIRECT
+      setTimeout(() => {
+        if (role === 'doctor') {
+          navigate('/doctor/dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      }, 1000);
 
     } catch (error) {
       setMessage({ 
@@ -98,10 +112,36 @@ const PatientLogin = () => {
               <span className="font-headline font-bold text-2xl text-primary tracking-tight">CareSync</span>
             </div>
             
-            <header className="mb-10">
+            <header className="mb-8">
               <h2 className="font-headline font-bold text-3xl text-on-surface mb-2">Welcome Back</h2>
               <p className="text-on-surface-variant font-body">Please enter your credentials to access your sanctuary.</p>
             </header>
+
+            {/* --- NEW: ROLE SELECTION TABS --- */}
+            <div className="flex bg-surface-container-low p-1 rounded-xl mb-8 border border-outline-variant/30">
+              <button
+                type="button"
+                onClick={() => setRole('patient')}
+                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+                  role === 'patient' 
+                    ? 'bg-white shadow-sm text-primary border border-outline-variant/20' 
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Patient
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole('doctor')}
+                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+                  role === 'doctor' 
+                    ? 'bg-white shadow-sm text-primary border border-outline-variant/20' 
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Doctor
+              </button>
+            </div>
 
             {/* Dynamic Status Message */}
             {message.text && (
@@ -130,7 +170,7 @@ const PatientLogin = () => {
                     onChange={handleChange}
                     required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="dr.smith@caresync.com" 
+                    placeholder={role === 'doctor' ? "dr.name@hospital.com" : "your@email.com"} 
                   />
                 </div>
               </div>
@@ -171,7 +211,7 @@ const PatientLogin = () => {
                 disabled={isLoading}
                 className="w-full py-4 px-6 bg-gradient-to-r from-primary to-primary-container text-white font-headline font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 mt-2" 
               >
-                <span>{isLoading ? 'Authenticating...' : 'Sign In'}</span>
+                <span>{isLoading ? 'Authenticating...' : `Sign In as ${role === 'doctor' ? 'Doctor' : 'Patient'}`}</span>
                 {!isLoading && <span className="material-symbols-outlined text-lg">arrow_forward</span>}
               </button>
             </form>
@@ -179,7 +219,9 @@ const PatientLogin = () => {
             <div className="mt-12 text-center">
               <p className="text-on-surface-variant text-sm">
                 New to the CareSync network? 
-                <Link to="/register" className="text-primary font-bold hover:underline ml-1">Create an account</Link>
+                <Link to={role === 'doctor' ? "/doctor/register" : "/register"} className="text-primary font-bold hover:underline ml-1">
+                  Create an account
+                </Link>
               </p>
             </div>
           </div>

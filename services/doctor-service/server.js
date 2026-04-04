@@ -2,8 +2,8 @@ const express = require('express');
 const connectDB = require('./config/db');
 require('dotenv').config();
 
-// Import middlewares
-const cors = require('./middleware/cors');
+// 1. 🔥 THE FIX: Import the standard cors package instead of the local middleware
+const cors = require('cors'); 
 const errorHandler = require('./middleware/errorHandler');
 
 // Import routes
@@ -16,8 +16,12 @@ const PORT = process.env.PORT || 5025;
 // Connect to MongoDB
 connectDB();
 
-// Middleware
-app.use(cors);
+// 2. 🔥 THE FIX: Configure CORS to allow your frontend and credentials
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://localhost:5000'], // Allow React and API Gateway
+    credentials: true // Crucial for tokens!
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

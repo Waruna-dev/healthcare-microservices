@@ -6,7 +6,7 @@ import {
   Heart, Activity, Moon, Footprints, 
   BrainCircuit, FileText, UploadCloud, ShieldCheck, 
   Bell, Settings, LogOut, ChevronRight, AlertTriangle, CheckCircle2,
-  ClipboardList, Stethoscope
+  ClipboardList, Stethoscope, User
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -17,6 +17,10 @@ const PatientDashboard = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [reports, setReports] = useState([]);
   const fileInputRef = useRef(null);
+  
+  // --- NEW: Dropdown State & Ref ---
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
@@ -37,6 +41,17 @@ const PatientDashboard = () => {
       navigate('/login');
     }
   }, [navigate]);
+
+  // --- NEW: Close dropdown when clicking outside ---
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -145,16 +160,58 @@ const PatientDashboard = () => {
               <span className="hover:text-primary cursor-pointer transition-colors">Specialists</span>
             </nav>
           </div>
+          
           <div className="flex items-center gap-4">
             <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all">
               <Bell size={20} />
             </button>
-            <Link to="/profile" className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all flex items-center justify-center">
-              <Settings size={20} />
-            </Link>
-            <button onClick={handleLogout} className="ml-2 flex items-center gap-2 px-4 py-2 bg-error-container text-error rounded-xl font-bold text-sm hover:opacity-80 transition-opacity">
-              <LogOut size={16} /> <span className="hidden sm:inline">Logout</span>
-            </button>
+
+            {/* --- UPDATED: PROFILE DROPDOWN MENU --- */}
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-center bg-primary-container text-primary font-bold shadow-sm hover:shadow-md"
+              >
+                {user.profilePicture ? (
+                  <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  user.name?.charAt(0) || <User size={20} />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 mt-3 w-56 bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50"
+                  >
+                    <div className="p-4 border-b border-outline-variant/30 bg-surface-container-low/50">
+                      <p className="font-bold text-on-surface truncate">{user.name}</p>
+                      <p className="text-xs text-on-surface-variant truncate mt-0.5">{user.email || 'Patient Account'}</p>
+                    </div>
+                    <div className="p-2 flex flex-col gap-1">
+                      <Link 
+                        to="/profile" 
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-low text-sm font-bold text-on-surface-variant hover:text-primary transition-colors"
+                      >
+                        <Settings size={18} /> Account Settings
+                      </Link>
+                      <button 
+                        onClick={handleLogout} 
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-error-container/50 text-sm font-bold text-error transition-colors w-full text-left"
+                      >
+                        <LogOut size={18} /> Logout
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            
           </div>
         </div>
       </header>
@@ -214,7 +271,6 @@ const PatientDashboard = () => {
                     <h2 className="text-3xl font-black font-headline leading-tight">Proactive Insights</h2>
                   </div>
                   
-                  {/* FIX 1: Clickable 'View Full Report' Button */}
                   <button 
                     onClick={() => latestReport && handleDownload(latestReport)}
                     className="px-5 py-2.5 rounded-full bg-white text-primary font-bold text-sm shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
@@ -258,7 +314,6 @@ const PatientDashboard = () => {
                         <div className="w-full">
                           <h4 className="font-bold text-lg mb-1">Recommended Action</h4>
                           
-                          {/* FIX 2: Beautiful Bulleted List for Abnormalities */}
                           {aiData.abnormalitiesFound?.length > 0 ? (
                             <div className="mb-4 mt-2">
                               <p className="text-white/90 text-sm font-semibold mb-2">Flagged Findings:</p>

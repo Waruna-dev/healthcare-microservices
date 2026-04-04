@@ -1,4 +1,6 @@
 const Doctor = require('../models/Doctor');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // ==================== GET ALL DOCTORS ====================
 const getAllDoctors = async (req, res) => {
@@ -99,29 +101,18 @@ const getDoctorById = async (req, res) => {
 const registerDoctor = async (req, res) => {
     try {
         const {
-            name,
-            email,
-            specialty,
-            phone,
-            licenseNumber,
-            experience,
-            address,
-            about,
-            gender,
-            qualifications,
-            specializations,
-            profileImageUrl
+            name, email, specialty, phone, licenseNumber,
+            experience, address, about, gender, qualifications,
+            specializations, profileImageUrl
         } = req.body;
 
         let profilePicture = profileImageUrl || '';
         
         if (req.file) {
-            // Convert image to base64 and store in database
             const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
             profilePicture = base64Image;
         }
 
-        // Check if doctor already exists
         const existingDoctor = await Doctor.findOne({
             $or: [{ email }, { licenseNumber }]
         });
@@ -135,7 +126,6 @@ const registerDoctor = async (req, res) => {
             });
         }
 
-        // Parse qualifications and specializations from form data
         let parsedQualifications = [];
         let parsedSpecializations = [];
         
@@ -143,8 +133,6 @@ const registerDoctor = async (req, res) => {
             try {
                 parsedQualifications = typeof qualifications === 'string' ? JSON.parse(qualifications) : qualifications;
             } catch (e) {
-                console.error('Error parsing qualifications:', e);
-                // If parsing fails, treat as simple string
                 parsedQualifications = [qualifications];
             }
         }
@@ -153,19 +141,12 @@ const registerDoctor = async (req, res) => {
             try {
                 parsedSpecializations = typeof specializations === 'string' ? JSON.parse(specializations) : specializations;
             } catch (e) {
-                console.error('Error parsing specializations:', e);
-                // If parsing fails, treat as simple string
                 parsedSpecializations = [specializations];
             }
         }
 
-        // Create new doctor
         const doctor = new Doctor({
-            name,
-            email,
-            specialty,
-            phone,
-            licenseNumber,
+            name, email, specialty, phone, licenseNumber,
             experience: parseInt(experience) || 0,
             address: address || '',
             about: about || '',
@@ -173,13 +154,12 @@ const registerDoctor = async (req, res) => {
             profilePicture,
             qualifications: parsedQualifications,
             specializations: parsedSpecializations,
-            status: 'pending', // Default status
-            role: 'doctor' // Default role
+            status: 'pending', 
+            role: 'doctor' 
         });
 
         await doctor.save();
 
-        // Return doctor data without password
         const doctorResponse = doctor.toJSON();
 
         res.status(201).json({
@@ -190,7 +170,6 @@ const registerDoctor = async (req, res) => {
     } catch (error) {
         console.error('Registration error:', error);
         
-        // Handle validation errors
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
             return res.status(400).json({
@@ -200,7 +179,6 @@ const registerDoctor = async (req, res) => {
             });
         }
 
-        // Handle duplicate key errors
         if (error.code === 11000) {
             const field = Object.keys(error.keyPattern)[0];
             return res.status(400).json({
@@ -213,6 +191,66 @@ const registerDoctor = async (req, res) => {
             success: false,
             message: 'Server error during registration'
         });
+    }
+};
+
+// ==================== DOCTOR LOGIN ====================
+const loginDoctor = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: 'Please provide email and password' });
+        }
+
+        // 1. Find the doctor
+        const doctor = await Doctor.findOne({ email }).select('+password');
+        
+        if (!doctor) {
+            return res.status(401).json({ success: false, message: 'Invalid email or password' });
+        }
+        
+        // 2. Check Approval Status
+        if (doctor.status === 'pending') {
+            return res.status(403).json({ success: false, message: 'Your account is still pending admin approval.' });
+        }
+        if (doctor.status === 'rejected') {
+            return res.status(403).json({ success: false, message: 'Your application was rejected. Please reapply.' });
+        }
+
+        if (!doctor.password) {
+            return res.status(401).json({ success: false, message: 'Account missing password. Please contact an administrator.' });
+        }
+
+        // 3. Check password
+        const isMatch = await bcrypt.compare(password, doctor.password);
+
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: 'Invalid email or password' });
+        }
+
+        // 4. Generate Token
+        const token = jwt.sign(
+            { id: doctor._id, role: doctor.role }, 
+            process.env.JWT_SECRET || 'your_fallback_secret_key', 
+            { expiresIn: '30d' }
+        );
+
+        res.status(200).json({
+            success: true,
+            token,
+            doctor: {
+                _id: doctor._id,
+                name: doctor.name,
+                email: doctor.email,
+                role: doctor.role,
+                status: doctor.status,
+                profilePicture: doctor.profilePicture
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ success: false, message: 'Server error during login' });
     }
 };
 
@@ -229,7 +267,6 @@ const updateDoctor = async (req, res) => {
             });
         }
 
-        // Remove sensitive fields that shouldn't be updated via this endpoint
         delete updates.password;
         delete updates.createdAt;
         
@@ -361,12 +398,39 @@ const toggleDoctorAvailability = async (req, res) => {
     }
 };
 
+// ==========================================
+// ADMIN UPDATE DOCTOR (Allows password/status changes)
+// ==========================================
+const adminUpdateDoctor = async (req, res) => {
+    try {
+        const updatedDoctor = await Doctor.findByIdAndUpdate(
+            req.params.id,
+            {
+                $set: req.body 
+            },
+            { new: true }
+        );
+
+        if (!updatedDoctor) {
+            return res.status(404).json({ success: false, message: 'Doctor not found' });
+        }
+
+        res.status(200).json({ success: true, data: updatedDoctor });
+    } catch (error) {
+        console.error("Admin Update Error:", error);
+        res.status(500).json({ success: false, message: 'Failed to update doctor' });
+    }
+};
+
+// ==================== EXPORTS ====================
 module.exports = {
     getAllDoctors,
     getDoctorById,
     registerDoctor,
+    loginDoctor, 
     updateDoctor,
     deleteDoctor,
     findDoctorsBySpecialty,
-    toggleDoctorAvailability
+    toggleDoctorAvailability,
+    adminUpdateDoctor
 };
