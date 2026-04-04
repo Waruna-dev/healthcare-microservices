@@ -58,6 +58,14 @@ app.use(
   })
 );
 
+app.use('/api/appointments', createProxyMiddleware({
+  target: 'http://localhost:5015',
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    res.status(503).json({ error: 'Appointment service unavailable' });
+  }
+}));
+
 // Placeholders for future services
 /*
 app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:5003', changeOrigin: true }));
