@@ -8,7 +8,7 @@ import img2 from '../../assets/images/9339706cc8079c7b463d4fb452f097d3.jpg';
 const DoctorProfileEdit = () => {
   const navigate = useNavigate();
   const { doctorId } = useParams(); // Get doctor ID from URL params
-  const { user, updateUser } = useAuth(); // Get logged-in user data and update function
+  const { user } = useAuth(); // Get logged-in user data
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -29,6 +29,7 @@ const DoctorProfileEdit = () => {
   const [profileImage, setProfileImage] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Fetch doctor data on component mount
   useEffect(() => {
@@ -233,17 +234,6 @@ const DoctorProfileEdit = () => {
       const data = await response.json();
       
       if (response.ok) {
-        // Update the user data in AuthContext with the updated profile
-        const updatedUserData = {
-          name: formData.name,
-          email: formData.email,
-          specialty: formData.specialty,
-          phone: formData.phone,
-          address: formData.address,
-          profilePicture: imageUrl || user?.profilePicture
-        };
-        updateUser(updatedUserData);
-        
         setMessage('✅ Profile updated successfully! Redirecting to dashboard...');
         setTimeout(() => navigate('/doctor/dashboard'), 2000);
       } else {
@@ -293,11 +283,19 @@ const DoctorProfileEdit = () => {
             {/* Profile Image Upload */}
             <div className="flex items-center space-x-6">
               <div className="flex-shrink-0">
-                <img
-                  className="h-24 w-24 rounded-full object-cover border-4 border-gray-200"
-                  src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0F6E56&color=fff&size=128`}
-                  alt="Profile preview"
-                />
+                <div 
+                  className="relative cursor-pointer group"
+                  onClick={() => setShowImageModal(true)}
+                >
+                  <img
+                    className="h-24 w-24 rounded-full object-cover border-4 border-gray-200 transition-transform group-hover:scale-105"
+                    src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0F6E56&color=fff&size=128`}
+                    alt="Profile preview"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-full transition-all flex items-center justify-center">
+                    <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">Click to view</span>
+                  </div>
+                </div>
               </div>
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -573,7 +571,50 @@ const DoctorProfileEdit = () => {
         </div>
       </div>
     </div>
-  );
-};
+
+    {/* Image Modal */}
+    {showImageModal && (
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+        onClick={() => setShowImageModal(false)}
+      >
+        <div 
+          className="bg-white rounded-xl p-6 max-w-2xl max-h-screen overflow-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-gray-900">Profile Picture</h3>
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="flex justify-center">
+            <img
+              src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0F6E56&color=fff&size=400`}
+              alt="Profile"
+              className="max-w-full max-h-96 rounded-lg object-contain"
+            />
+          </div>
+          
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-600">
+              {formData.name || 'Doctor'}'s Profile Picture
+            </p>
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+);
 
 export default DoctorProfileEdit;

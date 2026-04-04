@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 const DoctorLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  
+  // Debug: Log user data to see what's available
+  console.log('User data:', user);
 
   const menuItems = [
     { path: '/doctor/dashboard', name: 'Dashboard', icon: '📊' },
     { path: '/doctor/appointments', name: 'Appointments', icon: '📅' },
-    { path: '/doctor/doctors', name: 'All Doctors', icon: '👨‍⚕️' },
     { path: '/doctor/patients', name: 'My Patients', icon: '👥' },
     { path: '/doctor/schedule', name: 'Schedule', icon: '📆' },
     { path: '/doctor/weekly-schedule', name: 'Weekly Schedule', icon: '📅' },
@@ -54,8 +58,8 @@ const DoctorLayout = () => {
                 👨‍⚕️
               </div>
               <div>
-                <p className="font-semibold text-sm">Dr. Sarah Johnson</p>
-                <p className="text-xs text-blue-200">Cardiologist</p>
+                <p className="font-semibold text-sm">Dr. {user?.name || 'Doctor'}</p>
+                <p className="text-xs text-blue-200">{user?.specialty || user?.specialization || 'Doctor'}</p>
               </div>
             </div>
           </div>
@@ -104,9 +108,9 @@ const DoctorLayout = () => {
             <button className="text-gray-500 hover:text-gray-700">🔔</button>
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
-                DS
+                {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'DD'}
               </div>
-              <span className="text-sm text-gray-700 hidden md:block">Dr. Sarah</span>
+              <span className="text-sm text-gray-700 hidden md:block">Dr. {user?.name?.split(' ')[0] || 'Doctor'}</span>
             </div>
           </div>
         </header>
