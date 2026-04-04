@@ -1,12 +1,16 @@
 // src/components/Navbar.jsx
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HeartPulse, LogIn, Menu, X } from 'lucide-react';
+import { HeartPulse, LogIn, Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // --- NEW: Session State ---
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   // Track scroll for the glass effect
   useEffect(() => {
@@ -14,6 +18,37 @@ const Navbar = () => {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // --- NEW: Check for Logged In User on Load ---
+  useEffect(() => {
+    const checkSession = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        // Safely extract user data whether it's nested (parsed.patient/parsed.doctor) or flat
+        const userData = parsed.patient || parsed.doctor || parsed;
+        setUser(userData);
+      }
+    };
+    
+    checkSession();
+    
+    // Optional: Listen for storage changes in case they log in on another tab
+    window.addEventListener('storage', checkSession);
+    return () => window.removeEventListener('storage', checkSession);
+  }, []);
+
+  // --- NEW: Handle Logout ---
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setUser(null);
+    setMobileMenuOpen(false);
+    navigate('/'); // Send them back to home page
+  };
+
+  // Determine correct dashboard path based on role
+  const dashboardPath = user?.role === 'doctor' ? '/doctor/dashboard' : '/dashboard';
 
   return (
     <>
@@ -43,13 +78,29 @@ const Navbar = () => {
             <a href="#security" className="hover:text-primary transition-colors">Security</a>
           </div>
 
+          {/* --- UPDATED: Desktop Auth Buttons --- */}
           <div className="hidden md:flex items-center gap-4">
-            <Link to="/login" className="flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm bg-surface-container-lowest text-primary shadow-ambient hover:shadow-elevated hover:-translate-y-0.5 transition-all duration-300">
-              <LogIn size={16} /> Sign In
-            </Link>
-            <Link to="/register" className="px-6 py-2.5 rounded-2xl font-bold text-sm bg-primary text-on-primary shadow-elevated hover:bg-primary-container hover:-translate-y-0.5 transition-all duration-300">
-              Join CareSync
-            </Link>
+            {user ? (
+              // IF LOGGED IN: Show Dashboard & Logout
+              <>
+                <Link to={dashboardPath} className="flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm bg-primary text-white shadow-elevated hover:bg-primary-container hover:-translate-y-0.5 transition-all duration-300">
+                  <LayoutDashboard size={16} /> Dashboard
+                </Link>
+                <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm bg-error-container text-error shadow-ambient hover:bg-error hover:text-white transition-all duration-300">
+                  <LogOut size={16} /> Logout
+                </button>
+              </>
+            ) : (
+              // IF LOGGED OUT: Show Sign In & Join
+              <>
+                <Link to="/login" className="flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm bg-surface-container-lowest text-primary shadow-ambient hover:shadow-elevated hover:-translate-y-0.5 transition-all duration-300">
+                  <LogIn size={16} /> Sign In
+                </Link>
+                <Link to="/register" className="px-6 py-2.5 rounded-2xl font-bold text-sm bg-primary text-on-primary shadow-elevated hover:bg-primary-container hover:-translate-y-0.5 transition-all duration-300">
+                  Join CareSync
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -62,7 +113,7 @@ const Navbar = () => {
         </div>
       </motion.nav>
 
-      {/* Mobile Menu Dropdown */}
+      {/* --- UPDATED: Mobile Menu Dropdown --- */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div 
@@ -72,8 +123,34 @@ const Navbar = () => {
             className="fixed top-20 left-0 w-full bg-surface-container-lowest border-b border-outline-variant z-50 md:hidden overflow-hidden shadow-elevated"
           >
             <div className="flex flex-col p-6 gap-4 font-headline font-bold text-lg">
-              <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="w-full py-4 bg-surface-container-low text-primary text-center rounded-2xl">Sign In</Link>
-              <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="w-full py-4 bg-primary text-on-primary text-center rounded-2xl shadow-ambient">Create Account</Link>
+              {user ? (
+                <>
+                  <div className="flex items-center gap-3 mb-2 p-3 bg-surface-container-low rounded-2xl">
+                     <div className="w-10 h-10 rounded-full bg-primary-container text-primary flex items-center justify-center font-bold overflow-hidden border border-primary/20">
+                       {user.profilePicture ? (
+                         <img src={user.profilePicture} alt={user.name} className="w-full h-full object-cover" />
+                       ) : (
+                         user.name.charAt(0)
+                       )}
+                     </div>
+                     <div>
+                       <p className="text-sm font-bold text-on-surface">{user.name}</p>
+                       <p className="text-xs text-on-surface-variant font-normal">{user.email}</p>
+                     </div>
+                  </div>
+                  <Link to={dashboardPath} onClick={() => setMobileMenuOpen(false)} className="w-full py-4 flex justify-center items-center gap-2 bg-primary text-white text-center rounded-2xl shadow-ambient">
+                    <LayoutDashboard size={18}/> Go to Dashboard
+                  </Link>
+                  <button onClick={handleLogout} className="w-full py-4 flex justify-center items-center gap-2 bg-error-container text-error text-center rounded-2xl">
+                    <LogOut size={18}/> Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="w-full py-4 bg-surface-container-low text-primary text-center rounded-2xl">Sign In</Link>
+                  <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="w-full py-4 bg-primary text-on-primary text-center rounded-2xl shadow-ambient">Create Account</Link>
+                </>
+              )}
             </div>
           </motion.div>
         )}
