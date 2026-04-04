@@ -23,7 +23,7 @@ const PatientProfile = () => {
   const [profileData, setProfileData] = useState({ name: '', email: '', contactNumber: '' });
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   
-  // --- NEW: Password Visibility States ---
+  // Password Visibility States
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     new: false,
@@ -63,13 +63,46 @@ const PatientProfile = () => {
     setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
   };
 
-  // --- NEW: Password Validation Logic ---
+  // Password Validation Logic
   const passwordRules = {
     length: passwordData.newPassword.length >= 8,
     number: /\d/.test(passwordData.newPassword),
     special: /[!@#$%^&*(),.?":{}|<>]/.test(passwordData.newPassword)
   };
   const strengthScore = Object.values(passwordRules).filter(Boolean).length;
+
+  // --- NEW: Handle Profile Picture Upload ---
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('profileImage', file);
+
+    setIsLoading(true);
+    triggerToast('Uploading image...', 'success');
+    
+    try {
+      const response = await api.put('/patients/profile/picture', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const updatedPatient = response.data.patient;
+      setUser(updatedPatient);
+
+      // Update LocalStorage
+      const storageObj = JSON.parse(localStorage.getItem('user'));
+      if (storageObj.patient) storageObj.patient = updatedPatient;
+      else Object.assign(storageObj, updatedPatient);
+      localStorage.setItem('user', JSON.stringify(storageObj));
+
+      triggerToast('Profile picture updated!', 'success');
+    } catch (error) {
+      triggerToast(error.response?.data?.message || 'Failed to upload image.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -109,7 +142,6 @@ const PatientProfile = () => {
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     
-    // --- NEW: Block submission if password is too weak ---
     if (strengthScore < 3) {
       triggerToast('Please meet all new password requirements.', 'error');
       return;
@@ -128,7 +160,7 @@ const PatientProfile = () => {
       });
       triggerToast('Password changed securely.', 'success');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setShowPasswords({ current: false, new: false, confirm: false }); // Reset eyes
+      setShowPasswords({ current: false, new: false, confirm: false }); 
     } catch (error) {
       triggerToast(error.response?.data?.message || 'Failed to change password.', 'error');
     } finally {
@@ -233,14 +265,34 @@ const PatientProfile = () => {
       <main className="flex-1 py-10 px-6 md:px-8 max-w-7xl mx-auto w-full">
         <div className="flex flex-col md:flex-row gap-8">
           <div className="w-full md:w-64 shrink-0 space-y-2">
+            
+            {/* UPDATED: Profile Picture Container */}
             <div className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-ambient border border-outline-variant/30 mb-6 flex flex-col items-center text-center">
               <div className="relative group cursor-pointer mb-4">
-                <div className="w-20 h-20 bg-primary-container text-primary rounded-full flex items-center justify-center text-3xl font-bold font-headline shadow-inner">
-                  {user.name.charAt(0)}
-                </div>
-                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Camera size={20} className="text-white" />
-                </div>
+                {/* Hidden File Input */}
+                <input 
+                  type="file" 
+                  id="profileImageInput" 
+                  className="hidden" 
+                  accept="image/*" 
+                  onChange={handleImageUpload} 
+                />
+                
+                {/* Clickable Avatar Label */}
+                <label htmlFor="profileImageInput" className="cursor-pointer block w-20 h-20 rounded-full overflow-hidden border-2 border-primary/20 relative shadow-inner">
+                  {user.profilePicture ? (
+                    <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-primary-container text-primary flex items-center justify-center text-3xl font-bold font-headline">
+                      {user.name.charAt(0)}
+                    </div>
+                  )}
+                  
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera size={20} className="text-white" />
+                  </div>
+                </label>
               </div>
               <h3 className="font-bold text-lg font-headline truncate w-full">{user.name}</h3>
               <p className="text-xs text-on-surface-variant">Patient ID: {user._id?.slice(-6).toUpperCase() || 'N/A'}</p>

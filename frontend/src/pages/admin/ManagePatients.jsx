@@ -138,8 +138,13 @@ const ManagePatients = () => {
                   <tr key={patient._id} className="hover:bg-surface-container-lowest/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary-container text-primary rounded-full flex items-center justify-center font-bold">
-                          {patient.name.charAt(0)}
+                        {/* --- UPDATED: PROFILE PICTURE LOGIC --- */}
+                        <div className="w-10 h-10 bg-primary-container text-primary rounded-full flex items-center justify-center font-bold shrink-0 overflow-hidden border border-primary/20">
+                          {patient.profilePicture ? (
+                            <img src={patient.profilePicture} alt={patient.name} className="w-full h-full object-cover" />
+                          ) : (
+                            patient.name.charAt(0)
+                          )}
                         </div>
                         <div>
                           <p className="font-bold text-on-surface">{patient.name}</p>

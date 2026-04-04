@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+
 // Generate JWT Token function
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -37,6 +38,7 @@ const registerPatient = async (req, res) => {
         name: patient.name,
         email: patient.email,
         contactNumber: patient.contactNumber,
+        profilePicture: patient.profilePicture, // ADDED
         token: generateToken(patient._id),
       });
     } else {
@@ -60,6 +62,7 @@ const loginPatient = async (req, res) => {
         name: patient.name,
         email: patient.email,
         contactNumber: patient.contactNumber, 
+        profilePicture: patient.profilePicture, // ADDED: So picture shows on login
         token: generateToken(patient._id),
         uploadedReports: patient.uploadedReports 
       });
@@ -96,16 +99,14 @@ const uploadMedicalReport = async (req, res) => {
     const reportIndex = patient.uploadedReports.length - 1;
     await patient.save();
 
-// 2. Start the AI Analysis process using NATIVE Gemini PDF support
+    // 2. Start the AI Analysis process using NATIVE Gemini PDF support
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash", // Reverting to the stable 1.5-flash for best JSON support
+        model: "gemini-2.5-flash", 
         generationConfig: { 
           responseMimeType: "application/json",
-          // CRITICAL FIX FOR CONSISTENCY: 
-          // Temperature 0 forces the AI to pick the most probable answer every time, removing randomness.
           temperature: 0, 
           topK: 1,
           topP: 0.1
@@ -120,7 +121,6 @@ const uploadMedicalReport = async (req, res) => {
         }
       };
 
-      // TIGHTENED PROMPT: Removed ambiguity and added strict extraction rules
       const prompt = `
         You are a highly precise medical data extraction assistant. Your task is to analyze the attached medical lab report PDF and extract key clinical data objectively.
         Do NOT invent, hallucinate, or creatively rephrase information. Stick strictly to the text provided in the document.
@@ -219,6 +219,7 @@ const updatePatientProfile = async (req, res) => {
       name: updatedPatient.name,
       email: updatedPatient.email,
       contactNumber: updatedPatient.contactNumber,
+      profilePicture: updatedPatient.profilePicture, // ADDED
       uploadedReports: updatedPatient.uploadedReports,
       token: generateToken(updatedPatient._id)
     });
@@ -340,6 +341,34 @@ const getAllPatients = async (req, res) => {
   }
 };
 
+// @desc    Upload profile picture to Cloudinary
+// @route   PUT /api/patients/profile/picture
+const updateProfilePicture = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No image provided' });
+        }
+
+        // 🔥 FIX: Correctly access the patient ID from your specific auth middleware
+        const patientId = req.patient._id || req.patient.id;
+
+        const updatedPatient = await Patient.findByIdAndUpdate(
+            patientId, 
+            { profilePicture: req.file.path }, 
+            { new: true }
+        ).select('-password');
+
+        if (!updatedPatient) {
+           return res.status(404).json({ success: false, message: 'Patient not found' });
+        }
+
+        res.status(200).json({ success: true, patient: updatedPatient });
+    } catch (error) {
+        console.error('Upload Error:', error);
+        res.status(500).json({ success: false, message: 'Image upload failed' });
+    }
+};
+
 module.exports = { 
   registerPatient, 
   loginPatient, 
@@ -350,5 +379,6 @@ module.exports = {
   deletePatientAccount,
   updatePatientById,
   deletePatientById,
-  getAllPatients
+  getAllPatients,
+  updateProfilePicture
 };

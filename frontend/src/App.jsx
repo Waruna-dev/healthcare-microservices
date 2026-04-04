@@ -21,6 +21,7 @@ import DoctorLayout from "./pages/Doctor/DoctorLayout";
 import DoctorDashboard from "./pages/Doctor/DoctorDashboard";
 import AllDoctors from "./pages/Doctor/AllDoctors";
 import DoctorProfile from "./pages/Doctor/DoctorProfile";
+import DoctorProfileEdit from "./pages/Doctor/Doctorprofile_edit";
 import DoctorSchedule from "./pages/Doctor/DoctorSchedule";
 import WeeklySchedule from "./pages/Doctor/WeeklySchedule";
 import SlotDisplay from "./pages/Doctor/SlotDisplay";
@@ -38,12 +39,15 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
+        {/* Public Routes (Wrapped in MainLayout for Navbar/Footer) */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/contact-support" element={<ContactSupport />} />
+
+          {/* UPDATED: Cleaner route name, ensure your Footer links to "/support" */}
+          <Route path="/support" element={<ContactSupport />} />
+
           <Route path="/features" element={<Features />} />
           <Route path="/security" element={<Security />} />
           <Route path="/integration" element={<Integration />} />
@@ -59,6 +63,10 @@ function App() {
         <Route path="/doctor/register" element={<DoctorRegister />} />
         <Route path="/doctor/listing" element={<DoctorListing />} />
         <Route path="/doctor/:id" element={<ShowDoctorDetails />} />
+        <Route
+          path="/doctor/edit-profile/:doctorId"
+          element={<DoctorProfileEdit />}
+        />
 
         {/* Doctor Panel with Sidebar */}
         <Route path="/doctor" element={<DoctorLayout />}>

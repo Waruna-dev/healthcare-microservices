@@ -3,7 +3,18 @@ const mongoose = require('mongoose');
 const connectDB = async () => {
     try {
         const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/doctor-service';
-        await mongoose.connect(mongoURI);
+        
+        await mongoose.connect(mongoURI, {
+            // Connection pooling
+            maxPoolSize: 10, // Maintain up to 10 socket connections
+            serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+            socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+            
+            // Additional performance options
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+        });
+        
         console.log(`✅ MongoDB Connected Successfully`);
 
         // Legacy index { doctorId: 1, date: 1 } without partial rules breaks bulk weekly inserts
@@ -28,6 +39,20 @@ const connectDB = async () => {
         } catch (e) {
             console.warn('Availability.syncIndexes:', e.message);
         }
+
+        // Monitor connection events
+        mongoose.connection.on('error', (err) => {
+            console.error('MongoDB connection error:', err);
+        });
+
+        mongoose.connection.on('disconnected', () => {
+            console.warn('MongoDB disconnected');
+        });
+
+        mongoose.connection.on('reconnected', () => {
+            console.log('MongoDB reconnected');
+        });
+
     } catch (error) {
         console.error(`❌ MongoDB Connection Failed: ${error.message}`);
         console.log(`⚠️ Please check your MongoDB connection string and network access`);

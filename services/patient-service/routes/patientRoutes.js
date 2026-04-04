@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-// 1. Import your controllers (Updated with new profile functions)
+// 1. Import your controllers (Added updateProfilePicture)
 const { 
   registerPatient,
   loginPatient,
@@ -10,6 +10,7 @@ const {
   updatePatientProfile,
   updatePatientPassword,
   deletePatientAccount,
+  updateProfilePicture, // <-- NEW: Cloudinary Controller
   getAllPatients,
   updatePatientById,
   deletePatientById 
@@ -17,7 +18,10 @@ const {
 
 // 2. Import your middlewares
 const { protect } = require('../middleware/patientAuth');
-const upload = require('../middleware/reportUploader');
+
+// We rename the imports here so the Report uploader and Profile Pic uploader don't clash!
+const reportUpload = require('../middleware/reportUploader'); 
+const profilePicUpload = require('../middleware/upload'); // <-- NEW: Your Cloudinary middleware
 
 // ==========================================
 // PUBLIC ROUTES
@@ -29,16 +33,21 @@ router.post('/login', loginPatient);
 // PRIVATE ROUTES (Require Authentication)
 // ==========================================
 
-// Medical Records
-router.post('/upload-report', protect, upload.single('reportFile'), uploadMedicalReport);
+// Medical Records (Using reportUpload)
+router.post('/upload-report', protect, reportUpload.single('reportFile'), uploadMedicalReport);
 router.get('/reports/:filename', protect, downloadMedicalReport);
 
-// Profile Management (NEW)
+// Profile Management
 router.put('/profile', protect, updatePatientProfile);
 router.put('/password', protect, updatePatientPassword);
 router.delete('/account', protect, deletePatientAccount);
 
-// Add the Admin internal routes at the bottom
+// Profile Picture (NEW - Using profilePicUpload)
+router.put('/profile/picture', protect, profilePicUpload.single('profileImage'), updateProfilePicture);
+
+// ==========================================
+// ADMIN INTERNAL ROUTES
+// ==========================================
 router.get('/', getAllPatients);
 router.put('/admin/:id', updatePatientById);
 router.delete('/admin/:id', deletePatientById);

@@ -8,6 +8,10 @@ const patientSchema = new mongoose.Schema({
   role: { type: String, default: 'patient' }, 
   contactNumber: { type: String },
   address: { type: String },
+  
+  // --- NEW: Cloudinary Profile Picture URL ---
+  profilePicture: { type: String, default: '' },
+
   medicalHistory: [{
     condition: String,
     diagnosedDate: Date,
@@ -17,7 +21,7 @@ const patientSchema = new mongoose.Schema({
     fileName: String,
     filePath: String,
     uploadDate: { type: Date, default: Date.now },
-    // --- NEW: AI Analysis Data ---
+    // --- AI Analysis Data ---
     aiAnalysis: {
       status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
       summaryTitle: { type: String },
