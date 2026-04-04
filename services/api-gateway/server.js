@@ -58,6 +58,29 @@ app.use('/api/telemedicine', createProxyMiddleware({
   }
 }));
 
+app.use('/api/admin', createProxyMiddleware({
+  target: 'http://localhost:5002',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/admin': '',  // Remove /api/admin prefix
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Admin Proxy] ${req.method} ${req.url} -> http://localhost:5002${req.url.replace('/api/admin', '')}`);
+    
+    // Log headers for debugging
+    if (req.headers.authorization) {
+      console.log('[Admin Proxy] Has authorization header');
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Admin Proxy] Response status: ${proxyRes.statusCode}`);
+  },
+  onError: (err, req, res) => {
+    console.error('[Admin Proxy] Error:', err.message);
+    res.status(503).json({ error: 'Admin service unavailable', details: err.message });
+  }
+}));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', gateway: 'running' });
