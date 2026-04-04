@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const DoctorDashboard = () => {
+  const navigate = useNavigate();
+  const { doctorId } = useParams(); // Get doctor ID from URL if available
+  const [currentDoctorId, setCurrentDoctorId] = useState('');
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   // Mock data for UI display only
   const stats = [
-    { title: "Today's Appointments", value: "8", icon: "📅", color: "bg-blue-500" },
-    { title: "Total Patients", value: "1,247", icon: "👥", color: "bg-green-500" },
-    { title: "Pending Requests", value: "3", icon: "⏰", color: "bg-yellow-500" },
-    { title: "Total Earnings", value: "$12,450", icon: "💰", color: "bg-purple-500" },
+    { title: "Today's Appointments", value: "8", icon: "", color: "bg-blue-500" },
+    { title: "Total Patients", value: "1,247", icon: "", color: "bg-green-500" },
+    { title: "Pending Requests", value: "3", icon: "", color: "bg-yellow-500" },
+    { title: "Total Earnings", value: "$12,450", icon: "", color: "bg-purple-500" },
   ];
 
   const todayAppointments = [
@@ -121,7 +128,14 @@ const DoctorDashboard = () => {
               <p className="text-gray-600 text-sm">📍 City Heart Hospital</p>
               <p className="text-gray-600 text-sm">⏰ Mon-Fri: 9AM - 5PM</p>
             </div>
-            <button className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
+            <button 
+              onClick={() => {
+                // For now, use a mock doctor ID. In a real app, this would come from authentication
+                const mockDoctorId = '69ce329f92d476861c0cc046'; // Example doctor ID from your database
+                navigate(`/doctor/edit-profile/${mockDoctorId}`);
+              }}
+              className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+            >
               Edit Profile
             </button>
           </div>

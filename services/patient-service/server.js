@@ -11,13 +11,14 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // Allows us to accept JSON data in the body
 
 // Make the 'uploads' folder accessible via URL
 app.use('/uploads', express.static('uploads'));
 
-// IMPORTANT FIX: Mount routes at /api/patients (not /)
-app.use('/api/patients', require('./routes/patientRoutes'));
+// Connect our real patient routes (Registration & Login)
+//app.use('/api/patients', require('./routes/patientRoutes'));
+app.use('/', require('./routes/patientRoutes'));
 
 const PORT = process.env.PORT || 5005;
 

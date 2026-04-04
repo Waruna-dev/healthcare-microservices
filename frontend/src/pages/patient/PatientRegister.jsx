@@ -30,6 +30,24 @@ const PatientRegister = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // --- NEW: Strict Email Validation ---
+    // Ensures there is text, an '@' symbol, a domain, and a dot extension (like .com)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      setMessage({ text: 'Please enter a valid email address (e.g., name@example.com).', type: 'error' });
+      return;
+    }
+
+    // --- EXISTING: Sri Lankan Phone Number Validation ---
+    // Accepts format: 07XXXXXXXX or +947XXXXXXXX (Total 10 digits for local, 11 for international)
+    const slPhoneRegex = /^(?:0|\+94)\d{9}$/;
+    const cleanPhone = formData.contactNumber.trim().replace(/\s+/g, ''); // Removes accidental spaces
+
+    if (!slPhoneRegex.test(cleanPhone)) {
+      setMessage({ text: 'Please enter a valid phone number.', type: 'error' });
+      return;
+    }
+
     // Prevent submission if password is too weak
     if (strengthScore < 3) {
       setMessage({ text: 'Please meet all password requirements.', type: 'error' });
@@ -40,7 +58,9 @@ const PatientRegister = () => {
     setMessage({ text: '', type: '' });
 
     try {
-      const response = await api.post('/patients/register', formData);
+      // Pass the cleaned phone number to the API
+      const payload = { ...formData, contactNumber: cleanPhone };
+      const response = await api.post('/patients/register', payload);
       
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data));
@@ -62,7 +82,7 @@ const PatientRegister = () => {
 
   return (
     <div className="bg-background text-on-surface font-body selection:bg-primary-fixed selection:text-primary min-h-screen flex flex-col">
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         
         {/* --- Left Side: Editorial Image & Branding --- */}
         <section className="hidden md:flex md:w-1/2 relative bg-primary items-center justify-center p-12 overflow-hidden">
@@ -93,8 +113,20 @@ const PatientRegister = () => {
         </section>
 
         {/* --- Right Side: Registration Form --- */}
-        <section className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-surface overflow-y-auto">
-          <div className="w-full max-w-md my-auto">
+        <section className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-surface overflow-y-auto relative">
+          
+          {/* Back to Home Button */}
+          <div className="absolute top-6 right-6 md:top-8 md:right-8 z-20">
+            <Link 
+              to="/" 
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-on-surface-variant hover:text-primary bg-surface-container-lowest hover:bg-surface-container-low rounded-full border border-outline-variant/50 transition-all shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+              Back to Home
+            </Link>
+          </div>
+
+          <div className="w-full max-w-md my-auto pt-12 md:pt-0">
             
             {/* Mobile Branding Header */}
             <div className="md:hidden flex items-center gap-2 mb-10">
@@ -134,7 +166,7 @@ const PatientRegister = () => {
                     id="name" name="name" type="text"
                     value={formData.name} onChange={handleChange} required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="Jane Doe" 
+                    placeholder="Your Full Name" 
                   />
                 </div>
               </div>
@@ -150,7 +182,7 @@ const PatientRegister = () => {
                     id="email" name="email" type="email"
                     value={formData.email} onChange={handleChange} required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="jane@caresync.com" 
+                    placeholder="your@email.com" 
                   />
                 </div>
               </div>
@@ -166,7 +198,7 @@ const PatientRegister = () => {
                     id="contactNumber" name="contactNumber" type="tel"
                     value={formData.contactNumber} onChange={handleChange} required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="+1 (555) 000-0000" 
+                    placeholder="0712345678" 
                   />
                 </div>
               </div>
@@ -191,7 +223,7 @@ const PatientRegister = () => {
                     className="absolute inset-y-0 right-0 pr-4 flex items-center text-outline hover:text-on-surface transition-colors focus:outline-none"
                   >
                     <span className="material-symbols-outlined text-lg">
-                      {showPassword ? "visibility_off" : "visibility"}
+                      {showPassword ? "visibility" : "visibility_off"}
                     </span>
                   </button>
                 </div>

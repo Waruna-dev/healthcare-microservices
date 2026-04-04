@@ -1,4 +1,3 @@
-// server.js - API Gateway (PORT: 5000) - COMPLETE WORKING VERSION
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -6,41 +5,59 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// Enable CORS for frontend
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
-}));
+// Enable CORS
+app.use(cors());
 
-// Logging
-app.use((req, res, next) => {
-  console.log(`[Gateway] ${req.method} ${req.url}`);
+// 1. Patient Service Proxy
+app.use(
+  '/api/patients',
+  createProxyMiddleware({
+    target: 'http://localhost:5005',
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api/patients': '',
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying Patient]: ${req.method} ${req.url} -> http://localhost:5005${req.url.replace('/api/patients', '')}`);
+    }
+  })
+);
+
+// 2. Doctor Service Proxy
+console.log('Setting up doctor proxy...');
+app.use('/api/doctors', (req, res, next) => {
+  console.log(`[DEBUG] Doctor proxy hit: ${req.method} ${req.url}`);
   next();
-});
-
-// Patient Service Proxy
-app.use('/api/patients', createProxyMiddleware({
-  target: 'http://localhost:5005',
-  changeOrigin: true,
-  onProxyReq: (proxyReq, req, res) => {
-    console.log(`[Proxy] Forwarding to patient service: ${req.method} ${req.url}`);
-  },
-  onError: (err, req, res) => {
-    console.error('Proxy error:', err.message);
-    res.status(503).json({ error: 'Patient service unavailable' });
-  }
-}));
-
-// Doctor Service Proxy
-app.use('/api/doctors', createProxyMiddleware({
+}, createProxyMiddleware({
   target: 'http://localhost:5025',
   changeOrigin: true,
+  secure: false,
+  pathRewrite: (path) => `/api/doctors${path}`,
+  logLevel: 'debug',
+  onProxyReq: (proxyReq, req, res) => {
+    console.log(`[Proxying Doctor]: ${req.method} ${req.url} -> http://localhost:5025/api/doctors${req.url}`);
+  },
   onError: (err, req, res) => {
-    res.status(503).json({ error: 'Doctor service unavailable' });
+    console.error('Doctor Service Error:', err.message);
+    res.status(500).json({ error: 'Doctor service is unavailable' });
   }
 }));
 
-// Appointment Service Proxy
+// 3. Admin Service Proxy
+app.use(
+  '/api/admin',
+  createProxyMiddleware({
+    target: 'http://localhost:5002',
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api/admin': '',
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying Admin]: ${req.method} ${req.url} -> http://localhost:5002${req.url.replace('/api/admin', '')}`);
+    }
+  })
+);
+
 app.use('/api/appointments', createProxyMiddleware({
   target: 'http://localhost:5015',
   changeOrigin: true,
@@ -49,44 +66,23 @@ app.use('/api/appointments', createProxyMiddleware({
   }
 }));
 
-// Telemedicine Service Proxy
-app.use('/api/telemedicine', createProxyMiddleware({
-  target: 'http://localhost:5018',
-  changeOrigin: true,
-  onError: (err, req, res) => {
-    res.status(503).json({ error: 'Telemedicine service unavailable' });
-  }
-}));
+// Placeholders for future services
+/*
+app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:5003', changeOrigin: true }));
+app.use('/api/payments',     createProxyMiddleware({ target: 'http://localhost:5004', changeOrigin: true }));
+*/
 
-app.use('/api/admin', createProxyMiddleware({
-  target: 'http://localhost:5002',
-  changeOrigin: true,
-  pathRewrite: {
-    '^/api/admin': '',  // Remove /api/admin prefix
-  },
-  onProxyReq: (proxyReq, req, res) => {
-    console.log(`[Admin Proxy] ${req.method} ${req.url} -> http://localhost:5002${req.url.replace('/api/admin', '')}`);
-    
-    // Log headers for debugging
-    if (req.headers.authorization) {
-      console.log('[Admin Proxy] Has authorization header');
-    }
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    console.log(`[Admin Proxy] Response status: ${proxyRes.statusCode}`);
-  },
-  onError: (err, req, res) => {
-    console.error('[Admin Proxy] Error:', err.message);
-    res.status(503).json({ error: 'Admin service unavailable', details: err.message });
-  }
-}));
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', gateway: 'running' });
+// Health check route
+app.get('/', (req, res) => {
+  res.send('CareSync API Gateway is running!');
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log(`✅ API Gateway running on port ${PORT}`);
+  console.log(`📍 Patient Service : http://localhost:5005 (via /api/patients)`);
+  console.log(`📍 Doctor Service  : http://localhost:5025 (via /api/doctors)`);
+  console.log(`📍 Admin Service   : http://localhost:5002 (via /api/admin)`);
+  console.log(`🌐 Frontend should use: http://localhost:${PORT}/api/...`);
 });

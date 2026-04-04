@@ -1,10 +1,22 @@
-// services/admin-service/routes/adminRoutes.js
+// routes/adminRoutes.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
 const { protectAdmin } = require('../middleware/authAdmin');
+const sendEmail = require('../utils/sendEmail');
+
+// --- NEW: Import Message Controllers ---
+const { 
+  submitMessage, 
+  getAllMessages, 
+  updateMessageStatus, 
+  deleteMessage 
+} = require('../controllers/messageController');
 
 // Fetch the Admin model we defined in server.js
 const Admin = mongoose.model('Admin');
@@ -45,13 +57,10 @@ router.post('/login', async (req, res) => {
 // ==========================================
 router.get('/patients', protectAdmin, async (req, res) => {
   try {
-    // FIX: Changed from /api/patients to just /
     const response = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
     res.status(200).json({ success: true, count: response.data.length, data: response.data });
   } catch (error) {
-    console.error("MICROSERVICE CONNECTION FAILED!");
-    console.error(error.message); 
-    
+    console.error("MICROSERVICE CONNECTION FAILED!", error.message);
     res.status(500).json({ message: "Failed to fetch patients." });
   }
 });
@@ -64,7 +73,6 @@ router.put('/patients/:id', protectAdmin, async (req, res) => {
     const response = await axios.put(`${process.env.PATIENT_SERVICE_URL}/admin/${req.params.id}`, req.body);
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
-    // EXPOSE THE ERROR:
     console.error("UPDATE FAILED IN MICROSERVICE:", error.message);
     res.status(500).json({ message: "Failed to update patient." });
   }
@@ -78,7 +86,6 @@ router.delete('/patients/:id', protectAdmin, async (req, res) => {
     await axios.delete(`${process.env.PATIENT_SERVICE_URL}/admin/${req.params.id}`);
     res.status(200).json({ success: true, message: "Patient deleted." });
   } catch (error) {
-    // EXPOSE THE ERROR:
     console.error("DELETE FAILED IN MICROSERVICE:", error.message);
     res.status(500).json({ message: "Failed to delete patient." });
   }
@@ -89,67 +96,186 @@ router.delete('/patients/:id', protectAdmin, async (req, res) => {
 // ==========================================
 router.get('/demographics', protectAdmin, async (req, res) => {
   try {
-    // 1. Get Support Staff directly from the local Admin Database
     const supportStaffCount = await Admin.countDocuments();
 
-    // 2. Get Patients from the Patient Microservice
     let patientsCount = 0;
     try {
       const patientRes = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
-      patientsCount = patientRes.data.length; 
+      if (patientRes.data.patients) patientsCount = patientRes.data.patients.length;
+      else if (patientRes.data.data) patientsCount = patientRes.data.data.length;
+      else if (Array.isArray(patientRes.data)) patientsCount = patientRes.data.length;
     } catch (err) {
-      console.error("Demographics: Failed to fetch patients count", err.message);
+      console.error("Demographics: Failed to fetch patients count");
     }
 
-    // 3. Get Specialists from the Doctor Microservice (TEMPORARILY DISABLED)
-    let specialistsCount = 0; // Keeping this at 0 prevents the frontend from breaking
+    let specialistsCount = 0; 
+    let pendingDoctorsList = []; 
     
-    /* try {
+    try {
       if (process.env.DOCTOR_SERVICE_URL) {
-        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/`);
-        specialistsCount = doctorRes.data.length;
+        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
+        
+        let allDoctors = [];
+        
+        if (doctorRes.data.doctors && Array.isArray(doctorRes.data.doctors)) {
+            allDoctors = doctorRes.data.doctors;
+        } else if (doctorRes.data.data && Array.isArray(doctorRes.data.data)) {
+            allDoctors = doctorRes.data.data; 
+        } else if (Array.isArray(doctorRes.data)) {
+            allDoctors = doctorRes.data; 
+        }
+        
+        const approvedDoctors = allDoctors.filter(doc => doc.status === 'approved');
+        specialistsCount = approvedDoctors.length;
+
+        pendingDoctorsList = allDoctors
+          .filter(doc => doc.status === 'pending')
+          .map(doc => ({
+            _id: doc._id,
+            name: doc.name,
+            email: doc.email
+          }));
       }
     } catch (err) {
       console.error("Demographics: Failed to fetch specialists count", err.message);
     }
-    */
 
-    // 4. Calculate Totals
     const totalUsers = supportStaffCount + patientsCount + specialistsCount;
-
-    // 5. Calculate Real Growth Percentage
-    // Ideally, you query your DB for users created in the last 30 days. 
-    // For now, we assume all current users are new this month (a placeholder until you add creation dates)
     let newUsersThisMonth = totalUsers; 
     let previousMonthUsers = totalUsers - newUsersThisMonth;
     
     let growthPercentage = 0;
-    
     if (previousMonthUsers === 0 && totalUsers > 0) {
-      // If you had 0 users last month, and now you have users, that is 100% growth!
       growthPercentage = 100; 
     } else if (previousMonthUsers > 0) {
-      // The standard math formula for percentage growth
       growthPercentage = Math.round((newUsersThisMonth / previousMonthUsers) * 100);
     }
 
-    // Send formatted response exactly how the React frontend expects it
     res.status(200).json({
       success: true,
       data: {
         totalUsers,
         growthPercentage,
-        demographics: {
-          patients: patientsCount,
-          specialists: specialistsCount, // Will safely return 0
-          supportStaff: supportStaffCount
-        }
+        demographics: { 
+          patients: patientsCount, 
+          specialists: specialistsCount, 
+          supportStaff: supportStaffCount 
+        },
+        pendingDoctors: pendingDoctorsList 
       }
     });
 
   } catch (error) {
     console.error("Error generating demographics:", error.message);
     res.status(500).json({ message: "Failed to generate demographics." });
+  }
+});
+
+// ==========================================
+// GET /doctors/:id - Fetch Single Doctor Details
+// ==========================================
+router.get('/doctors/:id', protectAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${req.params.id}`);
+    const doctorData = response.data.data || response.data.doctor || response.data;
+    res.status(200).json({ success: true, data: doctorData });
+  } catch (error) {
+    console.error("Failed to fetch doctor details:", error.message);
+    res.status(500).json({ message: "Failed to fetch doctor details." });
+  }
+});
+
+// ==========================================
+// PUT /doctors/:id/approve - Approve & Email Doctor
+// ==========================================
+router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
+  try {
+    const doctorId = req.params.id;
+    const { name, email } = req.body; 
+
+    if (!email || !name) {
+      return res.status(400).json({ message: "Doctor email and name are required to send the approval email." });
+    }
+
+    const tempPassword = crypto.randomBytes(4).toString('hex');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(tempPassword, salt);
+
+    try {
+      await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
+        status: 'approved',
+        password: hashedPassword
+      });
+    } catch (err) {
+      console.error("Failed to update doctor in Doctor Microservice:", err.message);
+      return res.status(500).json({ message: "Failed to update doctor status in the database." });
+    }
+
+    try {
+      await sendEmail({
+        email: email,
+        subject: 'CareSync: Your Account is Approved!',
+        message: `Welcome Dr. ${name}! Your account is approved. Your temporary password is: ${tempPassword}`,
+        html: `<p>Welcome Dr. ${name}!</p><p>Your temporary password is: <strong>${tempPassword}</strong></p>`
+      });
+    } catch (emailError) {
+      console.error("Email failed:", emailError);
+      return res.status(200).json({
+        success: true,
+        message: 'Doctor approved, but failed to send the notification email.',
+        tempPasswordForAdminToShare: tempPassword 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Doctor approved and email sent successfully!'
+    });
+
+  } catch (error) {
+    console.error("Error approving doctor:", error);
+    res.status(500).json({ message: 'Failed to approve doctor.' });
+  }
+});
+
+// ==========================================
+// PUT /doctors/:id/reject - Reject & Delete Doctor
+// ==========================================
+router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
+  try {
+    const doctorId = req.params.id;
+    const { name, email } = req.body; 
+
+    if (!email || !name) {
+      return res.status(400).json({ message: "Doctor email and name are required to send the rejection email." });
+    }
+    
+    try {
+      await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
+    } catch (err) {
+      console.error("Failed to delete doctor in Doctor Microservice:", err.message);
+      return res.status(500).json({ message: "Failed to delete doctor from the database." });
+    }
+
+    try {
+      await sendEmail({
+        email: email,
+        subject: 'CareSync: Application Update',
+        message: `Dear Dr. ${name}, we regret to inform you that your application to join CareSync has been declined.`,
+        html: `<p>Dear Dr. ${name}, your application was declined.</p>`
+      });
+    } catch (emailError) {
+      console.error("Email failed:", emailError);
+      return res.status(200).json({
+        success: true,
+        message: 'Doctor deleted from database, but failed to send the notification email.'
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'Doctor rejected, data deleted, and email sent successfully.' });
+  } catch (error) {
+    console.error("Error rejecting doctor:", error);
+    res.status(500).json({ message: 'Failed to reject doctor.' });
   }
 });
 
@@ -182,83 +308,117 @@ router.post('/register', protectAdmin, async (req, res) => {
 // ==========================================
 router.put('/profile', protectAdmin, async (req, res) => {
   try {
-    // 1. Find the admin and explicitly ask for the password field
     const admin = await Admin.findById(req.admin._id).select('+password');
-    
-    if (!admin) {
-      return res.status(404).json({ message: 'Admin not found' });
-    }
+    if (!admin) return res.status(404).json({ message: 'Admin not found' });
 
-    // 2. Update basic info (only if provided)
     if (req.body.name) admin.name = req.body.name;
     if (req.body.email) admin.email = req.body.email;
 
-    // 3. Update Password ONLY IF they actually typed a new one
-    // .trim() ensures we don't accidentally process spaces
     if (req.body.newPassword && req.body.newPassword.trim() !== '') {
-      
-      if (!req.body.currentPassword) {
-        return res.status(400).json({ message: 'Please provide your current password to set a new one.' });
-      }
+      if (!req.body.currentPassword) return res.status(400).json({ message: 'Please provide your current password.' });
       
       const isMatch = await admin.matchPassword(req.body.currentPassword);
-      if (!isMatch) {
-        return res.status(400).json({ message: 'Current password is incorrect.' });
-      }
+      if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect.' });
 
       admin.password = req.body.newPassword;
     }
 
-    // 4. Save the updated admin to the database
     const updatedAdmin = await admin.save();
 
-    // 5. Send success response
     res.status(200).json({ 
       success: true, 
-      data: { 
-        _id: updatedAdmin._id, 
-        name: updatedAdmin.name, 
-        email: updatedAdmin.email, 
-        role: updatedAdmin.role 
-      }
+      data: { _id: updatedAdmin._id, name: updatedAdmin.name, email: updatedAdmin.email, role: updatedAdmin.role }
     });
-
   } catch (error) {
-    // EXPOSE THE ERROR IN YOUR TERMINAL:
     console.error("🔥 PROFILE UPDATE ERROR:", error);
-
-    // If they tried to change their email to one that already exists in the database
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'That email is already in use by another admin.' });
-    }
-
-    res.status(500).json({ message: 'Failed to update profile. Check server console.' });
+    if (error.code === 11000) return res.status(400).json({ message: 'That email is already in use.' });
+    res.status(500).json({ message: 'Failed to update profile.' });
   }
 });
+
 // ==========================================
 // DELETE /profile - Delete Current Admin
 // ==========================================
 router.delete('/profile', protectAdmin, async (req, res) => {
   try {
-    const adminId = req.admin._id;
-
-    // Safety Check: Don't let them delete the account if they are the last admin standing!
     const adminCount = await Admin.countDocuments();
     if (adminCount <= 1) {
-      return res.status(400).json({ 
-        message: 'Action denied. You are the last remaining administrator. Please create another admin account first.' 
-      });
+      return res.status(400).json({ message: 'Action denied. You are the last remaining administrator.' });
     }
 
-    await Admin.findByIdAndDelete(adminId);
-    
-    res.status(200).json({ 
-      success: true, 
-      message: 'Admin account deleted successfully.' 
-    });
+    await Admin.findByIdAndDelete(req.admin._id);
+    res.status(200).json({ success: true, message: 'Admin account deleted successfully.' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete account.' });
   }
 });
+
+// ==========================================
+// GET /doctors - Fetch all Doctors
+// ==========================================
+router.get('/doctors', protectAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
+    
+    let allDoctors = [];
+    if (response.data.doctors && Array.isArray(response.data.doctors)) {
+        allDoctors = response.data.doctors;
+    } else if (response.data.data && Array.isArray(response.data.data)) {
+        allDoctors = response.data.data; 
+    } else if (Array.isArray(response.data)) {
+        allDoctors = response.data; 
+    }
+    
+    res.status(200).json({ success: true, data: allDoctors });
+  } catch (error) {
+    console.error("Failed to fetch doctors list:", error.message);
+    res.status(500).json({ message: "Failed to fetch doctors list." });
+  }
+});
+
+// ==========================================
+// PUT /doctors/:id - Update a Doctor
+// ==========================================
+router.put('/doctors/:id', protectAdmin, async (req, res) => {
+  try {
+    if (req.body.password) {
+      const salt = await bcrypt.genSalt(10);
+      req.body.password = await bcrypt.hash(req.body.password, salt);
+    } else {
+      delete req.body.password; 
+    }
+
+    const response = await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${req.params.id}`, req.body);
+    res.status(200).json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Failed to update doctor:", error.message);
+    res.status(500).json({ message: "Failed to update doctor." });
+  }
+});
+
+// ==========================================
+// DELETE /doctors/:id - Delete a Doctor
+// ==========================================
+router.delete('/doctors/:id', protectAdmin, async (req, res) => {
+  try {
+    await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${req.params.id}`);
+    res.status(200).json({ success: true, message: "Doctor deleted." });
+  } catch (error) {
+    console.error("Failed to delete doctor:", error.message);
+    res.status(500).json({ message: "Failed to delete doctor." });
+  }
+});
+
+// ==========================================
+// SUPPORT INBOX ROUTES (NEW)
+// ==========================================
+
+// PUBLIC: Submit a message from the Contact Us page
+router.post('/contact', submitMessage);
+
+// PRIVATE: Admin message management
+router.get('/messages', protectAdmin, getAllMessages);
+router.put('/messages/:id', protectAdmin, updateMessageStatus);
+router.delete('/messages/:id', protectAdmin, deleteMessage);
 
 module.exports = router;

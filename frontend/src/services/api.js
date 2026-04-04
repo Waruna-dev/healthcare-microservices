@@ -1,55 +1,41 @@
+// src/services/api.js
 import axios from 'axios';
 
-// API Base URL (using gateway)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-
+// 1. Create a configured Axios instance
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api', 
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // Add timeout
 });
 
-// Single request interceptor (combine both into one)
+// 2. Request Interceptor (SMART TOKEN INJECTION)
 api.interceptors.request.use(
   (config) => {
-    // For admin routes
-    if (config.url && config.url.includes('/admin')) {
+    // If the API request is going to an admin route, use the adminToken
+    if (config.url.includes('/admin')) {
       const adminToken = localStorage.getItem('adminToken');
       if (adminToken) {
         config.headers.Authorization = `Bearer ${adminToken}`;
       }
-    } 
-    // For patient routes (default)
-    else {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    } else {
+      // Otherwise, use the standard patient token
+      const token = localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
-    
-    // Debug logging
-    console.log(`API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-    
     return config;
   },
-  (error) => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor
+// 3. Response Interceptor (SMART REDIRECT)
 api.interceptors.response.use(
-  (response) => {
-    console.log(`API Response: ${response.status} ${response.config.url}`);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Error:', error.response?.status, error.response?.data);
-    
     if (error.response && error.response.status === 401) {
+      
       // Check if the user is currently in the Admin Portal
       if (window.location.pathname.includes('/admin')) {
         localStorage.removeItem('adminToken');
@@ -62,9 +48,7 @@ api.interceptors.response.use(
       else {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        sessionStorage.removeItem('token');
-        sessionStorage.removeItem('user');
-        if (!['/login', '/register', '/'].includes(window.location.pathname)) {
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register' && window.location.pathname !== '/') {
           window.location.href = '/login';
         }
       }
@@ -72,6 +56,7 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 
 // Appointment API
 export const appointmentAPI = {
@@ -104,29 +89,6 @@ export const appointmentAPI = {
     const response = await api.put(`/appointments/${appointmentId}/cancel`, { reason });
     return response.data;
   }
-};
-
-// Telemedicine API
-export const telemedicineAPI = {
-  getSession: async (appointmentId) => {
-    const response = await api.get(`/telemedicine/${appointmentId}`);
-    return response.data;
-  },
-  startSession: async (appointmentId) => {
-    const response = await api.post(`/telemedicine/${appointmentId}/start`);
-    return response.data;
-  },
-  endSession: async (appointmentId, notes, prescription) => {
-    const response = await api.post(`/telemedicine/${appointmentId}/end`, {
-      consultationNotes: notes,
-      prescription
-    });
-    return response.data;
-  },
-  getPrescription: async (appointmentId) => {
-    const response = await api.get(`/telemedicine/${appointmentId}/prescription`);
-    return response.data;
-  },
 };
 
 export default api;

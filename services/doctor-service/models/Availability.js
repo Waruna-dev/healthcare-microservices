@@ -10,6 +10,7 @@ const availabilitySchema = new mongoose.Schema({
         ref: 'Doctor',
         required: true
     },
+    /** When set, this row applies only to that calendar day (UTC midnight anchor). Omit for weekly recurring. */
     date: {
         type: Date,
         required: false
@@ -64,6 +65,7 @@ const availabilitySchema = new mongoose.Schema({
             message: 'Invalid break end time'
         }
     },
+    /** Optional override for this slot/day (e.g. Rs.). Falls back to doctor profile when null. */
     consultationFee: {
         type: Number,
         default: null,
@@ -77,9 +79,28 @@ const availabilitySchema = new mongoose.Schema({
     timestamps: true
 });
 
-// SIMPLE INDEXES - Remove partial filter expressions
-availabilitySchema.index({ doctorId: 1, dayOfWeek: 1 });
-availabilitySchema.index({ doctorId: 1, date: 1 });
+const weeklySlotFilter = {
+    date: { $exists: false }
+};
+
+// Weekly template: one row per doctor per weekday (no `date` field stored)
+availabilitySchema.index(
+    { doctorId: 1, dayOfWeek: 1 },
+    {
+        unique: true,
+        partialFilterExpression: weeklySlotFilter
+    }
+);
+
+// Specific calendar day: at most one row per doctor per date
+availabilitySchema.index(
+    { doctorId: 1, date: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { date: { $type: 'date' } }
+    }
+);
+
 availabilitySchema.index({ doctorId: 1, isActive: 1 });
 
 module.exports = mongoose.model('Availability', availabilitySchema);
