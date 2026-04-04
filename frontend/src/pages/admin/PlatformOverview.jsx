@@ -5,7 +5,7 @@ import axios from 'axios';
 import { 
   Users, UserPlus, ShieldAlert, CheckCircle2, 
   Stethoscope, ArrowUpRight, ArrowDownRight, Minus,
-  X, Check, XCircle
+  X, Check, XCircle, AlertTriangle 
 } from 'lucide-react';
 
 const PlatformOverview = () => {
@@ -19,10 +19,13 @@ const PlatformOverview = () => {
 
   const [pendingDoctors, setPendingDoctors] = useState([]);
   
-  // --- NEW STATES FOR THE MODAL ---
+  // Modal States
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+
+  // --- NEW: Custom Reject Modal State ---
+  const [isRejectConfirmOpen, setIsRejectConfirmOpen] = useState(false);
 
   // Fetch Dashboard Data
   const fetchDashboardStats = async () => {
@@ -90,16 +93,11 @@ const PlatformOverview = () => {
     }
   };
 
-  // --- 3. REJECT DOCTOR ---
-  const handleReject = async () => {
-    // Make the warning more explicit since data will be deleted
-    const confirmReject = window.confirm("Are you sure you want to reject and permanently delete this registration?");
-    if (!confirmReject) return;
-
+  // --- 3. CONFIRM & REJECT DOCTOR ---
+  const confirmReject = async () => {
     setIsActionLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
-      // Passed name and email to backend so it can trigger the Resend email
       const response = await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}/reject`, 
         { name: selectedDoctor.name, email: selectedDoctor.email }, 
         { headers: { Authorization: `Bearer ${token}` }}
@@ -107,7 +105,8 @@ const PlatformOverview = () => {
 
       if (response.data.success) {
         showToast("Doctor registration rejected and data deleted.", "error");
-        setIsModalOpen(false);
+        setIsRejectConfirmOpen(false); // Close confirm modal
+        setIsModalOpen(false); // Close review modal
         fetchDashboardStats(); // Refresh the list
       }
     } catch (error) {
@@ -186,7 +185,7 @@ const PlatformOverview = () => {
 
               <div className="p-6 bg-surface-container-low border-t border-outline-variant/30 flex gap-4">
                 <button 
-                  onClick={handleReject}
+                  onClick={() => setIsRejectConfirmOpen(true)} // <-- Trigger the custom modal
                   disabled={isActionLoading}
                   className="flex-1 py-3 px-4 rounded-xl font-bold text-error bg-error-container hover:bg-error hover:text-white transition-colors flex justify-center items-center gap-2"
                 >
@@ -198,6 +197,46 @@ const PlatformOverview = () => {
                   className="flex-[2] py-3 px-4 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 shadow-md transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                 >
                   {isActionLoading ? 'Processing...' : <><Check size={18} /> Approve & Send Password</>}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- NEW: CUSTOM REJECT CONFIRMATION MODAL --- */}
+      <AnimatePresence>
+        {isRejectConfirmOpen && selectedDoctor && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface-container-lowest w-full max-w-md rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden p-6 text-center"
+            >
+              <div className="w-16 h-16 bg-error-container text-error rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <AlertTriangle size={32} />
+              </div>
+              
+              <h3 className="text-xl font-bold font-headline text-on-surface mb-2">Reject Registration?</h3>
+              <p className="text-on-surface-variant mb-6 text-sm leading-relaxed">
+                Are you sure you want to reject and permanently delete the registration for <span className="font-bold text-on-surface">Dr. {selectedDoctor.name}</span>? This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 justify-center">
+                <button 
+                  onClick={() => setIsRejectConfirmOpen(false)} 
+                  disabled={isActionLoading}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmReject} 
+                  disabled={isActionLoading}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors flex justify-center items-center gap-2"
+                >
+                  {isActionLoading ? 'Processing...' : 'Yes, Reject'}
                 </button>
               </div>
             </motion.div>
@@ -319,7 +358,6 @@ const PlatformOverview = () => {
                       </div>
                       <button 
                         onClick={() => handleReviewClick(doc._id)} 
-                        // 🔥 THE FIX: Changed 'text-primary' to 'text-white' and 'bg-primary-container' to 'bg-primary'
                         className="px-4 py-2 text-xs font-bold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors shadow-sm shrink-0 active:scale-95"
                       >
                         Review
