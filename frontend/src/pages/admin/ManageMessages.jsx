@@ -12,6 +12,9 @@ const ManageMessages = () => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
+  // --- NEW: Custom Delete Modal State ---
+  const [messageToDelete, setMessageToDelete] = useState(null);
+
   useEffect(() => {
     fetchMessages();
   }, []);
@@ -61,12 +64,19 @@ const ManageMessages = () => {
     }
   };
 
-  const deleteMessage = async (id) => {
-    if(!window.confirm("Are you sure you want to delete this message?")) return;
+  // --- UPDATED: Trigger custom modal instead of window.confirm ---
+  const triggerDelete = (msg) => {
+    setMessageToDelete(msg);
+  };
+
+  const confirmDelete = async () => {
+    if (!messageToDelete) return;
+    
     try {
-      await api.delete(`/admin/messages/${id}`);
-      setMessages(messages.filter(m => m._id !== id));
-      setIsViewModalOpen(false);
+      await api.delete(`/admin/messages/${messageToDelete._id}`);
+      setMessages(messages.filter(m => m._id !== messageToDelete._id));
+      setIsViewModalOpen(false); // Close view modal if it was open
+      setMessageToDelete(null);  // Close delete modal
     } catch (error) {
       console.error("Failed to delete message");
     }
@@ -162,7 +172,7 @@ const ManageMessages = () => {
 
       {/* Read Message Modal */}
       {isViewModalOpen && selectedMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-surface-container-lowest w-full max-w-2xl rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col">
             
             <div className="p-6 border-b border-outline-variant/30 flex justify-between items-start bg-surface-container-low">
@@ -186,7 +196,7 @@ const ManageMessages = () => {
 
             <div className="p-6 border-t border-outline-variant/30 bg-surface-container-lowest flex justify-between items-center">
               <button 
-                onClick={() => deleteMessage(selectedMessage._id)} 
+                onClick={() => triggerDelete(selectedMessage)} // <-- UPDATED to trigger modal
                 className="flex items-center gap-2 px-4 py-2.5 text-error hover:bg-error-container rounded-xl font-bold text-sm transition-colors"
               >
                 <Trash2 size={18} /> Delete
@@ -207,6 +217,38 @@ const ManageMessages = () => {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* --- NEW: CUSTOM DELETE CONFIRMATION MODAL --- */}
+      {messageToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-surface-container-lowest w-full max-w-md rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden p-6 text-center transform transition-all">
+            
+            <div className="w-16 h-16 bg-error-container text-error rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <AlertTriangle size={32} />
+            </div>
+            
+            <h3 className="text-xl font-bold font-headline text-on-surface mb-2">Delete Message?</h3>
+            <p className="text-on-surface-variant mb-6 text-sm leading-relaxed">
+              Are you sure you want to permanently delete this message from <span className="font-bold text-on-surface">{messageToDelete.name}</span>? This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3 justify-center">
+              <button 
+                onClick={() => setMessageToDelete(null)} 
+                className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete} 
+                className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
