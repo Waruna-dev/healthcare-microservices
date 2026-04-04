@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const DoctorLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-
-  const menuItems = [
+  const { user, authKey } = useAuth(); // Add authKey
+  const [menuItems, setMenuItems] = useState([
     { path: '/doctor/dashboard', name: 'Dashboard', icon: '📊' },
     { path: '/doctor/appointments', name: 'Appointments', icon: '📅' },
-    { path: '/doctor/doctors', name: 'All Doctors', icon: '👨‍⚕️' },
     { path: '/doctor/patients', name: 'My Patients', icon: '👥' },
     { path: '/doctor/schedule', name: 'Schedule', icon: '📆' },
     { path: '/doctor/weekly-schedule', name: 'Weekly Schedule', icon: '📅' },
@@ -17,15 +17,20 @@ const DoctorLayout = () => {
     { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },
     { path: '/doctor/settings', name: 'Settings', icon: '⚙️' },
-  ];
+  ]);
 
-  // No logout function needed - just navigate to home if needed
+  // Reset sidebar state when user changes
+  useEffect(() => {
+    console.log('DoctorLayout - User changed to:', user?.name);
+    // You can add any reset logic here
+  }, [user, authKey]);
+
   const goToHome = () => {
     navigate('/');
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100" key={authKey}> {/* Add key to force re-render */}
       {/* Sidebar */}
       <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-gradient-to-b from-blue-800 to-indigo-900 text-white transition-all duration-300 flex flex-col`}>
         {/* Logo */}
@@ -54,8 +59,8 @@ const DoctorLayout = () => {
                 👨‍⚕️
               </div>
               <div>
-                <p className="font-semibold text-sm">Dr. Sarah Johnson</p>
-                <p className="text-xs text-blue-200">Cardiologist</p>
+                <p className="font-semibold text-sm">Dr. {user?.name || 'Doctor'}</p>
+                <p className="text-xs text-blue-200">{user?.specialty || user?.specialization || 'Doctor'}</p>
               </div>
             </div>
           </div>
@@ -79,7 +84,7 @@ const DoctorLayout = () => {
           ))}
         </nav>
 
-        {/* Home/Exit Button instead of Logout */}
+        {/* Home/Exit Button */}
         <div className="p-4 border-t border-blue-700">
           <button
             onClick={goToHome}
@@ -104,9 +109,9 @@ const DoctorLayout = () => {
             <button className="text-gray-500 hover:text-gray-700">🔔</button>
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
-                DS
+                {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'DD'}
               </div>
-              <span className="text-sm text-gray-700 hidden md:block">Dr. Sarah</span>
+              <span className="text-sm text-gray-700 hidden md:block">Dr. {user?.name?.split(' ')[0] || 'Doctor'}</span>
             </div>
           </div>
         </header>

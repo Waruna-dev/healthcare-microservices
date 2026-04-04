@@ -1,14 +1,14 @@
 // src/pages/patient/PatientLogin.jsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext'; // Import useAuth
 import api from '../../services/api';
 
 const PatientLogin = () => {
   const navigate = useNavigate();
+  const { login } = useAuth(); // Get login function from context
   
-  // --- NEW: Role State (Defaults to 'patient') ---
-  const [role, setRole] = useState('patient'); 
-
+  const [role, setRole] = useState('patient');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -27,17 +27,30 @@ const PatientLogin = () => {
     setMessage({ text: '', type: '' });
 
     try {
-      // 🔥 DYNAMIC ENDPOINT: Hits the right API based on the selected role
+      // Determine endpoint based on role
       const endpoint = role === 'doctor' ? '/doctors/login' : '/patients/login';
       const response = await api.post(endpoint, formData);
       
-      localStorage.setItem('token', response.data.token);
-      // Store user data and explicit role for easy access in your app
-      localStorage.setItem('user', JSON.stringify({ ...response.data, role }));
+      const { token } = response.data;
+      
+      // Format data for AuthContext based on role
+      let userData;
+      if (role === 'doctor') {
+        // For doctor login, response.data.doctor contains doctor info
+        const doctorData = response.data.doctor || response.data;
+        userData = { doctor: doctorData };
+      } else {
+        // For patient login, adjust based on your patient API response structure
+        const patientData = response.data.patient || response.data;
+        userData = { patient: patientData };
+      }
+      
+      // Use the login function from AuthContext
+      login(userData, token);
       
       setMessage({ text: 'Authentication successful. Redirecting...', type: 'success' });
       
-      // 🔥 DYNAMIC REDIRECT
+      // Redirect based on role
       setTimeout(() => {
         if (role === 'doctor') {
           navigate('/doctor/dashboard');
@@ -60,7 +73,7 @@ const PatientLogin = () => {
     <div className="bg-background text-on-surface font-body selection:bg-primary-fixed selection:text-primary min-h-screen flex flex-col">
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         
-        {/* --- Left Side: Editorial Image & Branding --- */}
+        {/* Left Side: Editorial Image & Branding */}
         <section className="hidden md:flex md:w-1/2 relative bg-primary items-center justify-center p-12 overflow-hidden">
           <div className="absolute inset-0 z-0">
             <img 
@@ -88,7 +101,7 @@ const PatientLogin = () => {
           </div>
         </section>
 
-        {/* --- Right Side: Login Form --- */}
+        {/* Right Side: Login Form */}
         <section className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-surface relative overflow-y-auto">
           
           {/* Back to Home Button */}
@@ -117,11 +130,14 @@ const PatientLogin = () => {
               <p className="text-on-surface-variant font-body">Please enter your credentials to access your sanctuary.</p>
             </header>
 
-            {/* --- NEW: ROLE SELECTION TABS --- */}
+            {/* Role Selection Tabs */}
             <div className="flex bg-surface-container-low p-1 rounded-xl mb-8 border border-outline-variant/30">
               <button
                 type="button"
-                onClick={() => setRole('patient')}
+                onClick={() => {
+                  setRole('patient');
+                  setMessage({ text: '', type: '' }); // Clear messages when switching roles
+                }}
                 className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
                   role === 'patient' 
                     ? 'bg-white shadow-sm text-primary border border-outline-variant/20' 
@@ -132,7 +148,10 @@ const PatientLogin = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setRole('doctor')}
+                onClick={() => {
+                  setRole('doctor');
+                  setMessage({ text: '', type: '' }); // Clear messages when switching roles
+                }}
                 className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
                   role === 'doctor' 
                     ? 'bg-white shadow-sm text-primary border border-outline-variant/20' 

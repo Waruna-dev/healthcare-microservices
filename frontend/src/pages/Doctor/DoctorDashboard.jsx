@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const DoctorDashboard = () => {
   const navigate = useNavigate();
-  const { doctorId } = useParams(); // Get doctor ID from URL if available
+  const { doctorId } = useParams();
+  const { user, authKey } = useAuth(); // Add authKey
   const [currentDoctorId, setCurrentDoctorId] = useState('');
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Mock data for UI display only
+  // Reset component state when user changes
+  useEffect(() => {
+    // Clear any cached data when user changes
+    setLoading(true);
+    // Re-fetch doctor-specific data here
+    console.log('User changed to:', user?.name);
+    setLoading(false);
+  }, [user, authKey]); // Re-run when user or authKey changes
+
+  // Rest of your component remains the same...
   const stats = [
     { title: "Today's Appointments", value: "8", icon: "", color: "bg-blue-500" },
     { title: "Total Patients", value: "1,247", icon: "", color: "bg-green-500" },
@@ -17,18 +28,29 @@ const DoctorDashboard = () => {
   ];
 
   const todayAppointments = [
-    { id: 1, patient: "John Doe", time: "09:00 AM", type: "Video Call", status: "confirmed" },
-    { id: 2, patient: "Sarah Smith", time: "10:30 AM", type: "In-person", status: "confirmed" },
-    { id: 3, patient: "Mike Johnson", time: "11:45 AM", type: "Video Call", status: "pending" },
-    { id: 4, patient: "Emma Wilson", time: "02:00 PM", type: "In-person", status: "confirmed" },
-    { id: 5, patient: "Robert Brown", time: "03:30 PM", type: "Video Call", status: "confirmed" },
+    { id: 1, patient: "Sample Patient 1", time: "09:00 AM", type: "Video Call", status: "confirmed" },
+    { id: 2, patient: "Sample Patient 2", time: "10:30 AM", type: "In-person", status: "confirmed" },
+    { id: 3, patient: "Sample Patient 3", time: "11:45 AM", type: "Video Call", status: "pending" },
+    { id: 4, patient: "Sample Patient 4", time: "02:00 PM", type: "In-person", status: "confirmed" },
+    { id: 5, patient: "Sample Patient 5", time: "03:30 PM", type: "Video Call", status: "confirmed" },
   ];
 
   const recentPatients = [
-    { name: "John Doe", lastVisit: "Mar 28, 2026", condition: "Hypertension", status: "Recovering" },
-    { name: "Sarah Smith", lastVisit: "Mar 25, 2026", condition: "Heart Checkup", status: "Follow-up" },
-    { name: "Mike Johnson", lastVisit: "Mar 22, 2026", condition: "Chest Pain", status: "Pending" },
+    { name: "Sample Patient 1", lastVisit: "Mar 28, 2026", condition: "Hypertension", status: "Recovering" },
+    { name: "Sample Patient 2", lastVisit: "Mar 25, 2026", condition: "Heart Checkup", status: "Follow-up" },
+    { name: "Sample Patient 3", lastVisit: "Mar 22, 2026", condition: "Chest Pain", status: "Pending" },
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -38,17 +60,26 @@ const DoctorDashboard = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Doctor Dashboard</h1>
-              <p className="text-gray-500 text-sm">Welcome back, Dr. Sarah Johnson</p>
+              <p className="text-gray-500 text-sm">Welcome back, Dr. {user?.name || 'Doctor'}</p>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                DS
+                {user?.profilePicture ? (
+                  <img 
+                    src={user.profilePicture} 
+                    alt={user.name} 
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  user?.name?.charAt(0)?.toUpperCase() || 'D'
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Rest of your JSX remains the same... */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -109,11 +140,19 @@ const DoctorDashboard = () => {
             <h2 className="text-lg font-semibold text-gray-800 mb-4">Profile Overview</h2>
             <div className="flex items-center space-x-4 mb-4">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                DS
+                {user?.profilePicture ? (
+                  <img 
+                    src={user.profilePicture} 
+                    alt={user.name} 
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  user?.name?.charAt(0)?.toUpperCase() || 'D'
+                )}
               </div>
               <div>
-                <h3 className="font-bold text-gray-800">Dr. Sarah Johnson</h3>
-                <p className="text-gray-500 text-sm">Cardiologist</p>
+                <h3 className="font-bold text-gray-800">Dr. {user?.name || 'Doctor Name'}</h3>
+                <p className="text-gray-500 text-sm">{user?.specialty || user?.specialization || 'Doctor'}</p>
                 <div className="flex items-center mt-1">
                   {[...Array(5)].map((_, i) => (
                     <span key={i} className="text-yellow-400 text-sm">★</span>
@@ -123,16 +162,19 @@ const DoctorDashboard = () => {
               </div>
             </div>
             <div className="border-t pt-4 space-y-2">
-              <p className="text-gray-600 text-sm">📧 sarah.johnson@hospital.com</p>
-              <p className="text-gray-600 text-sm">📞 +1 (555) 123-4567</p>
-              <p className="text-gray-600 text-sm">📍 City Heart Hospital</p>
+              <p className="text-gray-600 text-sm">📧 {user?.email || 'doctor@hospital.com'}</p>
+              <p className="text-gray-600 text-sm">📞 {user?.phone || '+1 (555) 123-4567'}</p>
+              <p className="text-gray-600 text-sm">📍 {user?.address || 'Hospital Address'}</p>
               <p className="text-gray-600 text-sm">⏰ Mon-Fri: 9AM - 5PM</p>
             </div>
             <button 
               onClick={() => {
-                // For now, use a mock doctor ID. In a real app, this would come from authentication
-                const mockDoctorId = '69ce329f92d476861c0cc046'; // Example doctor ID from your database
-                navigate(`/doctor/edit-profile/${mockDoctorId}`);
+                const doctorId = user?._id || user?.id;
+                if (doctorId) {
+                  navigate(`/doctor/edit-profile/${doctorId}`);
+                } else {
+                  console.error('No doctor ID available for profile editing');
+                }
               }}
               className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
             >
@@ -173,20 +215,6 @@ const DoctorDashboard = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        {/* Info Note about Admin Approval */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <span className="text-blue-600 text-xl">ℹ️</span>
-            <div>
-              <p className="text-sm text-blue-800 font-medium">Admin Approval Flow</p>
-              <p className="text-sm text-blue-600 mt-1">
-                After registration, an admin will verify your account and send login credentials to your email.
-                For now, you're viewing a demo dashboard with sample data.
-              </p>
-            </div>
           </div>
         </div>
       </div>
