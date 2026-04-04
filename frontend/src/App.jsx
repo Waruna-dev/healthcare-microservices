@@ -35,12 +35,15 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
+        {/* Public Routes (Wrapped in MainLayout for Navbar/Footer) */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/contact-support" element={<ContactSupport />} />
+          
+          {/* UPDATED: Cleaner route name, ensure your Footer links to "/support" */}
+          <Route path="/support" element={<ContactSupport />} />
+          
           <Route path="/features" element={<Features />} />
           <Route path="/security" element={<Security />} />
           <Route path="/integration" element={<Integration />} />

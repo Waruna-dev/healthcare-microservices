@@ -3,29 +3,28 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Activity, Stethoscope, Settings, 
-  LogOut, Menu, X, Bell, ShieldCheck 
+  LogOut, Menu, X, Bell, ShieldCheck, Mail 
 } from 'lucide-react';
 import ManagePatients from './ManagePatients';
 import PlatformOverview from './PlatformOverview';
 import SystemSettings from './SystemSettings';
 import ManageDoctor from './ManageDoctor';
+import ManageMessages from './ManageMessages';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [adminUser, setAdminUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // Defaulting to the page we just built!
+  const [activeTab, setActiveTab] = useState('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // 1. Authentication Check
   useEffect(() => {
-    // We check for 'adminUser' specifically so it doesn't conflict with a regular patient login
     const storedAdmin = localStorage.getItem('adminUser');
     const token = localStorage.getItem('adminToken');
 
     if (storedAdmin && token) {
       setAdminUser(JSON.parse(storedAdmin));
     } else {
-      // If no admin is logged in, kick them back to the admin login page
       navigate('/admin/login');
     }
   }, [navigate]);
@@ -42,6 +41,8 @@ const AdminDashboard = () => {
     { id: 'overview', label: 'Platform Overview', icon: <Activity size={20} /> },
     { id: 'patients', label: 'Manage Patients', icon: <Users size={20} /> },
     { id: 'doctors', label: 'Manage Doctors', icon: <Stethoscope size={20} /> },
+    // --- NEW: Added Support Inbox to Sidebar ---
+    { id: 'messages', label: 'Support Inbox', icon: <Mail size={20} /> }, 
     { id: 'settings', label: 'System Settings', icon: <Settings size={20} /> },
   ];
 
@@ -143,12 +144,11 @@ const AdminDashboard = () => {
 
         {/* Dynamic Page Content */}
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'patients' && <ManagePatients />}
-          
-          {/* Placeholders for future pages */}
           {activeTab === 'overview' && <PlatformOverview />}
-          
+          {activeTab === 'patients' && <ManagePatients />}
           {activeTab === 'doctors' && <ManageDoctor />}
+          
+          {activeTab === 'messages' && <ManageMessages />} 
 
           {activeTab === 'settings' && <SystemSettings />}
         </div>
