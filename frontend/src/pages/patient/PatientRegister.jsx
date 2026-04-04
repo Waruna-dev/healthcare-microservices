@@ -30,6 +30,16 @@ const PatientRegister = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // --- NEW: Sri Lankan Phone Number Validation ---
+    // Accepts format: 07XXXXXXXX or +947XXXXXXXX (Total 10 digits for local, 11 for international)
+    const slPhoneRegex = /^(?:0|\+94)\d{9}$/;
+    const cleanPhone = formData.contactNumber.trim().replace(/\s+/g, ''); // Removes accidental spaces
+
+    if (!slPhoneRegex.test(cleanPhone)) {
+      setMessage({ text: 'Please enter a valid phone number.', type: 'error' });
+      return;
+    }
+
     // Prevent submission if password is too weak
     if (strengthScore < 3) {
       setMessage({ text: 'Please meet all password requirements.', type: 'error' });
@@ -40,7 +50,9 @@ const PatientRegister = () => {
     setMessage({ text: '', type: '' });
 
     try {
-      const response = await api.post('/patients/register', formData);
+      // Pass the cleaned phone number to the API
+      const payload = { ...formData, contactNumber: cleanPhone };
+      const response = await api.post('/patients/register', payload);
       
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data));
@@ -95,7 +107,7 @@ const PatientRegister = () => {
         {/* --- Right Side: Registration Form --- */}
         <section className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-surface overflow-y-auto relative">
           
-          {/* UPDATED: Back to Home Button added here */}
+          {/* Back to Home Button */}
           <div className="absolute top-6 right-6 md:top-8 md:right-8 z-20">
             <Link 
               to="/" 
@@ -146,7 +158,7 @@ const PatientRegister = () => {
                     id="name" name="name" type="text"
                     value={formData.name} onChange={handleChange} required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="Jane Doe" 
+                    placeholder="Your Full Name" 
                   />
                 </div>
               </div>
@@ -162,7 +174,7 @@ const PatientRegister = () => {
                     id="email" name="email" type="email"
                     value={formData.email} onChange={handleChange} required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="jane@caresync.com" 
+                    placeholder="your@email.com" 
                   />
                 </div>
               </div>
@@ -178,7 +190,7 @@ const PatientRegister = () => {
                     id="contactNumber" name="contactNumber" type="tel"
                     value={formData.contactNumber} onChange={handleChange} required
                     className="block w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-0 rounded-xl ring-1 ring-outline-variant focus:ring-2 focus:ring-primary transition-all placeholder:text-outline outline-none text-on-surface" 
-                    placeholder="+1 (555) 000-0000" 
+                    placeholder="0712345678" 
                   />
                 </div>
               </div>

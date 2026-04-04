@@ -1,10 +1,13 @@
-// services/admin-service/routes/adminRoutes.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
 const { protectAdmin } = require('../middleware/authAdmin');
+const sendEmail = require('../utils/sendEmail');
 
 // Fetch the Admin model we defined in server.js
 const Admin = mongoose.model('Admin');
@@ -45,13 +48,10 @@ router.post('/login', async (req, res) => {
 // ==========================================
 router.get('/patients', protectAdmin, async (req, res) => {
   try {
-    // FIX: Changed from /api/patients to just /
     const response = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
     res.status(200).json({ success: true, count: response.data.length, data: response.data });
   } catch (error) {
-    console.error("MICROSERVICE CONNECTION FAILED!");
-    console.error(error.message); 
-    
+    console.error("MICROSERVICE CONNECTION FAILED!", error.message);
     res.status(500).json({ message: "Failed to fetch patients." });
   }
 });
@@ -64,7 +64,6 @@ router.put('/patients/:id', protectAdmin, async (req, res) => {
     const response = await axios.put(`${process.env.PATIENT_SERVICE_URL}/admin/${req.params.id}`, req.body);
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
-    // EXPOSE THE ERROR:
     console.error("UPDATE FAILED IN MICROSERVICE:", error.message);
     res.status(500).json({ message: "Failed to update patient." });
   }
@@ -78,7 +77,6 @@ router.delete('/patients/:id', protectAdmin, async (req, res) => {
     await axios.delete(`${process.env.PATIENT_SERVICE_URL}/admin/${req.params.id}`);
     res.status(200).json({ success: true, message: "Patient deleted." });
   } catch (error) {
-    // EXPOSE THE ERROR:
     console.error("DELETE FAILED IN MICROSERVICE:", error.message);
     res.status(500).json({ message: "Failed to delete patient." });
   }
@@ -89,67 +87,285 @@ router.delete('/patients/:id', protectAdmin, async (req, res) => {
 // ==========================================
 router.get('/demographics', protectAdmin, async (req, res) => {
   try {
-    // 1. Get Support Staff directly from the local Admin Database
     const supportStaffCount = await Admin.countDocuments();
 
-    // 2. Get Patients from the Patient Microservice
     let patientsCount = 0;
     try {
       const patientRes = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
-      patientsCount = patientRes.data.length; 
+      if (patientRes.data.patients) patientsCount = patientRes.data.patients.length;
+      else if (patientRes.data.data) patientsCount = patientRes.data.data.length;
+      else if (Array.isArray(patientRes.data)) patientsCount = patientRes.data.length;
     } catch (err) {
-      console.error("Demographics: Failed to fetch patients count", err.message);
+      console.error("Demographics: Failed to fetch patients count");
     }
 
-    // 3. Get Specialists from the Doctor Microservice (TEMPORARILY DISABLED)
-    let specialistsCount = 0; // Keeping this at 0 prevents the frontend from breaking
+    let specialistsCount = 0; 
+    let pendingDoctorsList = []; 
     
-    /* try {
+    try {
       if (process.env.DOCTOR_SERVICE_URL) {
-        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/`);
-        specialistsCount = doctorRes.data.length;
+        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
+        
+        let allDoctors = [];
+        
+        // Target the specific "doctors" array from your service
+        if (doctorRes.data.doctors && Array.isArray(doctorRes.data.doctors)) {
+            allDoctors = doctorRes.data.doctors;
+        } else if (doctorRes.data.data && Array.isArray(doctorRes.data.data)) {
+            allDoctors = doctorRes.data.data; 
+        } else if (Array.isArray(doctorRes.data)) {
+            allDoctors = doctorRes.data; 
+        }
+        
+        // 🔥 THE FIX: Filter out pending/rejected doctors, count ONLY approved ones
+        const approvedDoctors = allDoctors.filter(doc => doc.status === 'approved');
+        specialistsCount = approvedDoctors.length;
+
+        // Extract the pending doctors
+        pendingDoctorsList = allDoctors
+          .filter(doc => doc.status === 'pending')
+          .map(doc => ({
+            _id: doc._id,
+            name: doc.name,
+            email: doc.email
+          }));
       }
     } catch (err) {
       console.error("Demographics: Failed to fetch specialists count", err.message);
     }
-    */
 
-    // 4. Calculate Totals
     const totalUsers = supportStaffCount + patientsCount + specialistsCount;
-
-    // 5. Calculate Real Growth Percentage
-    // Ideally, you query your DB for users created in the last 30 days. 
-    // For now, we assume all current users are new this month (a placeholder until you add creation dates)
     let newUsersThisMonth = totalUsers; 
     let previousMonthUsers = totalUsers - newUsersThisMonth;
     
     let growthPercentage = 0;
-    
     if (previousMonthUsers === 0 && totalUsers > 0) {
-      // If you had 0 users last month, and now you have users, that is 100% growth!
       growthPercentage = 100; 
     } else if (previousMonthUsers > 0) {
-      // The standard math formula for percentage growth
       growthPercentage = Math.round((newUsersThisMonth / previousMonthUsers) * 100);
     }
 
-    // Send formatted response exactly how the React frontend expects it
     res.status(200).json({
       success: true,
       data: {
         totalUsers,
         growthPercentage,
-        demographics: {
-          patients: patientsCount,
-          specialists: specialistsCount, // Will safely return 0
-          supportStaff: supportStaffCount
-        }
+        demographics: { 
+          patients: patientsCount, 
+          specialists: specialistsCount, 
+          supportStaff: supportStaffCount 
+        },
+        pendingDoctors: pendingDoctorsList 
       }
     });
 
   } catch (error) {
     console.error("Error generating demographics:", error.message);
     res.status(500).json({ message: "Failed to generate demographics." });
+  }
+});
+
+// ==========================================
+// GET /doctors/:id - Fetch Single Doctor Details
+// ==========================================
+router.get('/doctors/:id', protectAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${req.params.id}`);
+    
+    // Accommodate different potential response structures
+    const doctorData = response.data.data || response.data.doctor || response.data;
+    
+    res.status(200).json({ success: true, data: doctorData });
+  } catch (error) {
+    console.error("Failed to fetch doctor details:", error.message);
+    res.status(500).json({ message: "Failed to fetch doctor details." });
+  }
+});
+
+// ==========================================
+// PUT /doctors/:id/approve - Approve & Email Doctor
+// ==========================================
+router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
+  try {
+    const doctorId = req.params.id;
+    const { name, email } = req.body; 
+
+    if (!email || !name) {
+      return res.status(400).json({ message: "Doctor email and name are required to send the approval email." });
+    }
+
+    const tempPassword = crypto.randomBytes(4).toString('hex');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(tempPassword, salt);
+
+    try {
+      await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
+        status: 'approved',
+        password: hashedPassword
+      });
+    } catch (err) {
+      console.error("Failed to update doctor in Doctor Microservice:", err.message);
+      return res.status(500).json({ message: "Failed to update doctor status in the database." });
+    }
+
+    try {
+      await sendEmail({
+        email: email,
+        subject: 'CareSync: Your Account is Approved!',
+        message: `Welcome Dr. ${name}! Your account is approved. Your temporary password is: ${tempPassword}`,
+        html: `
+          <div style="background-color: #f9fafb; padding: 50px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              
+              <h1 style="font-size: 28px; font-weight: 800; color: #111827; margin-bottom: 30px; letter-spacing: -0.025em;">
+                CareSync
+              </h1>
+
+              <p style="font-size: 16px; color: #374151; margin-bottom: 24px; text-align: left;">
+                Hello Dr. ${name},
+              </p>
+
+              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 30px; text-align: left;">
+                We are pleased to inform you that your medical registration has been verified and approved. You are now a certified member of the CareSync network.
+              </p>
+
+              <div style="background-color: #f3f4f6; padding: 20px; border-radius: 12px; margin-bottom: 30px;">
+                <p style="font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">
+                  Your Temporary Password
+                </p>
+                <p style="font-size: 24px; font-weight: 700; color: #111827; margin: 0; letter-spacing: 0.1em;">
+                  ${tempPassword}
+                </p>
+              </div>
+
+              <div style="margin-bottom: 35px;">
+                <a href="http://localhost:5173/login" style="display: inline-block; padding: 16px 36px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 9999px; font-size: 16px; font-weight: 700; transition: background-color 0.2s;">
+                  Access Dashboard
+                </a>
+              </div>
+
+              <p style="font-size: 13px; color: #9ca3af; margin-bottom: 8px;">
+                Or copy and paste this link into your browser:
+              </p>
+              <p style="font-size: 13px; color: #4F46E5; word-break: break-all; margin-bottom: 40px;">
+                <a href="http://localhost:5173/login" style="color: #4F46E5; text-decoration: underline;">http://localhost:5173/login</a>
+              </p>
+
+              <hr style="border: 0; border-top: 1px solid #f3f4f6; margin-bottom: 30px;" />
+
+              <footer style="text-align: center;">
+                <p style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
+                  © ${new Date().getFullYear()} CareSync. Quality Care by Design.
+                </p>
+                <p style="font-size: 11px; color: #d1d5db; line-height: 1.4;">
+                  If you did not expect this approval, please contact our support team immediately.
+                </p>
+              </footer>
+            </div>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      console.error("Resend Email failed:", emailError);
+      return res.status(200).json({
+        success: true,
+        message: 'Doctor approved, but failed to send the notification email.',
+        tempPasswordForAdminToShare: tempPassword 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Doctor approved and email sent successfully!'
+    });
+
+  } catch (error) {
+    console.error("Error approving doctor:", error);
+    res.status(500).json({ message: 'Failed to approve doctor.' });
+  }
+});
+
+// ==========================================
+// PUT /doctors/:id/reject - Reject & Delete Doctor
+// ==========================================
+router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
+  try {
+    const doctorId = req.params.id;
+    const { name, email } = req.body; 
+
+    if (!email || !name) {
+      return res.status(400).json({ message: "Doctor email and name are required to send the rejection email." });
+    }
+    
+    // 1. Tell the Doctor Microservice to DELETE this doctor from the DB entirely
+    try {
+      await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
+    } catch (err) {
+      console.error("Failed to delete doctor in Doctor Microservice:", err.message);
+      return res.status(500).json({ message: "Failed to delete doctor from the database." });
+    }
+
+    // 2. Send Rejection & Reapply Email via Resend
+    try {
+      await sendEmail({
+        email: email,
+        subject: 'CareSync: Application Update',
+        message: `Dear Dr. ${name}, we regret to inform you that your application to join CareSync has been declined. You are welcome to reapply.`,
+        html: `
+          <div style="background-color: #f9fafb; padding: 50px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              
+              <h1 style="font-size: 28px; font-weight: 800; color: #111827; margin-bottom: 30px; letter-spacing: -0.025em;">
+                CareSync
+              </h1>
+
+              <p style="font-size: 16px; color: #374151; margin-bottom: 24px; text-align: left;">
+                Hello Dr. ${name},
+              </p>
+
+              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 20px; text-align: left;">
+                Thank you for your interest in joining the CareSync network. After careful review of your application and credentials by our administration team, we regret to inform you that we are unable to approve your registration at this time.
+              </p>
+              
+              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 30px; text-align: left;">
+                To protect your privacy, any personal data, documents, and information submitted during your registration process has been <strong>permanently deleted</strong> from our systems.
+              </p>
+
+              <div style="background-color: #f3f4f6; border-left: 4px solid #4F46E5; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
+                <p style="font-size: 15px; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 10px;">
+                  We invite you to reapply
+                </p>
+                <p style="font-size: 14px; line-height: 1.5; color: #4b5563; margin-bottom: 20px;">
+                  If you have updated credentials, obtained a new medical license, or believe your application was rejected in error due to missing information, you are welcome to submit a new application.
+                </p>
+                <a href="http://localhost:5173/doctor/register" style="display: inline-block; padding: 12px 24px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600; transition: background-color 0.2s;">
+                  Submit New Application
+                </a>
+              </div>
+
+              <hr style="border: 0; border-top: 1px solid #f3f4f6; margin-bottom: 30px;" />
+
+              <footer style="text-align: center;">
+                <p style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
+                  © ${new Date().getFullYear()} CareSync. Quality Care by Design.
+                </p>
+              </footer>
+            </div>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      console.error("Resend Email failed:", emailError);
+      return res.status(200).json({
+        success: true,
+        message: 'Doctor deleted from database, but failed to send the notification email.'
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'Doctor rejected, data deleted, and email sent successfully.' });
+  } catch (error) {
+    console.error("Error rejecting doctor:", error);
+    res.status(500).json({ message: 'Failed to reject doctor.' });
   }
 });
 
@@ -182,82 +398,107 @@ router.post('/register', protectAdmin, async (req, res) => {
 // ==========================================
 router.put('/profile', protectAdmin, async (req, res) => {
   try {
-    // 1. Find the admin and explicitly ask for the password field
     const admin = await Admin.findById(req.admin._id).select('+password');
-    
-    if (!admin) {
-      return res.status(404).json({ message: 'Admin not found' });
-    }
+    if (!admin) return res.status(404).json({ message: 'Admin not found' });
 
-    // 2. Update basic info (only if provided)
     if (req.body.name) admin.name = req.body.name;
     if (req.body.email) admin.email = req.body.email;
 
-    // 3. Update Password ONLY IF they actually typed a new one
-    // .trim() ensures we don't accidentally process spaces
     if (req.body.newPassword && req.body.newPassword.trim() !== '') {
-      
-      if (!req.body.currentPassword) {
-        return res.status(400).json({ message: 'Please provide your current password to set a new one.' });
-      }
+      if (!req.body.currentPassword) return res.status(400).json({ message: 'Please provide your current password.' });
       
       const isMatch = await admin.matchPassword(req.body.currentPassword);
-      if (!isMatch) {
-        return res.status(400).json({ message: 'Current password is incorrect.' });
-      }
+      if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect.' });
 
       admin.password = req.body.newPassword;
     }
 
-    // 4. Save the updated admin to the database
     const updatedAdmin = await admin.save();
 
-    // 5. Send success response
     res.status(200).json({ 
       success: true, 
-      data: { 
-        _id: updatedAdmin._id, 
-        name: updatedAdmin.name, 
-        email: updatedAdmin.email, 
-        role: updatedAdmin.role 
-      }
+      data: { _id: updatedAdmin._id, name: updatedAdmin.name, email: updatedAdmin.email, role: updatedAdmin.role }
     });
-
   } catch (error) {
-    // EXPOSE THE ERROR IN YOUR TERMINAL:
     console.error("🔥 PROFILE UPDATE ERROR:", error);
-
-    // If they tried to change their email to one that already exists in the database
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'That email is already in use by another admin.' });
-    }
-
-    res.status(500).json({ message: 'Failed to update profile. Check server console.' });
+    if (error.code === 11000) return res.status(400).json({ message: 'That email is already in use.' });
+    res.status(500).json({ message: 'Failed to update profile.' });
   }
 });
+
 // ==========================================
 // DELETE /profile - Delete Current Admin
 // ==========================================
 router.delete('/profile', protectAdmin, async (req, res) => {
   try {
-    const adminId = req.admin._id;
-
-    // Safety Check: Don't let them delete the account if they are the last admin standing!
     const adminCount = await Admin.countDocuments();
     if (adminCount <= 1) {
-      return res.status(400).json({ 
-        message: 'Action denied. You are the last remaining administrator. Please create another admin account first.' 
-      });
+      return res.status(400).json({ message: 'Action denied. You are the last remaining administrator.' });
     }
 
-    await Admin.findByIdAndDelete(adminId);
-    
-    res.status(200).json({ 
-      success: true, 
-      message: 'Admin account deleted successfully.' 
-    });
+    await Admin.findByIdAndDelete(req.admin._id);
+    res.status(200).json({ success: true, message: 'Admin account deleted successfully.' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete account.' });
+  }
+});
+
+// ==========================================
+// GET /doctors - Fetch all Doctors
+// ==========================================
+router.get('/doctors', protectAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
+    
+    // Extract the array properly based on how the Doctor Service sends it
+    let allDoctors = [];
+    if (response.data.doctors && Array.isArray(response.data.doctors)) {
+        allDoctors = response.data.doctors;
+    } else if (response.data.data && Array.isArray(response.data.data)) {
+        allDoctors = response.data.data; 
+    } else if (Array.isArray(response.data)) {
+        allDoctors = response.data; 
+    }
+    
+    res.status(200).json({ success: true, data: allDoctors });
+  } catch (error) {
+    console.error("Failed to fetch doctors list:", error.message);
+    res.status(500).json({ message: "Failed to fetch doctors list." });
+  }
+});
+
+// ==========================================
+// PUT /doctors/:id - Update a Doctor
+// ==========================================
+router.put('/doctors/:id', protectAdmin, async (req, res) => {
+  try {
+    // If they typed a password to reset, we must hash it first!
+    if (req.body.password) {
+      const salt = await bcrypt.genSalt(10);
+      req.body.password = await bcrypt.hash(req.body.password, salt);
+    } else {
+      delete req.body.password; // Don't send empty passwords
+    }
+
+    // Call the /admin/:id route so it accepts the password change if there is one
+    const response = await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${req.params.id}`, req.body);
+    res.status(200).json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Failed to update doctor:", error.message);
+    res.status(500).json({ message: "Failed to update doctor." });
+  }
+});
+
+// ==========================================
+// DELETE /doctors/:id - Delete a Doctor
+// ==========================================
+router.delete('/doctors/:id', protectAdmin, async (req, res) => {
+  try {
+    await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${req.params.id}`);
+    res.status(200).json({ success: true, message: "Doctor deleted." });
+  } catch (error) {
+    console.error("Failed to delete doctor:", error.message);
+    res.status(500).json({ message: "Failed to delete doctor." });
   }
 });
 
