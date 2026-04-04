@@ -30,7 +30,15 @@ const PatientRegister = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // --- NEW: Sri Lankan Phone Number Validation ---
+    // --- NEW: Strict Email Validation ---
+    // Ensures there is text, an '@' symbol, a domain, and a dot extension (like .com)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      setMessage({ text: 'Please enter a valid email address (e.g., name@example.com).', type: 'error' });
+      return;
+    }
+
+    // --- EXISTING: Sri Lankan Phone Number Validation ---
     // Accepts format: 07XXXXXXXX or +947XXXXXXXX (Total 10 digits for local, 11 for international)
     const slPhoneRegex = /^(?:0|\+94)\d{9}$/;
     const cleanPhone = formData.contactNumber.trim().replace(/\s+/g, ''); // Removes accidental spaces
