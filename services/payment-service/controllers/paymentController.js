@@ -142,6 +142,11 @@ export const createCheckoutSession = async (req, res) => {
       orderId,
       customerName,
       customerEmail,
+      appointmentId: `${req.body.appointmentId || ""}`.trim(),
+      doctorName: `${req.body.doctorName || ""}`.trim(),
+      department: `${req.body.department || ""}`.trim(),
+      appointmentDate: `${req.body.appointmentDate || ""}`.trim(),
+      appointmentTime: `${req.body.appointmentTime || ""}`.trim(),
       itemName,
       amount,
       currency,
@@ -162,6 +167,125 @@ export const createCheckoutSession = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create checkout session",
+      error: error.message,
+    });
+  }
+};
+
+export const getAdminDashboard = async (req, res) => {
+  try {
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 100)
+      : 50;
+
+    const [recentPayments, summaryRows] = await Promise.all([
+      Payment.find()
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+      Payment.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalPayments: { $sum: 1 },
+            totalRevenue: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "SUCCESS"] }, "$amount", 0],
+              },
+            },
+            successfulPayments: {
+              $sum: { $cond: [{ $eq: ["$status", "SUCCESS"] }, 1, 0] },
+            },
+            pendingPayments: {
+              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+            },
+            failedPayments: {
+              $sum: { $cond: [{ $eq: ["$status", "FAILED"] }, 1, 0] },
+            },
+            expiredPayments: {
+              $sum: { $cond: [{ $eq: ["$status", "EXPIRED"] }, 1, 0] },
+            },
+            revenueToday: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $eq: ["$status", "SUCCESS"] },
+                      {
+                        $gte: [
+                          "$createdAt",
+                          {
+                            $dateTrunc: {
+                              date: "$$NOW",
+                              unit: "day",
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  "$amount",
+                  0,
+                ],
+              },
+            },
+            paymentsToday: {
+              $sum: {
+                $cond: [
+                  {
+                    $gte: [
+                      "$createdAt",
+                      {
+                        $dateTrunc: {
+                          date: "$$NOW",
+                          unit: "day",
+                        },
+                      },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const summary = summaryRows[0] || {
+      totalPayments: 0,
+      totalRevenue: 0,
+      successfulPayments: 0,
+      pendingPayments: 0,
+      failedPayments: 0,
+      expiredPayments: 0,
+      revenueToday: 0,
+      paymentsToday: 0,
+    };
+
+    const successRate = summary.totalPayments
+      ? Number(
+          (
+            (summary.successfulPayments / summary.totalPayments) *
+            100
+          ).toFixed(1),
+        )
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        ...summary,
+        successRate,
+      },
+      recentPayments,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load payment dashboard",
       error: error.message,
     });
   }

@@ -30,7 +30,9 @@ import ShowDoctorDetails from "./pages/Doctor/Showdoctordetails";
 // --- Admin Pages ---
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+// --- Payment Pages ---
 import PaymentPage from "./pages/payment/PaymentPage";
+import PaymentDashboard from "./pages/payment/paymentAdminDashboard";
 
 function App() {
   return (
@@ -77,8 +79,9 @@ function App() {
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-
+        {/*payment Routes  */}
         <Route path="/payment" element={<PaymentPage />} />
+        <Route path="/payment/dashboard" element={<PaymentDashboard />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getAdminDashboard,
   createCheckoutSession,
   getPaymentByOrderId,
   handleWebhook,
@@ -7,6 +8,7 @@ import {
 
 const router = express.Router();
 
+router.get("/admin/dashboard", getAdminDashboard);
 router.post("/create-checkout-session", createCheckoutSession);
 router.post("/webhook", handleWebhook);
 router.get("/:orderId", getPaymentByOrderId);

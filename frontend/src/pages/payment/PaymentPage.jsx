@@ -93,8 +93,7 @@ const getResponseErrorMessage = (response, data, fallbackMessage) => {
 
 function PaymentPage() {
   const apiBaseUrl =
-    import.meta.env.VITE_PAYMENT_API_URL ??
-    "http://localhost:5040/api/payments";
+    import.meta.env.VITE_PAYMENT_API_URL ?? "/api/payments";
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");

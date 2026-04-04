@@ -19,6 +19,31 @@ const paymentSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    appointmentId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    doctorName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    department: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    appointmentDate: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    appointmentTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     itemName: {
       type: String,
       required: true,
