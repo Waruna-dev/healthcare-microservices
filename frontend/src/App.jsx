@@ -1,35 +1,36 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import MainLayout from './components/MainLayout';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import MainLayout from "./components/MainLayout";
 
-import Home from './pages/Home';
-import AboutUs from './pages/AboutUs';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import ContactSupport from './pages/ContactSupport';
-import Features from './pages/Features';
-import Integration from './pages/Integration';
-import Security from './pages/Security';
+import Home from "./pages/Home";
+import AboutUs from "./pages/AboutUs";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import ContactSupport from "./pages/ContactSupport";
+import Features from "./pages/Features";
+import Integration from "./pages/Integration";
+import Security from "./pages/Security";
 
 // --- Patient Pages ---
-import PatientRegister from './pages/patient/PatientRegister';
-import PatientLogin from './pages/patient/PatientLogin';
-import PatientDashboard from './pages/patient/PatientDashboard';
-import PatientProfile from './pages/patient/PatientProfile';
+import PatientRegister from "./pages/patient/PatientRegister";
+import PatientLogin from "./pages/patient/PatientLogin";
+import PatientDashboard from "./pages/patient/PatientDashboard";
+import PatientProfile from "./pages/patient/PatientProfile";
 
 // --- Doctor Pages ---
-import DoctorRegister from './pages/Doctor/DoctorRegister';
-import DoctorLayout from './pages/Doctor/DoctorLayout';
-import DoctorDashboard from './pages/Doctor/DoctorDashboard';
-import AllDoctors from './pages/Doctor/AllDoctors';
-import DoctorProfile from './pages/Doctor/DoctorProfile';
-import DoctorSchedule from './pages/Doctor/DoctorSchedule';
-import WeeklySchedule from './pages/Doctor/WeeklySchedule';
-import SlotDisplay from './pages/Doctor/SlotDisplay';
-import DoctorListing from './pages/Doctor/Doctorlisting';
-import ShowDoctorDetails from './pages/Doctor/Showdoctordetails';
+import DoctorRegister from "./pages/Doctor/DoctorRegister";
+import DoctorLayout from "./pages/Doctor/DoctorLayout";
+import DoctorDashboard from "./pages/Doctor/DoctorDashboard";
+import AllDoctors from "./pages/Doctor/AllDoctors";
+import DoctorProfile from "./pages/Doctor/DoctorProfile";
+import DoctorSchedule from "./pages/Doctor/DoctorSchedule";
+import WeeklySchedule from "./pages/Doctor/WeeklySchedule";
+import SlotDisplay from "./pages/Doctor/SlotDisplay";
+import DoctorListing from "./pages/Doctor/Doctorlisting";
+import ShowDoctorDetails from "./pages/Doctor/Showdoctordetails";
 
 // --- Admin Pages ---
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import PaymentPage from "./pages/payment/PaymentPage";
 
 function App() {
   return (
@@ -76,6 +77,8 @@ function App() {
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+        <Route path="/payment" element={<PaymentPage />} />
       </Routes>
     </BrowserRouter>
   );
