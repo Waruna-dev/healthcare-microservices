@@ -133,8 +133,17 @@ const doctorSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Create index for better search performance
+// Create indexes for better search performance
 doctorSchema.index({ name: 'text', specialty: 'text', email: 'text' });
+
+// Additional performance indexes
+doctorSchema.index({ specialty: 1, isAvailable: 1 }); // For filtering by specialty and availability
+doctorSchema.index({ createdAt: -1 }); // For sorting by creation date
+doctorSchema.index({ rating: -1 }); // For sorting by rating
+doctorSchema.index({ status: 1 }); // For filtering by status
+
+// Compound index for common queries
+doctorSchema.index({ specialty: 1, isAvailable: 1, status: 1 });
 
 // Method to hide password when sending JSON
 doctorSchema.methods.toJSON = function() {
