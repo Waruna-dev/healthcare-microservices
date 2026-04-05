@@ -1,31 +1,34 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // --- Patient Pages ---
-import Home from './pages/Home';
-import PatientRegister from './pages/patient/PatientRegister';
-import PatientLogin from './pages/patient/PatientLogin';
-import PatientDashboard from './pages/patient/PatientDashboard'; 
-import PatientProfile from './pages/patient/PatientProfile'; 
+import Home from "./pages/Home";
+import PatientRegister from "./pages/patient/PatientRegister";
+import PatientLogin from "./pages/patient/PatientLogin";
+import PatientDashboard from "./pages/patient/PatientDashboard";
+import PatientProfile from "./pages/patient/PatientProfile";
 
 // --- Admin Pages (NEW) ---
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
-import DoctorRegister from './pages/Doctor/DoctorRegister';
-import DoctorLayout from './pages/Doctor/DoctorLayout';
-import DoctorDashboard from './pages/Doctor/DoctorDashboard';
-import AllDoctors from './pages/Doctor/AllDoctors';
-import DoctorProfile from './pages/Doctor/DoctorProfile';
-import DoctorSchedule from './pages/Doctor/DoctorSchedule';
-import WeeklySchedule from './pages/Doctor/WeeklySchedule';
-import SlotDisplay from './pages/Doctor/SlotDisplay';
-import DoctorListing from './pages/Doctor/Doctorlisting';
-import ShowDoctorDetails from './pages/Doctor/Showdoctordetails';
+import DoctorRegister from "./pages/Doctor/DoctorRegister";
+import DoctorLayout from "./pages/Doctor/DoctorLayout";
+import DoctorDashboard from "./pages/Doctor/DoctorDashboard";
+import AllDoctors from "./pages/Doctor/AllDoctors";
+import DoctorProfile from "./pages/Doctor/DoctorProfile";
+import DoctorSchedule from "./pages/Doctor/DoctorSchedule";
+import WeeklySchedule from "./pages/Doctor/WeeklySchedule";
+import SlotDisplay from "./pages/Doctor/SlotDisplay";
+import DoctorListing from "./pages/Doctor/Doctorlisting";
+import ShowDoctorDetails from "./pages/Doctor/Showdoctordetails";
 
-import TelemedicineSession from './components/telemedicine/TelemedicineSession';
+import TelemedicineSession from "./components/telemedicine/TelemedicineSession";
+import DoctorAppointments from "./pages/Doctor/DoctorAppointments";
+import TelemedicineRoom from "./pages/telemedicine/TelemedicineRoom";
+import DoctorAppointmentDetail from "./pages/Doctor/DoctorAppointmentDetail";
+import AllAppointments from "./pages/patient/AllAppointments";
 
-
-import AppointmentBook from './components/appointment/AppointmentBooking';
+import AppointmentBook from "./components/appointment/AppointmentBooking";
 function App() {
   return (
     <BrowserRouter>
@@ -36,19 +39,33 @@ function App() {
         {/* Patient Routes */}
         <Route path="/register" element={<PatientRegister />} />
         <Route path="/login" element={<PatientLogin />} />
-        <Route path="/dashboard" element={<PatientDashboard />} /> 
-        <Route path="/profile" element={<PatientProfile />} /> 
+        <Route path="/dashboard" element={<PatientDashboard />} />
+        <Route path="/profile" element={<PatientProfile />} />
+        <Route
+          path="doctor/appointments/:id"
+          element={<DoctorAppointmentDetail />}
+        />
 
-<Route path="/appointments/book/:id" element={<AppointmentBook />} />
+        <Route path="/appointments/book/:id" element={<AppointmentBook />} />
         {/* Admin Routes (NEW) */}
         <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/dashboard" element={<AdminDashboard />} /> 
-
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/appointments/all" element={<AllAppointments />} />
         <Route path="/doctor/register" element={<DoctorRegister />} />
         <Route path="/doctor/listing" element={<DoctorListing />} />
         <Route path="/doctor/:id" element={<ShowDoctorDetails />} />
+        <Route path="/doctor/appointments" element={
 
-<Route path="/telemedicine/:appointmentId" element={<TelemedicineSession />} />
+    <DoctorLayout>
+      <DoctorAppointments />
+    </DoctorLayout>
+  
+} />
+        <Route path="/telemedicine/:id" element={<TelemedicineRoom />} />
+        <Route
+          path="/telemedicine/:appointmentId"
+          element={<TelemedicineSession />}
+        />
 
         <Route path="/doctor" element={<DoctorLayout />}>
           <Route index element={<DoctorDashboard />} />

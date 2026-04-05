@@ -2,16 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const {
-    startSession,
-    endSession,
-    getSession,
-    getPrescription
+    createSession,
+    getSessionByAppointment,
+    markSessionActive,
+    endSession
 } = require('../controllers/telemedicineController');
-const { protect } = require('../middleware/auth');
 
-router.get('/:appointmentId', protect, getSession);
-router.post('/:appointmentId/start', protect, startSession);
-router.post('/:appointmentId/end', protect, endSession);
-router.get('/:appointmentId/prescription', protect, getPrescription);
+// Create or get session
+router.post('/sessions', createSession);
+router.get('/sessions/:appointmentId', getSessionByAppointment);
+router.post('/sessions/:appointmentId/active', markSessionActive);
+router.post('/sessions/:appointmentId/end', endSession);
 
 module.exports = router;

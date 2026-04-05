@@ -1,37 +1,101 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
-const connectDB = require('./config/db');
-
-// Connect to MongoDB
-connectDB();
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
+const PORT = process.env.PORT || 5018;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Import routes
-const telemedicineRoutes = require('./routes/telemedicineRoutes');
+// Store active telemedicine sessions
+const sessions = new Map();
 
-// Routes
-app.use('/api/telemedicine', telemedicineRoutes);
+// Create telemedicine session
+app.post('/api/telemedicine/create', (req, res) => {
+    try {
+        const { appointmentId, doctorName, patientName, scheduledTime } = req.body;
+        
+        // Generate unique room ID
+        const roomId = `caresync_${appointmentId}_${Date.now()}`;
+        const roomName = `CareSync_${appointmentId}`;
+        
+        // Jitsi Meet configuration
+        const domain = 'meet.jit.si';
+        const jitsiLink = `https://${domain}/${roomName}`;
+        
+        // Store session
+        sessions.set(appointmentId, {
+            roomId,
+            roomName,
+            jitsiLink,
+            doctorName,
+            patientName,
+            scheduledTime,
+            createdAt: new Date(),
+            isActive: true
+        });
+        
+        res.json({
+            success: true,
+            telemedicineLink: jitsiLink,
+            roomId: roomId,
+            roomName: roomName
+        });
+    } catch (error) {
+        console.error('Error creating telemedicine session:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get session info
+app.get('/api/telemedicine/session/:appointmentId', (req, res) => {
+    const { appointmentId } = req.params;
+    const session = sessions.get(appointmentId);
+    
+    if (!session) {
+        return res.status(404).json({
+            success: false,
+            message: 'Session not found'
+        });
+    }
+    
+    res.json({
+        success: true,
+        session
+    });
+});
+
+// End session
+app.post('/api/telemedicine/end/:appointmentId', (req, res) => {
+    const { appointmentId } = req.params;
+    const session = sessions.get(appointmentId);
+    
+    if (session) {
+        session.isActive = false;
+        session.endedAt = new Date();
+        sessions.set(appointmentId, session);
+    }
+    
+    res.json({
+        success: true,
+        message: 'Session ended'
+    });
+});
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'telemedicine-service',
-    timestamp: new Date().toISOString(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
-  });
+    res.json({
+        status: 'OK',
+        service: 'telemedicine-service',
+        timestamp: new Date().toISOString()
+    });
 });
 
-const PORT = process.env.PORT || 5018;
 app.listen(PORT, () => {
-  console.log(`✅ Telemedicine Service running on port ${PORT}`);
-  console.log(`🎥 API: http://localhost:${PORT}/api/telemedicine`);
+    console.log(`🚀 Telemedicine Service running on port ${PORT}`);
+    console.log(`📍 Jitsi Meet integration ready`);
 });
