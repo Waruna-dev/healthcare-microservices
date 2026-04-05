@@ -22,7 +22,7 @@ const createPaymentPayload = () => ({
   department: "Cardiology",
   appointmentDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
   appointmentTime: "10:30",
-  amount: 10000,
+  amount: 1000,
   email: "nimal@example.com",
 });
 
@@ -32,8 +32,8 @@ const appointmentPreview = {
   department: "Cardiology",
   appointmentDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
   appointmentTime: "10:30 AM",
-  amount: 10000,
-  email: "nimal@example.com",
+  amount: 1000,
+  email: "ru@gmail.com",
 };
 
 const trustPoints = [

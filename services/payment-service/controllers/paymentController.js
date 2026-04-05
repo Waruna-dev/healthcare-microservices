@@ -191,7 +191,16 @@ export const getAdminDashboard = async (req, res) => {
             totalPayments: { $sum: 1 },
             totalRevenue: {
               $sum: {
-                $cond: [{ $eq: ["$status", "SUCCESS"] }, "$amount", 0],
+                $cond: [
+                  { $eq: ["$status", "SUCCESS"] },
+                  {
+                    $max: [
+                      { $subtract: ["$amount", { $ifNull: ["$refundedAmount", 0] }] },
+                      0,
+                    ],
+                  },
+                  0,
+                ],
               },
             },
             successfulPayments: {
@@ -225,7 +234,12 @@ export const getAdminDashboard = async (req, res) => {
                       },
                     ],
                   },
-                  "$amount",
+                  {
+                    $max: [
+                      { $subtract: ["$amount", { $ifNull: ["$refundedAmount", 0] }] },
+                      0,
+                    ],
+                  },
                   0,
                 ],
               },
@@ -368,6 +382,28 @@ export const handleWebhook = async (req, res) => {
       });
     }
 
+    if (event.type === "charge.refunded" || event.type === "charge.refund.updated") {
+      const charge = event.data.object;
+      const payment = await Payment.findOne({
+        gatewayPaymentIntentId:
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id,
+      });
+
+      if (payment) {
+        const refundedAmount = Number(charge.amount_refunded || 0) / 100;
+        payment.refundedAmount = refundedAmount;
+        payment.refundStatus = refundedAmount >= Number(payment.amount || 0)
+          ? "FULL"
+          : refundedAmount > 0
+          ? "PARTIAL"
+          : "NONE";
+        payment.lastWebhookEvent = event.type;
+        await payment.save();
+      }
+    }
+
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error("Webhook error:", error.message);
@@ -398,6 +434,79 @@ export const getPaymentByOrderId = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to get payment",
+      error: error.message,
+    });
+  }
+};
+
+export const refundPayment = async (req, res) => {
+  try {
+    const { orderId, amount } = req.body;
+    const refundAmount = Number.parseFloat(amount);
+
+    if (!orderId || !Number.isFinite(refundAmount) || refundAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "orderId and valid refund amount are required",
+      });
+    }
+
+    const payment = await Payment.findOne({ orderId });
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    if (normalizeStatus(payment.status) !== "SUCCESS") {
+      return res.status(400).json({
+        success: false,
+        message: "Only successful payments can be refunded",
+      });
+    }
+
+    const availableRefund = Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+    if (refundAmount > availableRefund) {
+      return res.status(400).json({
+        success: false,
+        message: "Refund amount exceeds available refundable amount",
+      });
+    }
+
+    if (!payment.gatewayPaymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment intent identifier is missing for refund processing",
+      });
+    }
+
+    const refund = await stripe.refunds.create({
+      payment_intent: payment.gatewayPaymentIntentId,
+      amount: Math.round(refundAmount * 100),
+    });
+
+    payment.refundedAmount = Number(payment.refundedAmount || 0) + refundAmount;
+    payment.gatewayRefundIds = Array.isArray(payment.gatewayRefundIds)
+      ? [...payment.gatewayRefundIds, refund.id]
+      : [refund.id];
+    payment.refundStatus = payment.refundedAmount >= Number(payment.amount)
+      ? "FULL"
+      : "PARTIAL";
+    payment.lastWebhookEvent = "refund.created";
+
+    await payment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Refund created successfully",
+      payment,
+      refund,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process refund",
       error: error.message,
     });
   }

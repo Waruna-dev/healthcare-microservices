@@ -51,6 +51,11 @@ const statusFilters = [
   { value: "EXPIRED", label: "Expired" },
 ];
 
+const viewTabs = [
+  { id: "transactions", label: "Transactions" },
+  { id: "refunds", label: "Refunds" },
+];
+
 const formatAmount = (amount, currency = "LKR") =>
   new Intl.NumberFormat("en-LK", {
     style: "currency",
@@ -345,6 +350,113 @@ function PaymentDashboard() {
     return matchesStatus && matchesSearch;
   });
 
+  const [activeView, setActiveView] = useState("transactions");
+  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
+  const [refundModalData, setRefundModalData] = useState({
+    open: false,
+    payment: null,
+    amount: "",
+  });
+
+  const refundPayments = recentPayments.filter(
+    (payment) => Number(payment.refundedAmount || 0) > 0,
+  );
+  const filteredRefundPayments = refundPayments.filter((payment) => {
+    if (!normalizedSearchTerm) {
+      return true;
+    }
+
+    return buildSearchablePaymentText(payment).includes(normalizedSearchTerm);
+  });
+
+  const isRefundEligible = (payment) => {
+    const refundableAmount =
+      Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+
+    return (
+      payment.status === "SUCCESS" &&
+      refundableAmount > 0 &&
+      Boolean(payment.gatewayPaymentIntentId)
+    );
+  };
+
+  const openRefundDialog = (payment) => {
+    if (!payment?.orderId || !isRefundEligible(payment)) {
+      setErrorMessage("This payment cannot be refunded right now.");
+      return;
+    }
+
+    const availableAmount =
+      Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+
+    setRefundModalData({
+      open: true,
+      payment,
+      amount: String(availableAmount),
+    });
+  };
+
+  const closeRefundDialog = () => {
+    setRefundModalData({
+      open: false,
+      payment: null,
+      amount: "",
+    });
+  };
+
+  const submitRefund = async () => {
+    const { payment, amount } = refundModalData;
+    if (!payment || !payment.orderId) {
+      setErrorMessage("Refund request failed. Please try again.");
+      return;
+    }
+
+    const refundAmount = Number(amount);
+    const availableAmount =
+      Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+
+    if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+      setErrorMessage("Please enter a valid refund amount.");
+      return;
+    }
+
+    if (refundAmount > availableAmount) {
+      setErrorMessage("Refund amount cannot exceed the available refundable amount.");
+      return;
+    }
+
+    setIsProcessingRefund(true);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/admin/refund`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: payment.orderId,
+          amount: refundAmount,
+        }),
+      });
+
+      const data = await parseResponseBody(response);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          getResponseErrorMessage(response, data, "Unable to request refund."),
+        );
+      }
+
+      closeRefundDialog();
+      fetchDashboard({ showLoader: false });
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsProcessingRefund(false);
+    }
+  };
+
   const pendingAmount = recentPayments
     .filter((payment) => payment.status === "PENDING")
     .reduce((total, payment) => total + Number(payment.amount || 0), 0);
@@ -637,6 +749,79 @@ function PaymentDashboard() {
             </section>
           ) : null}
 
+          {refundModalData.open && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-slate-950/50 px-4 py-6 pt-20">
+              <div className="w-full max-w-lg rounded-[1.75rem] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.18)] ring-1 ring-slate-200">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-rose-100 text-rose-600">
+                    <span className="text-lg font-bold">!</span>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-xl font-semibold text-slate-900">
+                      Confirm refund request
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Refund portion of order{' '}
+                      <strong>{refundModalData.payment?.orderId}</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Refund amount
+                    </label>
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="text-sm text-slate-500">{refundModalData.payment?.currency?.toUpperCase() || 'LKR'}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={refundModalData.amount}
+                        onChange={(event) =>
+                          setRefundModalData((prev) => ({
+                            ...prev,
+                            amount: event.target.value,
+                          }))
+                        }
+                        className="w-full border-none bg-transparent text-lg font-semibold text-slate-900 outline-none"
+                      />
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Available refundable amount:{' '}
+                      <strong>
+                        {formatAmount(
+                          Number(refundModalData.payment?.amount || 0) -
+                            Number(refundModalData.payment?.refundedAmount || 0),
+                          refundModalData.payment?.currency,
+                        )}
+                      </strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={closeRefundDialog}
+                    className="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitRefund}
+                    disabled={isProcessingRefund}
+                    className="rounded-2xl bg-[#4338ca] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2f46e8] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isProcessingRefund ? 'Processing...' : 'Confirm refund'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <section className="mt-6 flex min-h-[320px] items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 text-center">
               <div>
@@ -679,7 +864,7 @@ function PaymentDashboard() {
                         <p className="text-sm font-medium text-slate-500">
                           {card.label}
                         </p>
-                        <strong className="mt-2 block font-headline text-[2rem] font-bold text-slate-950">
+                        <strong className="mt-2 block font-headline text-[1.6rem] font-bold leading-tight text-slate-950 sm:text-[1.75rem] xl:text-[1.85rem]">
                           {card.value}
                         </strong>
                         <span className="mt-2 block text-sm text-slate-500">
@@ -695,34 +880,49 @@ function PaymentDashboard() {
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
                     <h2 className="font-headline text-2xl font-bold text-slate-950">
-                      Recent Transactions
+                      {activeView === "refunds" ? "Refund Requests" : "Recent Transactions"}
                     </h2>
                     <p className="mt-2 max-w-2xl text-sm text-slate-500">
-                      Real-time payment history with key customer and
-                      appointment details
+                      {activeView === "refunds"
+                        ? "Track requested refunds and their status after payments are approved."
+                        : "Real-time payment history with key customer and appointment details."}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between xl:justify-end">
-                    <div
-                      className="flex flex-wrap gap-2"
-                      aria-label="Filter payments by status"
-                    >
-                      {statusFilters.map((filterOption) => {
-                        const isActive = filterOption.value === statusFilter;
+                    <label className="flex min-w-[240px] items-center gap-3 rounded-2xl border border-[#dfe4ff] bg-white px-4 py-2.5 shadow-sm lg:min-w-[290px]">
+                      <span className="h-4.5 w-4.5 text-[#4338ca]">
+                        <DashboardIcon name="search" />
+                      </span>
+                      <input
+                        type="search"
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        placeholder={
+                          activeView === "refunds"
+                            ? "Search refunds..."
+                            : "Search transactions..."
+                        }
+                        className="w-full border-none bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                      />
+                    </label>
+
+                    <div className="flex flex-wrap gap-2" aria-label="Choose table view">
+                      {viewTabs.map((tab) => {
+                        const isActive = tab.id === activeView;
 
                         return (
                           <button
-                            key={filterOption.value}
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveView(tab.id)}
                             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                               isActive
                                 ? "bg-slate-950 text-white shadow-md"
                                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                             }`}
-                            type="button"
-                            onClick={() => setStatusFilter(filterOption.value)}
                           >
-                            {filterOption.label}
+                            {tab.label}
                           </button>
                         );
                       })}
@@ -730,15 +930,19 @@ function PaymentDashboard() {
 
                     <div className="inline-flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-500">
                       <strong className="font-headline text-xl font-bold text-slate-950">
-                        {filteredPayments.length}
+                        {activeView === "refunds"
+                          ? filteredRefundPayments.length
+                          : filteredPayments.length}
                       </strong>
-                      <span>records</span>
+                      <span>{activeView === "refunds" ? "refund entries" : "records"}</span>
                     </div>
                   </div>
                 </div>
 
-                {filteredPayments.length ? (
-                  <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-[#e5e8fb] bg-white/100">
+                {(activeView === "transactions"
+                  ? filteredPayments.length
+                  : filteredRefundPayments.length) ? (
+                  <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-[#e5e8fb] bg-white">
                     <div className="max-h-[760px] overflow-auto">
                       <table className="min-w-full divide-y divide-slate-200 text-sm">
                         <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
@@ -758,10 +962,15 @@ function PaymentDashboard() {
                             <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                               Details
                             </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Action
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                          {filteredPayments.map((payment) => (
+                          {(activeView === "transactions"
+                            ? filteredPayments
+                            : filteredRefundPayments).map((payment) => (
                             <tr
                               key={payment.id}
                               className="transition hover:bg-[#f4f2ff]/80"
@@ -833,6 +1042,34 @@ function PaymentDashboard() {
                                   )}
                                 </span>
                               </td>
+                              <td className="px-5 py-4 align-top">
+                                {activeView === "transactions" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openRefundDialog(payment)}
+                                    disabled={!isRefundEligible(payment) || isProcessingRefund}
+                                    className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+                                      isRefundEligible(payment)
+                                        ? "bg-[#4338ca] text-white hover:bg-[#2f46e8] disabled:bg-slate-200 disabled:text-slate-500"
+                                        : "bg-slate-100 text-slate-500"
+                                    }`}
+                                  >
+                                    {isProcessingRefund && isRefundEligible(payment)
+                                      ? "Processing..."
+                                      : isRefundEligible(payment)
+                                      ? "Partial refund"
+                                      : "Not eligible"}
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca]">
+                                    {payment.refundStatus === "FULL"
+                                      ? "Fully refunded"
+                                      : payment.refundStatus === "PARTIAL"
+                                      ? "Partially refunded"
+                                      : "Refunded"}
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -842,11 +1079,14 @@ function PaymentDashboard() {
                 ) : (
                   <div className="mt-6 rounded-[1.5rem] border border-dashed border-[#dcdffc] bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(241,244,255,0.9))] px-6 py-12 text-center">
                     <h3 className="font-headline text-xl font-semibold text-slate-900">
-                      No transactions match your search
+                      {activeView === "refunds"
+                        ? "No refunds have been requested yet"
+                        : "No transactions match your search"}
                     </h3>
                     <p className="mt-2 text-sm text-slate-500">
-                      Try another patient name, order number, email, or switch
-                      the status filter.
+                      {activeView === "refunds"
+                        ? "Go to Transactions and request a refund for a completed payment."
+                        : "Try another patient name, order number, email, or switch the status filter."}
                     </p>
                   </div>
                 )}
