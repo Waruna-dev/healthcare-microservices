@@ -44,6 +44,21 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
+  const login = (userData, token) => {
+    try {
+      // Store the complete user data structure (with nested doctor/patient)
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('token', token);
+      
+      // Extract the actual user data for the context state
+      const user = userData.doctor || userData.patient || userData;
+      setUser(user);
+    } catch (error) {
+      console.error('Error during login:', error);
+      throw error;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
@@ -80,6 +95,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    login,
     logout,
     updateUser,
     isAuthenticated: !!user,

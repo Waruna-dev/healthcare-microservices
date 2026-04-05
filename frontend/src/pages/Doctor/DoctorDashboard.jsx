@@ -4,13 +4,22 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const DoctorDashboard = () => {
   const navigate = useNavigate();
-  const { doctorId } = useParams(); // Get doctor ID from URL if available
-  const { user } = useAuth(); // Get logged-in user data
+  const { doctorId } = useParams();
+  const { user, authKey } = useAuth(); // Add authKey
   const [currentDoctorId, setCurrentDoctorId] = useState('');
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Mock data for UI display only
+  // Reset component state when user changes
+  useEffect(() => {
+    // Clear any cached data when user changes
+    setLoading(true);
+    // Re-fetch doctor-specific data here
+    console.log('User changed to:', user?.name);
+    setLoading(false);
+  }, [user, authKey]); // Re-run when user or authKey changes
+
+  // Rest of your component remains the same...
   const stats = [
     { title: "Today's Appointments", value: "8", icon: "", color: "bg-blue-500" },
     { title: "Total Patients", value: "1,247", icon: "", color: "bg-green-500" },
@@ -18,9 +27,6 @@ const DoctorDashboard = () => {
     { title: "Total Earnings", value: "$12,450", icon: "", color: "bg-purple-500" },
   ];
 
-  // Sample data for demonstration purposes only
-  // In a real application, this data would be fetched from a database or API
-  // These are example appointments for Dr. {user?.name || 'Doctor'}
   const todayAppointments = [
     { id: 1, patient: "Sample Patient 1", time: "09:00 AM", type: "Video Call", status: "confirmed" },
     { id: 2, patient: "Sample Patient 2", time: "10:30 AM", type: "In-person", status: "confirmed" },
@@ -29,13 +35,22 @@ const DoctorDashboard = () => {
     { id: 5, patient: "Sample Patient 5", time: "03:30 PM", type: "Video Call", status: "confirmed" },
   ];
 
-  // Sample data for demonstration purposes only
-  // In a real application, this data would be fetched from a database or API
   const recentPatients = [
     { name: "Sample Patient 1", lastVisit: "Mar 28, 2026", condition: "Hypertension", status: "Recovering" },
     { name: "Sample Patient 2", lastVisit: "Mar 25, 2026", condition: "Heart Checkup", status: "Follow-up" },
     { name: "Sample Patient 3", lastVisit: "Mar 22, 2026", condition: "Chest Pain", status: "Pending" },
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -45,7 +60,7 @@ const DoctorDashboard = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Doctor Dashboard</h1>
-              <p className="text-gray-500 text-sm">Welcome back, {user?.name || 'Doctor'}</p>
+              <p className="text-gray-500 text-sm">Welcome back, Dr. {user?.name || 'Doctor'}</p>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
@@ -64,6 +79,7 @@ const DoctorDashboard = () => {
         </div>
       </div>
 
+      {/* Rest of your JSX remains the same... */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -135,8 +151,8 @@ const DoctorDashboard = () => {
                 )}
               </div>
               <div>
-                <h3 className="font-bold text-gray-800">{user?.name || 'Doctor Name'}</h3>
-                <p className="text-gray-500 text-sm">{user?.specialty || 'Doctor'}</p>
+                <h3 className="font-bold text-gray-800">Dr. {user?.name || 'Doctor Name'}</h3>
+                <p className="text-gray-500 text-sm">{user?.specialty || user?.specialization || 'Doctor'}</p>
                 <div className="flex items-center mt-1">
                   {[...Array(5)].map((_, i) => (
                     <span key={i} className="text-yellow-400 text-sm">★</span>
@@ -153,7 +169,6 @@ const DoctorDashboard = () => {
             </div>
             <button 
               onClick={() => {
-                // Use logged-in doctor's ID for navigation
                 const doctorId = user?._id || user?.id;
                 if (doctorId) {
                   navigate(`/doctor/edit-profile/${doctorId}`);
@@ -200,20 +215,6 @@ const DoctorDashboard = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        {/* Info Note about Admin Approval */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <span className="text-blue-600 text-xl">ℹ️</span>
-            <div>
-              <p className="text-sm text-blue-800 font-medium">Admin Approval Flow</p>
-              <p className="text-sm text-blue-600 mt-1">
-                After registration, an admin will verify your account and send login credentials to your email.
-                For now, you're viewing a demo dashboard with sample data.
-              </p>
-            </div>
           </div>
         </div>
       </div>

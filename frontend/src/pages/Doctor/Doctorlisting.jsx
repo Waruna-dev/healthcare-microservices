@@ -40,11 +40,12 @@ const DoctorListing = () => {
   const fetchDoctors = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}`);
+      // Fetch all doctors
+      const response = await fetch(`${API_BASE}?limit=1000`);
       const data = await response.json();
       
       if (data.success && data.doctors) {
-        // For each doctor, fetch their availability/schedule to get pricing
+        // Fetch each doctor's availability/schedule
         const doctorsWithSchedule = await Promise.all(
           data.doctors.map(async (doctor) => {
             try {

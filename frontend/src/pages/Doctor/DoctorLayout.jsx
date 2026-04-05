@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -6,12 +6,8 @@ const DoctorLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
-  
-  // Debug: Log user data to see what's available
-  console.log('User data:', user);
-
-  const menuItems = [
+  const { user, authKey } = useAuth(); // Add authKey
+  const [menuItems, setMenuItems] = useState([
     { path: '/doctor/dashboard', name: 'Dashboard', icon: '📊' },
     { path: '/doctor/appointments', name: 'Appointments', icon: '📅' },
     { path: '/doctor/patients', name: 'My Patients', icon: '👥' },
@@ -21,15 +17,20 @@ const DoctorLayout = () => {
     { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },
     { path: '/doctor/settings', name: 'Settings', icon: '⚙️' },
-  ];
+  ]);
 
-  // No logout function needed - just navigate to home if needed
+  // Reset sidebar state when user changes
+  useEffect(() => {
+    console.log('DoctorLayout - User changed to:', user?.name);
+    // You can add any reset logic here
+  }, [user, authKey]);
+
   const goToHome = () => {
     navigate('/');
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100" key={authKey}> {/* Add key to force re-render */}
       {/* Sidebar */}
       <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-gradient-to-b from-blue-800 to-indigo-900 text-white transition-all duration-300 flex flex-col`}>
         {/* Logo */}
@@ -83,7 +84,7 @@ const DoctorLayout = () => {
           ))}
         </nav>
 
-        {/* Home/Exit Button instead of Logout */}
+        {/* Home/Exit Button */}
         <div className="p-4 border-t border-blue-700">
           <button
             onClick={goToHome}
