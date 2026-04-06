@@ -3,11 +3,13 @@ const mongoose = require('mongoose');
 const appointmentSchema = new mongoose.Schema({
     patientId: {
         type: String,  // Changed from ObjectId to String to avoid model dependency
-        required: true
+        required: true,
+        index: true
     },
     doctorId: {
         type: String,  // Changed from ObjectId to String
-        required: true
+        required: true,
+        index: true
     },
     patientName: {
         type: String,
