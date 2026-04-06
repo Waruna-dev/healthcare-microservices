@@ -10,31 +10,10 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Helper function to call notification service
-const sendNotification = async (userId, userType, title, message, data = {}) => {
-    try {
-        const response = await fetch(`${process.env.NOTIFICATION_SERVICE_URL}/api/notifications`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId,
-                userType,
-                title,
-                message,
-                data
-            })
-        });
-        return await response.json();
-    } catch (error) {
-        console.error('Error sending notification:', error);
-        return null;
-    }
-};
-
 // Helper function to call payment service
 const processPaymentRequest = async (appointmentId, amount, patientId, paymentMethod = 'card') => {
     try {
-        const response = await fetch(`${process.env.PAYMENT_SERVICE_URL}/api/payments/create`, {
+        const response = await fetch(`${process.env.PAYMENT_SERVICE_URL || 'http://localhost:5004'}/api/payments/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -52,27 +31,46 @@ const processPaymentRequest = async (appointmentId, amount, patientId, paymentMe
     }
 };
 
-// Generate Jitsi meeting link
+// Helper function to call telemedicine service
+const createTelemedicineSession = async (appointmentId, doctorName, patientName, scheduledTime) => {
+    try {
+        const response = await fetch(`${process.env.TELEMEDICINE_SERVICE_URL || 'http://localhost:5018'}/api/telemedicine/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                appointmentId,
+                doctorName,
+                patientName,
+                scheduledTime
+            })
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Error creating telemedicine session:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Generate Jitsi meeting link (fallback)
 const generateTelemedicineLink = (appointmentId, doctorName, patientName) => {
-    const roomId = `caresync_${appointmentId}_${Date.now()}`;
+    const roomName = `CareSync_${appointmentId}_${Date.now()}`;
     const domain = 'meet.jit.si';
-    const roomName = `CareSync_${appointmentId}`;
     const jitsiLink = `https://${domain}/${roomName}`;
     
     return {
         telemedicineLink: jitsiLink,
-        telemedicineRoomId: roomId,
+        telemedicineRoomId: roomName,
         roomName: roomName
     };
 };
 
-// Add this at the top of createAppointment function for debugging
+// @desc    Create a new appointment
+// @desc    Create a new appointment
 const createAppointment = async (req, res) => {
     try {
         console.log('=== CREATE APPOINTMENT DEBUG ===');
         console.log('Request body:', req.body);
         console.log('Request files:', req.files);
-        console.log('Request patient:', req.patient);
         
         const {
             doctorId,
@@ -91,39 +89,37 @@ const createAppointment = async (req, res) => {
 
         const patientId = req.patient?._id || req.body.patientId;
         
-        console.log('Extracted values:', {
-            doctorId,
-            patientId,
-            slotId,
-            date,
-            startTime,
-            endTime,
-            consultationFee
-        });
-        
         if (!patientId) {
-            console.log('ERROR: No patient ID found');
             return res.status(401).json({
                 success: false,
                 message: 'Patient not authenticated'
             });
         }
 
-        // Check for conflicting appointments
+        // ==============================================
+        // 🔴 ADD THIS SLOT AVAILABILITY CHECK HERE 🔴
+        // ==============================================
+        // Check for conflicting appointments (pending or accepted)
         const existingAppointment = await Appointment.findOne({
             doctorId: doctorId,
             date: new Date(date),
-            startTime,
+            startTime: startTime,
             status: { $in: ['pending', 'accepted'] }
         });
 
         if (existingAppointment) {
-            console.log('ERROR: Slot already booked');
+            console.log('❌ Slot already booked:', {
+                doctorId,
+                date,
+                startTime,
+                existingStatus: existingAppointment.status
+            });
             return res.status(400).json({
                 success: false,
-                message: 'This time slot is already booked'
+                message: 'This time slot is already booked. Please select another time.'
             });
         }
+        // ==============================================
 
         // Handle file uploads
         const uploadedReports = [];
@@ -155,26 +151,11 @@ const createAppointment = async (req, res) => {
             status: 'pending',
             paymentStatus: 'pending'
         };
-        
-        console.log('Creating appointment with data:', appointmentData);
 
         const appointment = new Appointment(appointmentData);
         await appointment.save();
         
-        console.log('Appointment created successfully:', appointment._id);
-
-        // Send notification to doctor (don't fail if notification fails)
-        try {
-            await sendNotification(
-                doctorId,
-                'doctor',
-                'New Appointment Request',
-                `A new appointment has been requested for ${new Date(date).toLocaleDateString()} at ${startTime}`,
-                { appointmentId: appointment._id, type: 'new_appointment' }
-            );
-        } catch (notifError) {
-            console.error('Notification error (non-critical):', notifError.message);
-        }
+        console.log('✅ Appointment created successfully:', appointment._id);
 
         res.status(201).json({
             success: true,
@@ -184,7 +165,6 @@ const createAppointment = async (req, res) => {
 
     } catch (error) {
         console.error('Create appointment error:', error);
-        console.error('Error stack:', error.stack);
         res.status(500).json({
             success: false,
             message: error.message
@@ -192,14 +172,18 @@ const createAppointment = async (req, res) => {
     }
 };
 // @desc    Get appointments for a patient
-// @route   GET /api/appointments/patient/:patientId
 const getPatientAppointments = async (req, res) => {
     try {
         const { patientId } = req.params;
         
+        console.log('🔍 Fetching appointments for patient:', patientId);
+        
         const appointments = await Appointment.find({ 
             patientId: patientId 
         }).sort({ date: -1, createdAt: -1 });
+        
+        console.log(`📊 Found ${appointments.length} appointments for patient ${patientId}`);
+        console.log('📋 Appointments:', JSON.stringify(appointments, null, 2));
 
         res.json({
             success: true,
@@ -214,9 +198,7 @@ const getPatientAppointments = async (req, res) => {
         });
     }
 };
-
 // @desc    Get appointments for a doctor
-// @route   GET /api/appointments/doctor/:doctorId
 const getDoctorAppointments = async (req, res) => {
     try {
         const { doctorId } = req.params;
@@ -240,7 +222,6 @@ const getDoctorAppointments = async (req, res) => {
 };
 
 // @desc    Get appointment by ID
-// @route   GET /api/appointments/:id
 const getAppointmentById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -268,7 +249,6 @@ const getAppointmentById = async (req, res) => {
 };
 
 // @desc    Update appointment status (Accept/Reject)
-// @route   PUT /api/appointments/:id/status
 const updateAppointmentStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -296,19 +276,6 @@ const updateAppointmentStatus = async (req, res) => {
 
         await appointment.save();
 
-        // Send notification to patient
-        const statusMessage = status === 'accepted' 
-            ? 'Your appointment has been accepted! Please complete the payment to join the telemedicine session.'
-            : `Your appointment has been rejected. Reason: ${rejectionReason || 'No reason provided'}`;
-        
-        await sendNotification(
-            appointment.patientId,
-            'patient',
-            `Appointment ${status === 'accepted' ? 'Accepted' : 'Rejected'}`,
-            statusMessage,
-            { appointmentId: appointment._id, status }
-        );
-
         res.json({
             success: true,
             message: `Appointment ${status}`,
@@ -324,7 +291,6 @@ const updateAppointmentStatus = async (req, res) => {
 };
 
 // @desc    Process payment for appointment
-// @route   POST /api/appointments/:id/payment
 const processPayment = async (req, res) => {
     try {
         const { id } = req.params;
@@ -353,6 +319,21 @@ const processPayment = async (req, res) => {
             });
         }
 
+        // Check if payment is within 48 hours
+        const acceptedDate = new Date(appointment.updatedAt);
+        const now = new Date();
+        const hoursSinceAcceptance = (now - acceptedDate) / (1000 * 60 * 60);
+        
+        if (hoursSinceAcceptance > 48) {
+            appointment.status = 'cancelled';
+            appointment.rejectionReason = 'Payment not completed within 48 hours';
+            await appointment.save();
+            return res.status(400).json({
+                success: false,
+                message: 'Payment window expired (48 hours). Appointment cancelled.'
+            });
+        }
+
         // Process payment with payment service
         const paymentResult = await processPaymentRequest(
             id,
@@ -376,42 +357,29 @@ const processPayment = async (req, res) => {
         appointment.paymentId = paymentResult.paymentId;
         appointment.paymentDetails = paymentResult.details || {};
         
-        // Generate telemedicine link after successful payment
-        const telemedicineData = generateTelemedicineLink(
+        // Create telemedicine session
+        const telemedicineResult = await createTelemedicineSession(
             id,
-            appointment.doctorName || 'Doctor',
-            appointment.patientName || 'Patient'
+            appointment.doctorName,
+            appointment.patientName,
+            new Date(appointment.date)
         );
         
-        appointment.telemedicineLink = telemedicineData.telemedicineLink;
-        appointment.telemedicineRoomId = telemedicineData.telemedicineRoomId;
+        if (telemedicineResult.success) {
+            appointment.telemedicineLink = telemedicineResult.telemedicineLink;
+            appointment.telemedicineRoomId = telemedicineResult.roomId;
+        } else {
+            // Fallback to local generation
+            const telemedicineData = generateTelemedicineLink(
+                id,
+                appointment.doctorName,
+                appointment.patientName
+            );
+            appointment.telemedicineLink = telemedicineData.telemedicineLink;
+            appointment.telemedicineRoomId = telemedicineData.telemedicineRoomId;
+        }
         
         await appointment.save();
-
-        // Send notifications to both parties
-        await sendNotification(
-            appointment.patientId,
-            'patient',
-            'Payment Successful',
-            `Your payment of LKR ${appointment.consultationFee} has been processed. Click the link to join your telemedicine session at the scheduled time.`,
-            { 
-                appointmentId: appointment._id, 
-                telemedicineLink: appointment.telemedicineLink,
-                scheduledTime: appointment.startTime,
-                scheduledDate: appointment.date
-            }
-        );
-
-        await sendNotification(
-            appointment.doctorId,
-            'doctor',
-            'Payment Completed',
-            `Patient has completed the payment of LKR ${appointment.consultationFee} for appointment on ${new Date(appointment.date).toLocaleDateString()} at ${appointment.startTime}.`,
-            { 
-                appointmentId: appointment._id,
-                telemedicineLink: appointment.telemedicineLink
-            }
-        );
 
         res.json({
             success: true,
@@ -429,7 +397,6 @@ const processPayment = async (req, res) => {
 };
 
 // @desc    Get telemedicine session info
-// @route   GET /api/appointments/:id/telemedicine
 const getTelemedicineInfo = async (req, res) => {
     try {
         const { id } = req.params;
@@ -450,7 +417,7 @@ const getTelemedicineInfo = async (req, res) => {
             });
         }
 
-        // Check if current time is within appointment time
+        // Check if current time is within appointment time (allow 20 minutes before)
         const now = new Date();
         const appointmentDate = new Date(appointment.date);
         const [startHour, startMinute] = appointment.startTime.split(':');
@@ -460,8 +427,12 @@ const getTelemedicineInfo = async (req, res) => {
         const [endHour, endMinute] = appointment.endTime.split(':');
         appointmentEnd.setHours(parseInt(endHour), parseInt(endMinute), 0);
         
-        const canJoin = now >= appointmentDate && now <= appointmentEnd;
-        const isEarly = now < appointmentDate;
+        // Allow joining 20 minutes before
+        const canJoinTime = new Date(appointmentDate);
+        canJoinTime.setMinutes(canJoinTime.getMinutes() - 20);
+        
+        const canJoin = now >= canJoinTime && now <= appointmentEnd;
+        const isEarly = now < canJoinTime;
         const isLate = now > appointmentEnd;
 
         res.json({
@@ -480,7 +451,7 @@ const getTelemedicineInfo = async (req, res) => {
                 canJoin,
                 isEarly,
                 isLate,
-                currentTime: now,
+                canJoinTime: canJoinTime,
                 sessionStartTime: appointmentDate,
                 sessionEndTime: appointmentEnd
             }
@@ -495,7 +466,6 @@ const getTelemedicineInfo = async (req, res) => {
 };
 
 // @desc    Complete appointment and add prescription
-// @route   POST /api/appointments/:id/complete
 const completeAppointment = async (req, res) => {
     try {
         const { id } = req.params;
@@ -517,15 +487,6 @@ const completeAppointment = async (req, res) => {
         
         await appointment.save();
 
-        // Send notification to patient
-        await sendNotification(
-            appointment.patientId,
-            'patient',
-            'Appointment Completed',
-            'Your telemedicine session has been completed. The prescription has been shared with you.',
-            { appointmentId: appointment._id, prescription }
-        );
-
         res.json({
             success: true,
             message: 'Appointment completed successfully',
@@ -541,7 +502,6 @@ const completeAppointment = async (req, res) => {
 };
 
 // @desc    Cancel appointment
-// @route   PUT /api/appointments/:id/cancel
 const cancelAppointment = async (req, res) => {
     try {
         const { id } = req.params;
@@ -583,6 +543,60 @@ const cancelAppointment = async (req, res) => {
     }
 };
 
+// @desc    Get upcoming appointment for patient (latest pending/accepted)
+const getUpcomingAppointment = async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        
+        console.log('🔍 Fetching upcoming appointment for patient:', patientId);
+        
+        const appointment = await Appointment.findOne({
+            patientId: patientId,
+            status: { $in: ['pending', 'accepted'] },
+            paymentStatus: { $ne: 'failed' }
+        }).sort({ createdAt: -1 });
+        
+        console.log('📊 Upcoming appointment found:', appointment ? appointment._id : 'None');
+
+        res.json({
+            success: true,
+            appointment
+        });
+    } catch (error) {
+        console.error('Get upcoming appointment error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+// @desc    Check if slot is available
+// @desc    Check if slot is available (for pending appointments too)
+const checkSlotAvailability = async (req, res) => {
+    try {
+        const { doctorId, date, startTime } = req.query;
+        
+        // Check for any pending or accepted appointments at this slot
+        const existingAppointment = await Appointment.findOne({
+            doctorId: doctorId,
+            date: new Date(date),
+            startTime,
+            status: { $in: ['pending', 'accepted'] }
+        });
+
+        res.json({
+            success: true,
+            isAvailable: !existingAppointment,
+            message: existingAppointment ? 'This time slot is already booked' : 'Slot available'
+        });
+    } catch (error) {
+        console.error('Check slot availability error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
 module.exports = {
     createAppointment,
     getPatientAppointments,
@@ -592,5 +606,7 @@ module.exports = {
     processPayment,
     getTelemedicineInfo,
     completeAppointment,
-    cancelAppointment
+    cancelAppointment,
+    getUpcomingAppointment,
+    checkSlotAvailability
 };
