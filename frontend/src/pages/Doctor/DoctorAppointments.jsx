@@ -688,7 +688,7 @@ const DoctorAppointments = () => {
                     <h3 className="text-xl font-bold text-gray-900">{selectedAppointment.patientName}</h3>
                     <p className="text-gray-600 flex items-center gap-1 mt-1">
                       <Mail className="w-4 h-4" />
-                      {selectedAppointment.patientEmail}
+                      {selectedAppointment.patientEmail} 
                     </p>
                   </div>
                 </div>
