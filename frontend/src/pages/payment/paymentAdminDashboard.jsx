@@ -798,6 +798,61 @@ function PaymentDashboard() {
     (maxRevenue, day) => Math.max(maxRevenue, day.revenue),
     0,
   );
+  const reportTimelinePeakDay = reportTimeline.reduce(
+    (peakDay, day) => (day.revenue > peakDay.revenue ? day : peakDay),
+    reportTimeline[0] || { label: "No data", revenue: 0, transactions: 0 },
+  );
+  const reportTimelineTotalRevenue = reportTimeline.reduce(
+    (totalRevenue, day) => totalRevenue + day.revenue,
+    0,
+  );
+  const reportTimelineTotalTransactions = reportTimeline.reduce(
+    (totalTransactions, day) => totalTransactions + day.transactions,
+    0,
+  );
+
+  const chartWidth = 640;
+  const chartHeight = 260;
+  const chartPadding = {
+    top: 20,
+    right: 20,
+    bottom: 46,
+    left: 20,
+  };
+  const innerChartWidth =
+    chartWidth - chartPadding.left - chartPadding.right;
+  const innerChartHeight =
+    chartHeight - chartPadding.top - chartPadding.bottom;
+  const chartMaxRevenue = reportTimelineMaxRevenue || 1;
+  const reportTrendPoints = reportTimeline.map((day, index) => {
+    const x =
+      chartPadding.left +
+      (reportTimeline.length > 1
+        ? (index / (reportTimeline.length - 1)) * innerChartWidth
+        : innerChartWidth / 2);
+    const y =
+      chartPadding.top +
+      innerChartHeight -
+      (day.revenue / chartMaxRevenue) * innerChartHeight;
+
+    return {
+      ...day,
+      x,
+      y,
+    };
+  });
+  const reportTrendLinePath = reportTrendPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+  const reportTrendAreaPath = reportTrendPoints.length
+    ? `${reportTrendLinePath} L ${reportTrendPoints[reportTrendPoints.length - 1].x} ${
+        chartHeight - chartPadding.bottom
+      } L ${reportTrendPoints[0].x} ${chartHeight - chartPadding.bottom} Z`
+    : "";
+  const reportTrendGridValues = [1, 0.5, 0].map((ratio) => ({
+    value: chartMaxRevenue * ratio,
+    y: chartPadding.top + innerChartHeight - innerChartHeight * ratio,
+  }));
 
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[#f6f7ff] px-3 py-3 text-slate-900 sm:px-4 lg:px-5">
@@ -1250,32 +1305,149 @@ function PaymentDashboard() {
                         Peak day
                       </p>
                       <strong className="mt-1 block text-lg font-bold text-slate-950">
-                        {formatAmount(reportTimelineMaxRevenue, "LKR")}
+                        {formatAmount(reportTimelinePeakDay.revenue, "LKR")}
                       </strong>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {reportTimelinePeakDay.label}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
-                    {reportTimeline.map((day) => {
-                      const heightPercentage = reportTimelineMaxRevenue
-                        ? Math.max(
-                            12,
-                            (day.revenue / reportTimelineMaxRevenue) * 100,
-                          )
-                        : 8;
+                  <div className="mt-6 rounded-[1.4rem] border border-[#e6e9f8] bg-white p-4 shadow-sm">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-[1.1rem] bg-[#f7f8ff] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          Seven-day revenue
+                        </p>
+                        <strong className="mt-2 block text-lg font-bold text-slate-950">
+                          {formatAmount(reportTimelineTotalRevenue, "LKR")}
+                        </strong>
+                      </div>
+                      <div className="rounded-[1.1rem] bg-[#f7f8ff] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          Transactions
+                        </p>
+                        <strong className="mt-2 block text-lg font-bold text-slate-950">
+                          {reportTimelineTotalTransactions}
+                        </strong>
+                      </div>
+                      <div className="rounded-[1.1rem] bg-[#f7f8ff] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          Daily average
+                        </p>
+                        <strong className="mt-2 block text-lg font-bold text-slate-950">
+                          {formatAmount(
+                            reportTimelineTotalRevenue / reportTimeline.length,
+                            "LKR",
+                          )}
+                        </strong>
+                      </div>
+                    </div>
 
-                      return (
+                    <div className="mt-5 overflow-hidden rounded-[1.25rem] bg-[linear-gradient(180deg,#f8f9ff_0%,#eef1ff_100%)] px-3 py-4 sm:px-4">
+                      <svg
+                        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                        className="h-[18rem] w-full"
+                        aria-label="Seven-day settlement trend chart"
+                        role="img"
+                      >
+                        <defs>
+                          <linearGradient
+                            id="reportTrendFill"
+                            x1="0"
+                            x2="0"
+                            y1="0"
+                            y2="1"
+                          >
+                            <stop offset="0%" stopColor="#5b50f6" stopOpacity="0.28" />
+                            <stop offset="100%" stopColor="#5b50f6" stopOpacity="0.02" />
+                          </linearGradient>
+                          <linearGradient
+                            id="reportTrendStroke"
+                            x1="0"
+                            x2="1"
+                            y1="0"
+                            y2="0"
+                          >
+                            <stop offset="0%" stopColor="#7c73ff" />
+                            <stop offset="100%" stopColor="#4338ca" />
+                          </linearGradient>
+                        </defs>
+
+                        {reportTrendGridValues.map((gridLine) => (
+                          <g key={gridLine.y}>
+                            <line
+                              x1={chartPadding.left}
+                              x2={chartWidth - chartPadding.right}
+                              y1={gridLine.y}
+                              y2={gridLine.y}
+                              stroke="#dfe4ff"
+                              strokeDasharray="4 8"
+                            />
+                            <text
+                              x={chartPadding.left}
+                              y={gridLine.y - 8}
+                              fill="#94a3b8"
+                              fontSize="11"
+                            >
+                              {formatAmount(gridLine.value, "LKR")}
+                            </text>
+                          </g>
+                        ))}
+
+                        {reportTrendAreaPath ? (
+                          <path d={reportTrendAreaPath} fill="url(#reportTrendFill)" />
+                        ) : null}
+
+                        {reportTrendLinePath ? (
+                          <path
+                            d={reportTrendLinePath}
+                            fill="none"
+                            stroke="url(#reportTrendStroke)"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        ) : null}
+
+                        {reportTrendPoints.map((point) => (
+                          <g key={point.key}>
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              fill="#ffffff"
+                              r="9"
+                              stroke="#c7d2fe"
+                              strokeWidth="2"
+                            />
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              fill="#4f46e5"
+                              r="4.5"
+                            />
+                            <text
+                              x={point.x}
+                              y={chartHeight - 12}
+                              textAnchor="middle"
+                              fill="#475569"
+                              fontSize="12"
+                              fontWeight="600"
+                            >
+                              {point.label}
+                            </text>
+                          </g>
+                        ))}
+                      </svg>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {reportTimeline.map((day) => (
                         <div
                           key={day.key}
-                          className="rounded-[1.35rem] border border-[#e6e9f8] bg-white px-3 py-4 shadow-sm"
+                          className="rounded-[1.15rem] border border-[#e6e9f8] bg-[#fafbff] px-4 py-3"
                         >
-                          <div className="flex h-36 items-end rounded-[1rem] bg-[#f7f8ff] px-2 py-3">
-                            <div
-                              className="w-full rounded-full bg-linear-to-t from-[#4338ca] via-[#5b50f6] to-[#7c73ff]"
-                              style={{ height: `${heightPercentage}%` }}
-                            />
-                          </div>
-                          <p className="mt-3 text-sm font-semibold text-slate-900">
+                          <p className="text-sm font-semibold text-slate-900">
                             {day.label}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
@@ -1285,8 +1457,8 @@ function PaymentDashboard() {
                             {formatAmount(day.revenue, "LKR")}
                           </p>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 </article>
 
