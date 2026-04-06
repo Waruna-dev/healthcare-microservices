@@ -28,6 +28,8 @@ import SlotDisplay from './pages/Doctor/SlotDisplay';
 import DoctorListing from './pages/Doctor/Doctorlisting';
 import ShowDoctorDetails from './pages/Doctor/Showdoctordetails';
 
+import AllAppointments from "./pages/patient/AllAppointments";
+
 // --- Admin Pages ---
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -52,6 +54,9 @@ function App() {
           <Route path="/security" element={<Security />} />
           <Route path="/integration" element={<Integration />} />
         </Route>
+
+         <Route path="/appointments/all" element={<AllAppointments />} />
+         
 
         {/* Patient Routes */}
         <Route path="/register" element={<PatientRegister />} />
