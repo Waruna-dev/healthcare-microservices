@@ -5,19 +5,10 @@ import axios from 'axios';
 import img1 from '../../assets/images/1e73cdf4e73454e4db41a709b9163cac.jpg';
 import img2 from '../../assets/images/9339706cc8079c7b463d4fb452f097d3.jpg';
 
-function authHeaders(useFormData = false) {
-  const token = localStorage.getItem('token');
-  const h = {};
-  if (token) h.Authorization = `Bearer ${token}`;
-  // Don't set Content-Type for FormData - browser sets it automatically
-  if (!useFormData) h['Content-Type'] = 'application/json';
-  return h;
-}
-
 const DoctorProfileEdit = () => {
   const navigate = useNavigate();
   const { doctorId } = useParams(); // Get doctor ID from URL params
-  const { user, updateUser } = useAuth(); // Get logged-in user data and update function
+  const { user } = useAuth(); // Get logged-in user data
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -38,6 +29,7 @@ const DoctorProfileEdit = () => {
   const [profileImage, setProfileImage] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Fetch doctor data on component mount
   useEffect(() => {
@@ -54,9 +46,7 @@ const DoctorProfileEdit = () => {
 
   const fetchDoctorData = async (doctorIdToUse) => {
     try {
-      const response = await fetch(`/api/doctors/${doctorIdToUse}`, {
-        headers: authHeaders()
-      });
+      const response = await fetch(`http://localhost:5025/api/doctors/${doctorIdToUse}`);
       const data = await response.json();
       
       if (data.success && data.doctor) {
@@ -202,49 +192,48 @@ const DoctorProfileEdit = () => {
     setMessage('');
 
     try {
-      // Prepare payload as JSON object
-      const payload = {
-        name: formData.name,
-        email: formData.email,
-        specialty: formData.specialty,
-        phone: formData.phone,
-        licenseNumber: formData.licenseNumber,
-        experience: formData.experience,
-        address: formData.address,
-        about: formData.about,
-        gender: formData.gender,
-        qualifications: formData.qualifications.filter(q => q.trim() !== ''),
-        specializations: formData.specializations.filter(s => s.trim() !== ''),
-        profilePicture: imageUrl || user?.profilePicture
-      };
+      const payload = new FormData();
+      
+      // Add all form fields
+      Object.keys(formData).forEach(key => {
+        if (key === 'qualifications' || key === 'specializations') {
+          // Handle arrays separately
+          return;
+        } else {
+          payload.append(key, formData[key]);
+        }
+      });
 
-      console.log('Submitting payload:', payload);
+      // Add qualifications as JSON string
+      const validQualifications = formData.qualifications.filter(q => q.trim() !== '');
+      payload.append('qualifications', JSON.stringify(validQualifications));
+      
+      // Add specializations as JSON string
+      const validSpecializations = formData.specializations.filter(s => s.trim() !== '');
+      payload.append('specializations', JSON.stringify(validSpecializations));
+      
+      // Add profile image URL only if uploaded to Cloudinary
+      if (imageUrl) {
+        payload.append('profileImageUrl', imageUrl);
+        console.log('Adding profileImageUrl to payload:', imageUrl);
+      } else {
+        console.log('No imageUrl to add to payload');
+      }
+
+      console.log('FormData contents:');
+      for (let [key, value] of payload.entries()) {
+        console.log(key, value);
+      }
 
       const effectiveDoctorId = user?._id || user?.id || doctorId;
-      const response = await fetch(`/api/doctors/${effectiveDoctorId}`, {
-        method: 'PUT',
-        headers: authHeaders(), // Use JSON headers
-        body: JSON.stringify(payload)
+      const response = await fetch(`http://localhost:5025/api/doctors/${effectiveDoctorId}`, {
+        method: 'PUT', // Use PUT for updating
+        body: payload
       });
 
       const data = await response.json();
-      console.log('Update response:', data);
       
-      if (data.success) {
-        // Update user data in AuthContext with the updated doctor data from response
-        const updatedUserData = {
-          ...user,
-          name: formData.name,
-          email: formData.email,
-          specialty: formData.specialty,
-          phone: formData.phone,
-          address: formData.address,
-          profilePicture: imageUrl || user?.profilePicture,
-          qualifications: formData.qualifications.filter(q => q.trim() !== ''),
-          specializations: formData.specializations.filter(s => s.trim() !== '')
-        };
-        updateUser(updatedUserData);
-        
+      if (response.ok) {
         setMessage('✅ Profile updated successfully! Redirecting to dashboard...');
         setTimeout(() => navigate('/doctor/dashboard'), 2000);
       } else {
@@ -252,7 +241,7 @@ const DoctorProfileEdit = () => {
       }
     } catch (err) {
       console.error('Update error:', err);
-      setError('Failed to update profile. Please try again.');
+      setError('Cannot connect to server. Please make sure backend is running on port 5025');
     } finally {
       setLoading(false);
     }
@@ -294,11 +283,19 @@ const DoctorProfileEdit = () => {
             {/* Profile Image Upload */}
             <div className="flex items-center space-x-6">
               <div className="flex-shrink-0">
-                <img
-                  className="h-24 w-24 rounded-full object-cover border-4 border-gray-200"
-                  src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0F6E56&color=fff&size=128`}
-                  alt="Profile preview"
-                />
+                <div 
+                  className="relative cursor-pointer group"
+                  onClick={() => setShowImageModal(true)}
+                >
+                  <img
+                    className="h-24 w-24 rounded-full object-cover border-4 border-gray-200 transition-transform group-hover:scale-105"
+                    src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0F6E56&color=fff&size=128`}
+                    alt="Profile preview"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-full transition-all flex items-center justify-center">
+                    <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">Click to view</span>
+                  </div>
+                </div>
               </div>
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -574,7 +571,50 @@ const DoctorProfileEdit = () => {
         </div>
       </div>
     </div>
-  );
-};
+
+    {/* Image Modal */}
+    {showImageModal && (
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+        onClick={() => setShowImageModal(false)}
+      >
+        <div 
+          className="bg-white rounded-xl p-6 max-w-2xl max-h-screen overflow-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-gray-900">Profile Picture</h3>
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="flex justify-center">
+            <img
+              src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0F6E56&color=fff&size=400`}
+              alt="Profile"
+              className="max-w-full max-h-96 rounded-lg object-contain"
+            />
+          </div>
+          
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-600">
+              {formData.name || 'Doctor'}'s Profile Picture
+            </p>
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+);
 
 export default DoctorProfileEdit;
