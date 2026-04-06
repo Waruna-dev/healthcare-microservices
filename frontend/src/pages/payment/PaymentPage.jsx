@@ -73,6 +73,7 @@ const getStoredPatient = () => {
 
 const buildPaymentPayload = (appointment, patient) => {
   const appointmentId = appointment?._id || appointment?.id || "";
+  const patientId = patient?._id || patient?.id || appointment?.patientId || "";
   const patientName =
     patient?.name || appointment?.patientName || "CareSync Patient";
   const patientEmail =
@@ -81,6 +82,7 @@ const buildPaymentPayload = (appointment, patient) => {
   return {
     orderId: `PAY-${appointmentId}-${Date.now()}`,
     appointmentId,
+    patientId,
     customerName: patientName,
     customerEmail: patientEmail,
     patientName,
@@ -128,6 +130,37 @@ const getResponseErrorMessage = (response, data, fallbackMessage) => {
   }
 
   return message;
+};
+
+const getUserFriendlyErrorMessage = (
+  message,
+  fallbackMessage = "Something went wrong. Please try again.",
+) => {
+  const normalizedMessage = `${message || ""}`.trim();
+  const lowerMessage = normalizedMessage.toLowerCase();
+
+  if (!normalizedMessage) {
+    return fallbackMessage;
+  }
+
+  if (
+    lowerMessage.includes("request failed with status code 404") ||
+    lowerMessage.includes("request failed with status 404") ||
+    lowerMessage.includes("route not found") ||
+    lowerMessage.includes("not found")
+  ) {
+    return "Payment details are temporarily unavailable. Please refresh and try again.";
+  }
+
+  if (
+    lowerMessage.includes("network error") ||
+    lowerMessage.includes("failed to fetch") ||
+    lowerMessage.includes("error occurred while trying to proxy")
+  ) {
+    return "Payment service is temporarily unavailable. Please try again shortly.";
+  }
+
+  return normalizedMessage;
 };
 
 function PaymentPage() {
@@ -196,9 +229,10 @@ function PaymentPage() {
       } catch (error) {
         if (!isCancelled) {
           setErrorMessage(
-            error?.response?.data?.message ||
-              error.message ||
+            getUserFriendlyErrorMessage(
+              error?.response?.data?.message || error.message,
               "Unable to load appointment details.",
+            ),
           );
         }
       } finally {
@@ -277,7 +311,10 @@ function PaymentPage() {
             return;
           }
 
-          const errorText = error.message || "Unable to load payment status.";
+          const errorText = getUserFriendlyErrorMessage(
+            error.message,
+            "Unable to load payment status.",
+          );
           setErrorMessage(errorText);
           setSuccessMessage("");
           showToast(errorText, "error");
@@ -359,7 +396,10 @@ function PaymentPage() {
       setSuccessMessage("Redirecting to Stripe Checkout...");
       window.location.href = data.url;
     } catch (error) {
-      const errorText = error.message || "Unable to create checkout session.";
+      const errorText = getUserFriendlyErrorMessage(
+        error.message,
+        "Unable to create checkout session.",
+      );
       setErrorMessage(errorText);
       showToast(errorText, "error");
     } finally {
@@ -621,12 +661,6 @@ function PaymentPage() {
                 </div>
               </div>
             </div>
-
-            {errorMessage ? (
-              <div className="mt-5 rounded-2xl border border-error/20 bg-error-container px-4 py-3 text-sm font-medium text-error">
-                {errorMessage}
-              </div>
-            ) : null}
 
             {successMessage ? (
               <div className="mt-5 rounded-2xl border border-secondary/20 bg-secondary-container px-4 py-3 text-sm font-medium text-secondary">

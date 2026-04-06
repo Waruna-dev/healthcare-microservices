@@ -76,6 +76,7 @@ export const createCheckoutSession = async (req, res) => {
   try {
     const orderId = `${req.body.orderId || ""}`.trim();
     const appointmentId = `${req.body.appointmentId || ""}`.trim();
+    const patientId = `${req.body.patientId || req.body.userId || ""}`.trim();
     const customerName = getCustomerName(req.body);
     const customerEmail = getCustomerEmail(req.body);
     const itemName = buildItemName(req.body);
@@ -108,6 +109,10 @@ export const createCheckoutSession = async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      // Restrict checkout to direct card entry so Stripe Link doesn't
+      // reuse a previous browser-saved wallet on shared devices.
+      payment_method_types: ["card"],
+      customer_creation: "always",
       customer_email: customerEmail,
       client_reference_id: orderId,
       billing_address_collection: "auto",
@@ -130,10 +135,18 @@ export const createCheckoutSession = async (req, res) => {
       ],
       metadata: {
         orderId,
+        appointmentId,
+        patientId,
+        customerEmail,
+        customerName,
       },
       payment_intent_data: {
         metadata: {
           orderId,
+          appointmentId,
+          patientId,
+          customerEmail,
+          customerName,
         },
       },
       success_url: `${getClientUrl()}${paymentPagePath}?payment=success&orderId=${orderId}`,

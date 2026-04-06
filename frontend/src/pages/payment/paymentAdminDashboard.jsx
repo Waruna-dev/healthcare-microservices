@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const apiBaseUrl = import.meta.env.VITE_PAYMENT_API_URL ?? "/api/payments";
+const fallbackPaymentApiBases = [
+  apiBaseUrl,
+  "/api/payments",
+  "http://localhost:5040/api/payments",
+  "http://localhost:5004/api/payments",
+];
 
 const statusToneMap = {
   SUCCESS: "success",
@@ -197,6 +203,31 @@ const getResponseErrorMessage = (response, data, fallbackMessage) => {
   return message;
 };
 
+const getUniqueApiBases = (primaryBase) =>
+  [primaryBase, ...fallbackPaymentApiBases].filter(
+    (value, index, collection) => value && collection.indexOf(value) === index,
+  );
+
+const shouldTryNextApiBase = ({ response, data, error }) => {
+  if (error) {
+    return true;
+  }
+
+  if (!response) {
+    return false;
+  }
+
+  if (response.status === 404 || response.status === 503) {
+    return true;
+  }
+
+  const message = `${data?.message || data?.error || ""}`.toLowerCase();
+  return (
+    message.includes("route not found") ||
+    message.includes("error occurred while trying to proxy")
+  );
+};
+
 function DashboardIcon({ name }) {
   const commonProps = {
     viewBox: "0 0 24 24",
@@ -336,9 +367,54 @@ function PaymentDashboard() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [resolvedApiBase, setResolvedApiBase] = useState(apiBaseUrl);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [activeSidebarItem, setActiveSidebarItem] = useState("payments");
+
+  const callPaymentApi = useCallback(async (path, fetchOptions = {}) => {
+    const candidateBases = getUniqueApiBases(resolvedApiBase);
+    let lastFailure = null;
+
+    for (const base of candidateBases) {
+      try {
+        const response = await fetch(`${base}${path}`, fetchOptions);
+        const data = await parseResponseBody(response);
+
+        if (response.ok && data?.success !== false) {
+          if (base !== resolvedApiBase) {
+            setResolvedApiBase(base);
+          }
+
+          return { response, data };
+        }
+
+        lastFailure = { response, data };
+
+        if (!shouldTryNextApiBase({ response, data })) {
+          break;
+        }
+      } catch (error) {
+        lastFailure = { error };
+
+        if (!shouldTryNextApiBase({ error })) {
+          break;
+        }
+      }
+    }
+
+    if (lastFailure?.error) {
+      throw lastFailure.error;
+    }
+
+    throw new Error(
+      getResponseErrorMessage(
+        lastFailure?.response,
+        lastFailure?.data,
+        "Unable to connect to the payment service.",
+      ),
+    );
+  }, [resolvedApiBase]);
 
   const fetchDashboard = useCallback(
     async ({ showLoader } = { showLoader: false }) => {
@@ -351,18 +427,7 @@ function PaymentDashboard() {
       setErrorMessage("");
 
       try {
-        const response = await fetch(`${apiBaseUrl}/admin/dashboard?limit=50`);
-        const data = await parseResponseBody(response);
-
-        if (!response.ok || !data.success) {
-          throw new Error(
-            getResponseErrorMessage(
-              response,
-              data,
-              "Unable to load payment dashboard",
-            ),
-          );
-        }
+        const { data } = await callPaymentApi("/admin/dashboard?limit=50");
 
         setDashboard(data);
       } catch (error) {
@@ -372,7 +437,7 @@ function PaymentDashboard() {
         setIsRefreshing(false);
       }
     },
-    [],
+    [callPaymentApi],
   );
 
   useEffect(() => {
@@ -475,7 +540,7 @@ function PaymentDashboard() {
     setErrorMessage("");
 
     try {
-      const response = await fetch(`${apiBaseUrl}/admin/refund`, {
+      const { data } = await callPaymentApi("/admin/refund", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -486,14 +551,6 @@ function PaymentDashboard() {
           isFullRefund: isFullRefund,
         }),
       });
-
-      const data = await parseResponseBody(response);
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          getResponseErrorMessage(response, data, "Unable to request refund."),
-        );
-      }
 
       closeRefundDialog();
       fetchDashboard({ showLoader: false });
