@@ -35,6 +35,9 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import PaymentPage from "./pages/payment/PaymentPage";
 import PaymentDashboard from "./pages/payment/paymentAdminDashboard";
 
+
+import AppointmentBook from './components/appointment/AppointmentBooking';
+
 function App() {
   return (
     <BrowserRouter>
@@ -58,6 +61,8 @@ function App() {
         <Route path="/login" element={<PatientLogin />} />
         <Route path="/dashboard" element={<PatientDashboard />} />
         <Route path="/profile" element={<PatientProfile />} />
+
+<Route path="/appointments/book/:id" element={<AppointmentBook />} />
 
         {/* Doctor Public Routes */}
         <Route path="/doctor/register" element={<DoctorRegister />} />

@@ -267,6 +267,12 @@ const updateDoctor = async (req, res) => {
             });
         }
 
+        // Handle profileImageUrl to profilePicture mapping
+        if (updates.profileImageUrl) {
+            updates.profilePicture = updates.profileImageUrl;
+            delete updates.profileImageUrl;
+        }
+
         delete updates.password;
         delete updates.createdAt;
         

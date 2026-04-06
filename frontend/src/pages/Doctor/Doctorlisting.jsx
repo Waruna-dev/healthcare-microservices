@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
-const API_BASE = 'http://localhost:5025/api/doctors';
-const AVAILABILITY_API = 'http://localhost:5025/api/doctors/availability';
+const API_BASE = '/api/doctors';
+const AVAILABILITY_API = '/api/doctors/availability';
 
 // Specialty color mapping
 const specialtyColors = {
@@ -20,6 +20,14 @@ const specialtyColors = {
   Surgery: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
   Oncology: { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', dot: 'bg-fuchsia-500' },
   default: { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-500' },
+};
+
+// Function to add cache-busting to image URLs
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return null;
+  // Add timestamp to break cache
+  const separator = imageUrl.includes('?') ? '&' : '?';
+  return `${imageUrl}${separator}t=${Date.now()}`;
 };
 
 const DoctorListing = () => {
@@ -40,72 +48,30 @@ const DoctorListing = () => {
   const fetchDoctors = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}`);
+      // Fetch all doctors
+      const response = await fetch(`${API_BASE}?limit=1000`);
       const data = await response.json();
       
       if (data.success && data.doctors) {
-        // For each doctor, fetch their availability/schedule to get pricing
-        const doctorsWithSchedule = await Promise.all(
-          data.doctors.map(async (doctor) => {
-            try {
-              const scheduleRes = await fetch(`${AVAILABILITY_API}/my?doctorId=${doctor._id}`);
-              const scheduleData = await scheduleRes.json();
-              
-              let schedule = null;
-              if (scheduleData.success && scheduleData.availability) {
-                // Get the first active schedule to display pricing
-                const activeSchedule = scheduleData.availability.find(s => s.isActive === true);
-                if (activeSchedule) {
-                  schedule = {
-                    price: activeSchedule.price,
-                    startTime: activeSchedule.startTime,
-                    endTime: activeSchedule.endTime,
-                    slotDuration: activeSchedule.slotDuration,
-                    availabilityStatus: activeSchedule.availabilityStatus
-                  };
-                }
-              }
-              
-              return {
-                ...doctor,
-                // Map database fields to component fields
-                name: doctor.name,
-                specialty: doctor.specialty,
-                experience: doctor.experience,
-                consultationFee: doctor.consultationFee,
-                gender: doctor.gender,
-                rating: doctor.rating || 0,
-                reviewCount: doctor.totalRatings || 0,
-                isAvailable: doctor.isAvailable,
-                bio: doctor.bio,
-                profileImage: doctor.profilePicture,
-                email: doctor.email,
-                phone: doctor.phone,
-                address: doctor.address,
-                schedule
-              };
-            } catch (error) {
-              console.error(`Error fetching schedule for doctor ${doctor._id}:`, error);
-              return {
-                ...doctor,
-                // Map database fields to component fields
-                name: doctor.name,
-                specialty: doctor.specialty,
-                experience: doctor.experience,
-                consultationFee: doctor.consultationFee,
-                gender: doctor.gender,
-                rating: doctor.rating || 0,
-                reviewCount: doctor.totalRatings || 0,
-                isAvailable: doctor.isAvailable,
-                bio: doctor.bio,
-                profileImage: doctor.profilePicture,
-                email: doctor.email,
-                phone: doctor.phone,
-                address: doctor.address
-              };
-            }
-          })
-        );
+        // Process doctors without individual schedule calls for faster loading
+        const doctorsWithSchedule = data.doctors.map(doctor => ({
+          ...doctor,
+          // Map database fields to component fields
+          name: doctor.name,
+          specialty: doctor.specialty,
+          experience: doctor.experience,
+          consultationFee: doctor.consultationFee,
+          gender: doctor.gender,
+          rating: doctor.rating || 0,
+          reviewCount: doctor.totalRatings || 0,
+          isAvailable: doctor.isAvailable,
+          bio: doctor.bio,
+          profileImage: doctor.profilePicture,
+          email: doctor.email,
+          phone: doctor.phone,
+          address: doctor.address,
+          schedule: null // Skip schedule fetching for faster loading
+        }));
         
         setDoctors(doctorsWithSchedule);
         setError(null); // Clear any previous errors
@@ -259,7 +225,7 @@ const DoctorListing = () => {
                   <div className="flex items-start gap-3 mb-4">
                     <div className="relative flex-shrink-0">
                       <img
-                        src={doctor.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name.replace('Dr. ', ''))}&background=0F6E56&color=fff&size=128`}
+                        src={getImageUrl(doctor.profileImage) || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name.replace('Dr. ', ''))}&background=0F6E56&color=fff&size=128`}
                         alt={doctor.name}
                         className="w-16 h-16 rounded-full object-cover border-3 border-white shadow-md"
                         onError={(e) => {
@@ -310,7 +276,7 @@ const DoctorListing = () => {
                     <div className="text-center border-l border-r border-gray-100">
                       <p className="text-[10px] text-gray-400 uppercase tracking-wider">Fee</p>
                       <p className="text-sm font-semibold text-emerald-600">
-                        LKR{doctor.schedule?.price?.toLocaleString() || doctor.consultationFee?.toLocaleString() || 'N/A'}
+                        LKR{doctor.consultationFee?.toLocaleString() || 'N/A'}
                       </p>
                     </div>
                     <div className="text-center">

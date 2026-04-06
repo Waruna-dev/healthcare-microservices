@@ -1,18 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { resolveDoctorIdForApi } from '../../utils/doctorId';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-
-function hasDoctorId(s) {
-  return typeof s === 'string' && s.trim().length > 0;
-}
-
-function readInitialDoctorId() {
-  try {
-    const saved = localStorage.getItem('scheduleDoctorId');
-    if (saved?.trim()) return saved.trim();
-  } catch {}
-  return '';
-}
 
 /** API date → YYYY-MM-DD (UTC calendar day, matches backend storage) */
 function ymdFromApiDate(iso) {
@@ -34,20 +22,18 @@ function monthRangeYmd(year, monthIndex) {
 const DAYS_HEADER = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function authHeaders() {
-  const token = localStorage.getItem('doctorToken');
+  const token = localStorage.getItem('token');
   const h = { 'Content-Type': 'application/json' };
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
 const DoctorSchedule = () => {
-  const [doctorId, setDoctorId] = useState(() => readInitialDoctorId());
+  const { user } = useAuth();
+  const loggedInDoctorId = user?._id || user?.id || '';
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [monthSlots, setMonthSlots] = useState({});
-  const [loading, setLoading] = useState(() => {
-    const id = readInitialDoctorId();
-    return hasDoctorId(id);
-  });
+  const [loading, setLoading] = useState(true);
   const [calendarRefreshing, setCalendarRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -56,7 +42,7 @@ const DoctorSchedule = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalYmd, setModalYmd] = useState('');
   const [modalForm, setModalForm] = useState({
-    doctorId: '',
+    doctorId: loggedInDoctorId,
     _id: null,
     startTime: '09:00',
     endTime: '17:00',
@@ -66,10 +52,10 @@ const DoctorSchedule = () => {
     consultationFee: ''
   });
 
-  const loadSchedule = useCallback(async (idOverride, opts = {}) => {
+  const loadSchedule = useCallback(async (opts = {}) => {
     const quiet = Boolean(opts.quiet);
-    const id = (typeof idOverride === 'string' ? idOverride : doctorId).trim();
-    if (!hasDoctorId(id)) {
+    const id = loggedInDoctorId.trim();
+    if (!id) {
       setMonthSlots({});
       setLoading(false);
       setCalendarRefreshing(false);
@@ -112,7 +98,7 @@ const DoctorSchedule = () => {
       setLoading(false);
       setCalendarRefreshing(false);
     }
-  }, [doctorId, currentMonth]);
+  }, [loggedInDoctorId, currentMonth]);
 
   useEffect(() => {
     loadSchedule();
@@ -123,7 +109,7 @@ const DoctorSchedule = () => {
     setModalYmd(ymd);
     if (existing) {
       setModalForm({
-        doctorId: '', // Always allow user to enter their own Doctor ID
+        doctorId: loggedInDoctorId,
         _id: existing._id,
         startTime: existing.startTime || '09:00',
         endTime: existing.endTime || '17:00',
@@ -137,7 +123,7 @@ const DoctorSchedule = () => {
       });
     } else {
       setModalForm({
-        doctorId: '',
+        doctorId: loggedInDoctorId,
         _id: null,
         startTime: '09:00',
         endTime: '17:00',
@@ -156,15 +142,13 @@ const DoctorSchedule = () => {
   };
 
   const loadMonthFromModal = async () => {
-    const id = modalForm.doctorId.trim();
-    if (!hasDoctorId(id)) {
-      setMessage({ type: 'error', text: 'Enter a Doctor ID in the form first.' });
+    const id = loggedInDoctorId.trim();
+    if (!id) {
+      setMessage({ type: 'error', text: 'Doctor authentication required.' });
       return;
     }
-    setDoctorId(id);
-    localStorage.setItem('scheduleDoctorId', id);
     try {
-      await loadSchedule(id, { quiet: true });
+      await loadSchedule({ quiet: true });
       setMessage({ type: 'success', text: 'Calendar loaded for this month.' });
     } catch (e) {
       console.error(e);
@@ -173,11 +157,23 @@ const DoctorSchedule = () => {
 
   const saveDay = async (e) => {
     e.preventDefault();
-    const id = modalForm.doctorId.trim();
-    if (!hasDoctorId(id)) {
-      setMessage({ type: 'error', text: 'Enter a Doctor ID in the form.' });
+    const id = loggedInDoctorId.trim();
+    if (!id) {
+      setMessage({ type: 'error', text: 'Doctor authentication required.' });
       return;
     }
+    
+    // Check if the date is past or today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(modalYmd + 'T00:00:00');
+    checkDate.setHours(0, 0, 0, 0);
+    
+    if (checkDate <= today) {
+      setMessage({ type: 'error', text: 'Cannot schedule availability for past dates or today. Only future dates are allowed.' });
+      return;
+    }
+    
     setSaving(true);
     try {
       const body = {
@@ -202,11 +198,9 @@ const DoctorSchedule = () => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setDoctorId(id);
-        localStorage.setItem('scheduleDoctorId', id);
         setMessage({ type: 'success', text: data.message || 'Saved' });
         closeModal();
-        await loadSchedule(id, { quiet: true });
+        await loadSchedule({ quiet: true });
       } else {
         setMessage({ type: 'error', text: data.message || 'Save failed' });
       }
@@ -219,8 +213,8 @@ const DoctorSchedule = () => {
   };
 
   const deleteDaySlot = async () => {
-    const id = modalForm.doctorId.trim();
-    if (!modalForm._id || !hasDoctorId(id)) return;
+    const id = loggedInDoctorId.trim();
+    if (!modalForm._id || !id) return;
     if (!window.confirm('Remove availability for this date?')) return;
     setSaving(true);
     try {
@@ -233,11 +227,9 @@ const DoctorSchedule = () => {
       );
       const data = await res.json();
       if (res.ok && data.success) {
-        setDoctorId(id);
-        localStorage.setItem('scheduleDoctorId', id);
         setMessage({ type: 'success', text: 'Removed' });
         closeModal();
-        await loadSchedule(id, { quiet: true });
+        await loadSchedule({ quiet: true });
       } else {
         setMessage({ type: 'error', text: data.message || 'Delete failed' });
       }
@@ -263,18 +255,30 @@ const DoctorSchedule = () => {
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const out = [];
+    
+    // Get today's date for comparison
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     for (let i = 0; i < firstDay; i++) {
       out.push({ empty: true, key: `e-${i}` });
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const ymd = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const slot = monthSlots[ymd];
+      
+      // Check if this date is in the past or today
+      const checkDate = new Date(year, month, d);
+      checkDate.setHours(0, 0, 0, 0);
+      const isPastOrToday = checkDate <= today;
+      
       out.push({
         empty: false,
         key: `d-${d}`,
         date: d,
         ymd,
-        slot
+        slot,
+        isPastOrToday
       });
     }
     return out;
@@ -305,8 +309,7 @@ const DoctorSchedule = () => {
               <p className="text-indigo-100 text-sm font-medium uppercase tracking-wide">CareSync</p>
               <h1 className="text-3xl sm:text-4xl font-bold mt-1">Schedule by date</h1>
               <p className="text-indigo-100 mt-2 max-w-2xl">
-                Click a date — the form includes <strong>Doctor ID</strong>, times, and fee (Rs.). Doctor ID is saved in
-                this browser after you save or load.
+                Click a date to set your availability. The schedule is automatically associated with your logged-in doctor account.
               </p>
             </div>
             <button
@@ -368,37 +371,69 @@ const DoctorSchedule = () => {
                   <div
                     key={day.key}
                     className={`min-h-[96px] rounded-xl border p-2 flex flex-col text-left transition ${
-                      day.slot
+                      day.isPastOrToday
+                        ? 'border-slate-400 bg-slate-200/70 opacity-75'
+                        : day.slot
                         ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100/80'
                         : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/40'
                     }`}
                   >
                     <button
                       type="button"
-                      onClick={() => openDayModal(day.ymd)}
-                      className="flex-1 flex flex-col text-left"
+                      onClick={() => !day.isPastOrToday && openDayModal(day.ymd)}
+                      disabled={day.isPastOrToday}
+                      className={`flex-1 flex flex-col text-left ${
+                        day.isPastOrToday ? 'cursor-not-allowed' : 'cursor-pointer'
+                      }`}
                     >
-                      <span className="text-sm font-bold text-slate-800">{day.date}</span>
+                      <span className={`text-sm font-bold ${day.isPastOrToday ? 'text-slate-600' : 'text-slate-800'}`}>
+                        {day.date}
+                        {day.isPastOrToday && (
+                          <span className="ml-1 text-xs text-slate-500">
+                            {new Date().getDate() === day.date && 
+                             new Date().getMonth() === currentMonth.getMonth() && 
+                             new Date().getFullYear() === currentMonth.getFullYear() ? '(Today)' : '(Past)'}
+                          </span>
+                        )}
+                      </span>
                       {day.slot ? (
                         <>
-                          <span className="mt-1 text-[11px] font-medium text-emerald-900 leading-tight">
+                          <span className={`mt-1 text-[11px] font-medium leading-tight ${
+                            day.isPastOrToday ? 'text-slate-600' : 'text-emerald-900'
+                          }`}>
                             {day.slot.startTime}–{day.slot.endTime}
                           </span>
                           {day.slot.consultationFee != null && (
-                            <span className="mt-auto text-[10px] text-emerald-800 font-semibold">
+                            <span className={`mt-auto text-[10px] font-semibold ${
+                              day.isPastOrToday ? 'text-slate-600' : 'text-emerald-800'
+                            }`}>
                               Rs. {day.slot.consultationFee}
                             </span>
                           )}
                         </>
                       ) : (
-                        <span className="mt-auto text-[10px] text-slate-400">Tap to add</span>
+                        <span className={`mt-auto text-[10px] ${
+                          day.isPastOrToday ? 'text-slate-500' : 'text-slate-400'
+                        }`}>
+                          {day.isPastOrToday ? 'Past date' : 'Tap to add'}
+                        </span>
                       )}
                     </button>
-                    {day.slot && (
+                    {day.slot && !day.isPastOrToday && (
                       <button
                         type="button"
                         onClick={() => navigate(`/doctor/slots/${day.ymd}`)}
-                        className="mt-2 w-full px-2 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition-colors"
+                        className="mt-2 px-2 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition-colors"
+                      >
+                        📅 View Slots
+                      </button>
+                    )}
+                    {day.slot && day.isPastOrToday && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/doctor/slots/${day.ymd}`)}
+                        className="mt-2 px-2 py-1 bg-slate-500 text-white text-xs font-medium rounded cursor-pointer opacity-75"
+                        title="View past slots (read-only)"
                       >
                         📅 View Slots
                       </button>
@@ -411,8 +446,7 @@ const DoctorSchedule = () => {
         </div>
 
         <p className="mt-6 text-xs text-slate-500 text-center">
-          Enter the doctor identifier in the form when you open a date. Use <strong>Load calendar</strong> there to
-          refresh the month without saving times.
+          Your schedule is automatically associated with your logged-in doctor account. Click any date to add or modify availability.
         </p>
       </div>
 
@@ -445,21 +479,21 @@ const DoctorSchedule = () => {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
-                    value={modalForm.doctorId}
-                    onChange={(e) => setModalForm((p) => ({ ...p, doctorId: e.target.value }))}
-                    placeholder="Doctor ID"
-                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={loggedInDoctorId}
+                    disabled
+                    placeholder="Logged-in Doctor ID"
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-slate-50 text-slate-600"
                     autoComplete="off"
                   />
                   <button
                     type="button"
                     onClick={loadMonthFromModal}
                     disabled={
-                      saving || calendarRefreshing || !hasDoctorId(modalForm.doctorId)
+                      saving || calendarRefreshing
                     }
                     className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm font-semibold hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
-                    {calendarRefreshing ? 'Loading…' : 'Load calendar'}
+                    {calendarRefreshing ? 'Loading…' : 'Refresh calendar'}
                   </button>
                 </div>
               </div>

@@ -57,4 +57,38 @@ api.interceptors.response.use(
   }
 );
 
+
+// Appointment API
+export const appointmentAPI = {
+  getPatientAppointments: async (patientId) => {
+    const response = await api.get(`/appointments/patient/${patientId}`);
+    return response.data;
+  },
+  getDoctorAppointments: async (doctorId) => {
+    const response = await api.get(`/appointments/doctor/${doctorId}`);
+    return response.data;
+  },
+  getAppointmentById: async (appointmentId) => {
+    const response = await api.get(`/appointments/${appointmentId}`);
+    return response.data;
+  },
+  createAppointment: async (appointmentData) => {
+    // Use JSON instead of FormData for simpler handling
+    const response = await api.post('/appointments', appointmentData);
+    return response.data;
+  },
+  updateStatus: async (appointmentId, status, rejectionReason) => {
+    const response = await api.put(`/appointments/${appointmentId}/status`, { status, rejectionReason });
+    return response.data;
+  },
+  processPayment: async (appointmentId, paymentData) => {
+    const response = await api.post(`/appointments/${appointmentId}/payment`, paymentData);
+    return response.data;
+  },
+  cancelAppointment: async (appointmentId, reason) => {
+    const response = await api.put(`/appointments/${appointmentId}/cancel`, { reason });
+    return response.data;
+  }
+};
+
 export default api;
