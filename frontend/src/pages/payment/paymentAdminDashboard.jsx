@@ -356,6 +356,7 @@ function PaymentDashboard() {
     open: false,
     payment: null,
     amount: "",
+    isFullRefund: false,
   });
 
   const refundPayments = recentPayments.filter(
@@ -393,6 +394,23 @@ function PaymentDashboard() {
       open: true,
       payment,
       amount: String(availableAmount),
+      isFullRefund: false,
+    });
+  };
+
+  const handleFullRefund = async (payment) => {
+    if (!payment?.orderId || !isRefundEligible(payment)) {
+      setErrorMessage("This payment cannot be refunded right now.");
+      return;
+    }
+
+    const availableAmount = Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+
+    setRefundModalData({
+      open: true,
+      payment,
+      amount: String(availableAmount),
+      isFullRefund: true,
     });
   };
 
@@ -401,19 +419,21 @@ function PaymentDashboard() {
       open: false,
       payment: null,
       amount: "",
+      isFullRefund: false,
     });
   };
 
   const submitRefund = async () => {
-    const { payment, amount } = refundModalData;
+    const { payment, amount, isFullRefund } = refundModalData;
     if (!payment || !payment.orderId) {
       setErrorMessage("Refund request failed. Please try again.");
       return;
     }
 
-    const refundAmount = Number(amount);
-    const availableAmount =
-      Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+    const refundAmount = isFullRefund
+      ? Number(payment.amount || 0) - Number(payment.refundedAmount || 0)
+      : Number(amount);
+    const availableAmount = Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
 
     if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
       setErrorMessage("Please enter a valid refund amount.");
@@ -437,6 +457,7 @@ function PaymentDashboard() {
         body: JSON.stringify({
           orderId: payment.orderId,
           amount: refundAmount,
+          isFullRefund: isFullRefund,
         }),
       });
 
@@ -761,7 +782,7 @@ function PaymentDashboard() {
                       Confirm refund request
                     </h3>
                     <p className="mt-1 text-sm text-slate-500">
-                      Refund portion of order{' '}
+                      {refundModalData.isFullRefund ? "Full refund" : "Partial refund"} for order{' '}
                       <strong>{refundModalData.payment?.orderId}</strong>.
                     </p>
                   </div>
@@ -783,10 +804,35 @@ function PaymentDashboard() {
                           setRefundModalData((prev) => ({
                             ...prev,
                             amount: event.target.value,
+                            isFullRefund: false,
                           }))
                         }
-                        className="w-full border-none bg-transparent text-lg font-semibold text-slate-900 outline-none"
+                        disabled={refundModalData.isFullRefund}
+                        className="w-full border-none bg-transparent text-lg font-semibold text-slate-900 outline-none disabled:opacity-60"
                       />
+                    </div>
+                    <div className="mt-3 flex items-center">
+                      <input
+                        type="checkbox"
+                        id="fullRefundCheckbox"
+                        checked={refundModalData.isFullRefund}
+                        onChange={(e) => {
+                          const isFullRefund = e.target.checked;
+                          const availableAmount = 
+                            Number(refundModalData.payment?.amount || 0) - 
+                            Number(refundModalData.payment?.refundedAmount || 0);
+                          
+                          setRefundModalData((prev) => ({
+                            ...prev,
+                            isFullRefund,
+                            amount: isFullRefund ? String(availableAmount) : prev.amount
+                          }));
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 text-[#4338ca] focus:ring-[#4338ca]"
+                      />
+                      <label htmlFor="fullRefundCheckbox" className="ml-2 text-sm text-slate-700">
+                        Process full refund
+                      </label>
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
                       Available refundable amount:{' '}
@@ -1044,22 +1090,32 @@ function PaymentDashboard() {
                               </td>
                               <td className="px-5 py-4 align-top">
                                 {activeView === "transactions" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openRefundDialog(payment)}
-                                    disabled={!isRefundEligible(payment) || isProcessingRefund}
-                                    className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] transition ${
-                                      isRefundEligible(payment)
-                                        ? "bg-[#4338ca] text-white hover:bg-[#2f46e8] disabled:bg-slate-200 disabled:text-slate-500"
-                                        : "bg-slate-100 text-slate-500"
-                                    }`}
-                                  >
-                                    {isProcessingRefund && isRefundEligible(payment)
-                                      ? "Processing..."
-                                      : isRefundEligible(payment)
-                                      ? "Partial refund"
-                                      : "Not eligible"}
-                                  </button>
+                                  <div className="space-y-2">
+                                    {isRefundEligible(payment) ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => openRefundDialog(payment)}
+                                          disabled={isProcessingRefund}
+                                          className="inline-flex w-full items-center justify-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] transition bg-[#4338ca] text-white hover:bg-[#2f46e8] disabled:bg-slate-200 disabled:text-slate-500"
+                                        >
+                                          {isProcessingRefund ? "Processing..." : "Partial refund"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleFullRefund(payment)}
+                                          disabled={isProcessingRefund}
+                                          className="inline-flex w-full items-center justify-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] transition bg-rose-600 text-white hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-500"
+                                        >
+                                          {isProcessingRefund ? "Processing..." : "Full refund"}
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                        Not eligible
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="inline-flex rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca]">
                                     {payment.refundStatus === "FULL"

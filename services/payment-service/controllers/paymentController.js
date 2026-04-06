@@ -441,7 +441,7 @@ export const getPaymentByOrderId = async (req, res) => {
 
 export const refundPayment = async (req, res) => {
   try {
-    const { orderId, amount } = req.body;
+    const { orderId, amount, isFullRefund } = req.body;
     const refundAmount = Number.parseFloat(amount);
 
     if (!orderId || !Number.isFinite(refundAmount) || refundAmount <= 0) {
@@ -484,6 +484,9 @@ export const refundPayment = async (req, res) => {
     const refund = await stripe.refunds.create({
       payment_intent: payment.gatewayPaymentIntentId,
       amount: Math.round(refundAmount * 100),
+      metadata: {
+        isFullRefund: isFullRefund ? "true" : "false",
+      },
     });
 
     payment.refundedAmount = Number(payment.refundedAmount || 0) + refundAmount;
