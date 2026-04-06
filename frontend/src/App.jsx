@@ -28,13 +28,16 @@ import SlotDisplay from "./pages/Doctor/SlotDisplay";
 import DoctorListing from "./pages/Doctor/Doctorlisting";
 import ShowDoctorDetails from "./pages/Doctor/Showdoctordetails";
 
+import AllAppointments from "./pages/patient/AllAppointments";
+import DoctorAppointmentDetail from "./pages/Doctor/DoctorAppointmentDetail";
+import DoctorAppointments from "./pages/Doctor/DoctorAppointments";
+
 // --- Admin Pages ---
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 // --- Payment Pages ---
 import PaymentPage from "./pages/payment/PaymentPage";
 import PaymentDashboard from "./pages/payment/paymentAdminDashboard";
-
 
 import AppointmentBook from './components/appointment/AppointmentBooking';
 
@@ -47,10 +50,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-
-          {/* UPDATED: Cleaner route name, ensure your Footer links to "/support" */}
           <Route path="/support" element={<ContactSupport />} />
-
           <Route path="/features" element={<Features />} />
           <Route path="/security" element={<Security />} />
           <Route path="/integration" element={<Integration />} />
@@ -61,8 +61,8 @@ function App() {
         <Route path="/login" element={<PatientLogin />} />
         <Route path="/dashboard" element={<PatientDashboard />} />
         <Route path="/profile" element={<PatientProfile />} />
-
-<Route path="/appointments/book/:id" element={<AppointmentBook />} />
+        <Route path="/appointments/all" element={<AllAppointments />} />
+        <Route path="/appointments/book/:id" element={<AppointmentBook />} />
 
         {/* Doctor Public Routes */}
         <Route path="/doctor/register" element={<DoctorRegister />} />
@@ -73,7 +73,7 @@ function App() {
           element={<DoctorProfileEdit />}
         />
 
-        {/* Doctor Panel with Sidebar */}
+        {/* Doctor Panel with Sidebar - Using Outlet pattern */}
         <Route path="/doctor" element={<DoctorLayout />}>
           <Route index element={<DoctorDashboard />} />
           <Route path="dashboard" element={<DoctorDashboard />} />
@@ -82,7 +82,8 @@ function App() {
           <Route path="schedule" element={<DoctorSchedule />} />
           <Route path="weekly-schedule" element={<WeeklySchedule />} />
           <Route path="slots/:date" element={<SlotDisplay />} />
-          <Route path="appointments" element={<div>Appointments Page</div>} />
+          <Route path="appointments" element={<DoctorAppointments />} />
+          <Route path="appointments/:id" element={<DoctorAppointmentDetail />} />
           <Route path="patients" element={<div>My Patients Page</div>} />
           <Route path="availability" element={<div>Availability Page</div>} />
           <Route path="prescriptions" element={<div>Prescriptions Page</div>} />
