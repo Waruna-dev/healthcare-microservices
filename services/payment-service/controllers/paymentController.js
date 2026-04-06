@@ -75,11 +75,13 @@ const syncPaymentStatusFromSession = async (payment) => {
 export const createCheckoutSession = async (req, res) => {
   try {
     const orderId = `${req.body.orderId || ""}`.trim();
+    const appointmentId = `${req.body.appointmentId || ""}`.trim();
     const customerName = getCustomerName(req.body);
     const customerEmail = getCustomerEmail(req.body);
     const itemName = buildItemName(req.body);
     const amount = toAmount(req.body.amount);
     const currency = `${req.body.currency || "lkr"}`.trim().toLowerCase();
+    const paymentPagePath = appointmentId ? `/payment/${appointmentId}` : "/payment";
 
     const validationMessage = validateCheckoutPayload({
       orderId,
@@ -134,15 +136,15 @@ export const createCheckoutSession = async (req, res) => {
           orderId,
         },
       },
-      success_url: `${getClientUrl()}/payment?payment=success&orderId=${orderId}`,
-      cancel_url: `${getClientUrl()}/payment?payment=cancel&orderId=${orderId}`,
+      success_url: `${getClientUrl()}${paymentPagePath}?payment=success&orderId=${orderId}`,
+      cancel_url: `${getClientUrl()}${paymentPagePath}?payment=cancel&orderId=${orderId}`,
     });
 
     const payment = await Payment.create({
       orderId,
       customerName,
       customerEmail,
-      appointmentId: `${req.body.appointmentId || ""}`.trim(),
+      appointmentId,
       doctorName: `${req.body.doctorName || ""}`.trim(),
       department: `${req.body.department || ""}`.trim(),
       appointmentDate: `${req.body.appointmentDate || ""}`.trim(),

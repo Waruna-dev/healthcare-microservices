@@ -95,6 +95,7 @@ function App() {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         {/*payment Routes  */}
         <Route path="/payment" element={<PaymentPage />} />
+        <Route path="/payment/:appointmentId" element={<PaymentPage />} />
         <Route path="/payment/dashboard" element={<PaymentDashboard />} />
       </Routes>
     </BrowserRouter>
