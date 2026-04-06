@@ -10,6 +10,142 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 
+// Sparkles component for AI icon
+const Sparkles = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+    <path d="M5 3v4M3 5h4"/>
+  </svg>
+);
+
+// Appointment Card Component
+const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => {
+  const navigate = useNavigate();
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-warning-container text-warning';
+      case 'accepted': return 'bg-primary-fixed text-primary';
+      case 'completed': return 'bg-secondary-container text-secondary';
+      case 'rejected': return 'bg-error-container text-error';
+      case 'cancelled': return 'bg-surface-container-low text-on-surface-variant';
+      default: return 'bg-surface-container-low text-on-surface-variant';
+    }
+  };
+
+  const getPaymentStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-warning-container text-warning';
+      case 'completed': return 'bg-secondary-container text-secondary';
+      case 'failed': return 'bg-error-container text-error';
+      default: return 'bg-surface-container-low text-on-surface-variant';
+    }
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const handleViewDetails = () => {
+    navigate(`/appointments/${appointment._id}`, { state: { appointment } });
+  };
+
+  const handleJoinCall = () => {
+    navigate(`/telemedicine/${appointment._id}`);
+  };
+
+  const canJoinCall = appointment.paymentStatus === 'completed' && 
+                      appointment.status === 'accepted' &&
+                      appointment.telemedicineLink;
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300">
+      <div className={`h-1.5 ${
+        appointment.status === 'pending' ? 'bg-warning' :
+        appointment.status === 'accepted' ? 'bg-primary' :
+        appointment.status === 'completed' ? 'bg-secondary' :
+        'bg-outline'
+      }`} />
+      
+      <div className="p-5">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary-fixed rounded-xl">
+              <Stethoscope className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-on-surface">Dr. {appointment.doctorName}</h3>
+              <p className="text-sm text-on-surface-variant">{appointment.doctorSpecialty}</p>
+            </div>
+          </div>
+          
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
+            {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-4">
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <Calendar className="w-4 h-4 text-outline" />
+            <span>{formatDate(appointment.date)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <Clock className="w-4 h-4 text-outline" />
+            <span>{appointment.startTime} - {appointment.endTime}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-t border-outline-variant/30 mb-4">
+          <div>
+            <p className="text-xs text-on-surface-variant">Consultation Fee</p>
+            <p className="font-semibold text-on-surface">LKR {appointment.consultationFee?.toLocaleString() || 0}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-on-surface-variant">Payment Status</p>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getPaymentStatusColor(appointment.paymentStatus)}`}>
+              {appointment.paymentStatus === 'pending' ? 'Payment Pending' : 
+               appointment.paymentStatus === 'completed' ? 'Paid' : 
+               appointment.paymentStatus === 'failed' ? 'Failed' : 'Pending'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleViewDetails}
+            className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low rounded-xl hover:bg-surface-container transition-colors"
+          >
+            View Details
+          </button>
+          
+          {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
+            <button
+              onClick={() => onPaymentComplete?.(appointment)}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary rounded-xl hover:shadow-md transition-all"
+            >
+              Pay Now
+            </button>
+          )}
+          
+          {canJoinCall && (
+            <button
+              onClick={handleJoinCall}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-secondary rounded-xl hover:shadow-md transition-all"
+            >
+              Join Call
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PatientDashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState({ name: 'Patient' });
@@ -127,6 +263,23 @@ const PatientDashboard = () => {
   const latestReport = reports.length > 0 ? reports[reports.length - 1] : null;
   const aiData = latestReport?.aiAnalysis;
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-surface">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  // Get upcoming appointment (first pending or accepted)
+  const upcomingAppointment = appointments.find(
+    apt => apt.status === 'pending' || apt.status === 'accepted'
+  );
+
   return (
     <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
       
@@ -156,10 +309,8 @@ const PatientDashboard = () => {
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
               <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
-              <span className="hover:text-primary cursor-pointer transition-colors">Records</span>
-              <Link to="/doctor/listing" className="hover:text-blue-600 transition-colors">
-                Specialists
-              </Link>
+              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
+              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
             </nav>
           </div>
           
@@ -168,7 +319,6 @@ const PatientDashboard = () => {
               <Bell size={20} />
             </button>
 
-            {/* --- UPDATED: PROFILE DROPDOWN MENU --- */}
             <div className="relative" ref={dropdownRef}>
               <button 
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -222,7 +372,7 @@ const PatientDashboard = () => {
         <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div className="space-y-2">
             <h1 className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface">
-              Welcome Back, <span className="text-primary">{user.name.split(' ')[0]}</span>
+              Welcome Back, <span className="text-primary">{user.name?.split(' ')[0] || 'Patient'}</span>
             </h1>
             <p className="text-on-surface-variant font-medium text-lg">Your digital sanctuary is secure and optimized.</p>
           </div>
@@ -260,7 +410,7 @@ const PatientDashboard = () => {
               ))}
             </div>
 
-            {/* --- PROACTIVE INSIGHTS CARD --- */}
+            {/* AI Analysis Card */}
             <motion.div variants={itemVars} className="bg-primary p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden text-on-primary shadow-elevated">
               <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
               
@@ -304,8 +454,8 @@ const PatientDashboard = () => {
                           <ClipboardList size={20} />
                         </div>
                         <div className="w-full">
-                          <h4 className="font-bold text-lg mb-1">{aiData.summaryTitle}</h4>
-                          <p className="text-white/80 text-sm leading-relaxed">{aiData.summaryDescription}</p>
+                          <h4 className="font-bold text-lg mb-1">{aiData.summaryTitle || 'Health Analysis Complete'}</h4>
+                          <p className="text-white/80 text-sm leading-relaxed">{aiData.summaryDescription || 'Your health metrics have been analyzed successfully.'}</p>
                         </div>
                       </div>
 
@@ -320,7 +470,7 @@ const PatientDashboard = () => {
                             <div className="mb-4 mt-2">
                               <p className="text-white/90 text-sm font-semibold mb-2">Flagged Findings:</p>
                               <ul className="space-y-2 mb-3 bg-black/10 rounded-xl p-4 border border-white/10">
-                                {aiData.abnormalitiesFound.map((metric, i) => (
+                                {aiData.abnormalitiesFound.slice(0, 3).map((metric, i) => (
                                   <li key={i} className="text-white/80 text-sm flex items-start gap-3">
                                     <span className="opacity-50 mt-0.5">•</span>
                                     <span className="leading-snug">{metric}</span>
@@ -328,24 +478,23 @@ const PatientDashboard = () => {
                                 ))}
                               </ul>
                               <p className="text-white/80 text-sm leading-relaxed">
-                                Consider consulting a <strong>{aiData.recommendedSpecialization}</strong> for a detailed review.
+                                Consider consulting a <strong>{aiData.recommendedSpecialization || 'specialist'}</strong> for a detailed review.
                               </p>
                             </div>
                           ) : (
                             <p className="text-white/80 text-sm leading-relaxed mb-3">
-                              No major abnormalities detected. Consider consulting a <strong>{aiData.recommendedSpecialization}</strong> for a standard review.
+                              No major abnormalities detected. Consider consulting a <strong>{aiData.recommendedSpecialization || 'specialist'}</strong> for a standard review.
                             </p>
                           )}
 
-                          <button className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold transition-colors">
-                            Book {aiData.recommendedSpecialization}
-                          </button>
+                          <Link to="/doctor/listing" className="inline-block px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold transition-colors">
+                            Book {aiData.recommendedSpecialization || 'Appointment'}
+                          </Link>
                         </div>
                       </div>
                     </>
                   )}
 
-                  {/* State 3: Analysis Failed */}
                   {!isUploading && aiData?.status === 'failed' && (
                     <div className="flex gap-5 p-5 rounded-2xl bg-error-container/20 backdrop-blur-md border border-error/30 transition-colors">
                       <div className="w-12 h-12 rounded-full bg-error text-white flex items-center justify-center shrink-0">
@@ -360,8 +509,7 @@ const PatientDashboard = () => {
                     </div>
                   )}
 
-                  {/* State 4: Vault is Empty */}
-                  {!isUploading && (!aiData || aiData.status === 'pending') && (
+                  {!isUploading && (!aiData || aiData.status === 'pending') && reports.length === 0 && (
                     <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
                       <div className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center shrink-0">
                         <UploadCloud size={20} />
@@ -375,9 +523,55 @@ const PatientDashboard = () => {
                 </div>
               </div>
             </motion.div>
+
+            {/* APPOINTMENTS SECTION - Only Upcoming */}
+            <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-primary-fixed text-primary rounded-lg"><Calendar size={20} /></div>
+                <h2 className="text-xl font-bold font-headline">Your Appointments</h2>
+                {appointments.length > 1 && (
+                  <Link 
+                    to="/appointments/all" 
+                    className="ml-auto text-sm text-primary hover:text-primary-hover font-medium"
+                  >
+                    View All ({appointments.length})
+                  </Link>
+                )}
+              </div>
+              
+              {loadingAppointments ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : upcomingAppointment ? (
+                <AppointmentCard
+                  appointment={upcomingAppointment}
+                  onStatusUpdate={handleAppointmentUpdate}
+                  onPaymentComplete={handlePaymentComplete}
+                />
+              ) : appointments.length > 0 ? (
+                <div className="text-center py-8">
+                  <Calendar size={48} className="text-outline mx-auto mb-3" />
+                  <p className="text-on-surface-variant">No active appointments</p>
+                  <p className="text-sm text-on-surface-variant/70 mt-1">Your past appointments are in "View All"</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar size={48} className="text-outline mx-auto mb-3" />
+                  <p className="text-on-surface-variant text-sm">No appointments scheduled</p>
+                  <Link 
+                    to="/doctor/listing" 
+                    className="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-colors"
+                  >
+                    Book Your First Appointment
+                  </Link>
+                </div>
+              )}
+            </motion.div>
           </div>
 
           <div className="lg:col-span-4 space-y-8">
+            {/* Records Vault */}
             <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-primary-fixed text-primary rounded-lg"><FileText size={20} /></div>
@@ -400,7 +594,7 @@ const PatientDashboard = () => {
               <div className="space-y-3">
                 <h5 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Recently Processed</h5>
                 {reports.length > 0 ? (
-                  [...reports].reverse().map((file, idx) => (
+                  [...reports].reverse().slice(0, 3).map((file, idx) => (
                     <div key={idx} onClick={() => handleDownload(file)} className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-error-container text-error flex items-center justify-center"><FileText size={16} /></div>
@@ -424,8 +618,9 @@ const PatientDashboard = () => {
               </div>
             </motion.div>
 
+            {/* Access Control */}
             <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
-               <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-secondary-container text-secondary rounded-lg"><ShieldCheck size={20} /></div>
                 <h2 className="text-xl font-bold font-headline">Access Control</h2>
               </div>
