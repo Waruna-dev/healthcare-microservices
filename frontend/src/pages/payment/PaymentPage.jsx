@@ -233,7 +233,7 @@ function PaymentPage() {
         </div>
 
         <section className="grid flex-1 gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/50 bg-primary shadow-elevated">
+          <div className="relative overflow-hidden rounded-4xl border border-white/50 bg-primary shadow-elevated">
             <img
               src={heroImage}
               alt="Healthcare payment experience"
@@ -242,7 +242,7 @@ function PaymentPage() {
             <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(28,17,111,0.92),rgba(53,37,205,0.72),rgba(53,37,205,0.32))]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(111,251,190,0.22),transparent_28%)]" />
 
-            <div className="relative z-10 flex h-full min-h-[320px] flex-col justify-between p-6 text-white sm:p-8 lg:min-h-[640px] lg:p-10">
+            <div className="relative z-10 flex h-full min-h-80 flex-col justify-between p-6 text-white sm:p-8 lg:min-h-160 lg:p-10">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur-md">
                   <ShieldCheck className="h-4 w-4" />
@@ -286,7 +286,7 @@ function PaymentPage() {
             </div>
           </div>
 
-          <div className="glass-card flex flex-col rounded-[2rem] p-5 sm:p-7 lg:p-8">
+          <div className="glass-card flex flex-col rounded-4xl p-5 sm:p-7 lg:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">
@@ -422,7 +422,7 @@ function PaymentPage() {
               type="button"
               onClick={handleCheckout}
               disabled={isSubmitting}
-              className="mt-6 flex w-full items-center justify-center gap-3 rounded-[1.25rem] bg-gradient-to-r from-primary via-primary-container to-primary px-6 py-4 font-headline text-lg font-bold text-white shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-[1.25rem] bg-linear-to-r from-primary via-primary-container to-primary px-6 py-4 font-headline text-lg font-bold text-white shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <span>
                 {isSubmitting

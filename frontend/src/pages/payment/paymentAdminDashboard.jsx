@@ -74,6 +74,17 @@ const formatDateTime = (value) => {
   }).format(new Date(value));
 };
 
+const formatCompactDate = (value) => {
+  if (!value) {
+    return "Not available";
+  }
+
+  return new Intl.DateTimeFormat("en-LK", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+};
+
 const getInitials = (value) => {
   const parts = `${value || ""}`
     .trim()
@@ -90,6 +101,37 @@ const getInitials = (value) => {
 
 const getDisplayValue = (value, fallback = "Not available") =>
   `${value || ""}`.trim() || fallback;
+
+const getPaymentStatusLabel = (payment) => {
+  if (payment.refundStatus === "FULL") {
+    return "Refunded";
+  }
+
+  if (payment.refundStatus === "PARTIAL") {
+    return "Partially refunded";
+  }
+
+  if (payment.status === "SUCCESS") {
+    return "Success";
+  }
+
+  return getDisplayValue(payment.lastWebhookEvent, "Awaiting webhook");
+};
+
+const getPaymentStatusBadge = (payment) => {
+  if (payment.refundStatus === "FULL") {
+    return { label: "Refunded", tone: "pending" };
+  }
+
+  if (payment.refundStatus === "PARTIAL") {
+    return { label: "Partially refunded", tone: "pending" };
+  }
+
+  return {
+    label: payment.status || "PENDING",
+    tone: statusToneMap[payment.status] || "pending",
+  };
+};
 
 const buildSearchablePaymentText = (payment) =>
   [
@@ -398,22 +440,6 @@ function PaymentDashboard() {
     });
   };
 
-  const handleFullRefund = async (payment) => {
-    if (!payment?.orderId || !isRefundEligible(payment)) {
-      setErrorMessage("This payment cannot be refunded right now.");
-      return;
-    }
-
-    const availableAmount = Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
-
-    setRefundModalData({
-      open: true,
-      payment,
-      amount: String(availableAmount),
-      isFullRefund: true,
-    });
-  };
-
   const closeRefundDialog = () => {
     setRefundModalData({
       open: false,
@@ -538,19 +564,254 @@ function PaymentDashboard() {
       ]
     : [];
 
+  const isReportsView = activeSidebarItem === "reports";
+  const totalRefundedAmount = recentPayments.reduce(
+    (total, payment) => total + Number(payment.refundedAmount || 0),
+    0,
+  );
+  const failedAmount = recentPayments
+    .filter((payment) => ["FAILED", "EXPIRED"].includes(payment.status))
+    .reduce((total, payment) => total + Number(payment.amount || 0), 0);
+  const netRevenue = Math.max(
+    0,
+    Number(summary?.totalRevenue || 0) - totalRefundedAmount,
+  );
+
+  const reportMetricCards = summary
+    ? [
+        {
+          label: "Net Revenue",
+          value: formatAmount(netRevenue, "LKR"),
+          note: `${summary.successfulPayments} successful collections after refunds`,
+          badge: "Net",
+          icon: "revenue",
+          tone: "blue",
+        },
+        {
+          label: "Refund Exposure",
+          value: formatAmount(totalRefundedAmount, "LKR"),
+          note: `${refundPayments.length} transactions already refunded`,
+          badge: "Refunds",
+          icon: "pending",
+          tone: "amber",
+        },
+        {
+          label: "Failed Volume",
+          value: formatAmount(failedAmount, "LKR"),
+          note: `${recentPayments.filter((payment) =>
+            ["FAILED", "EXPIRED"].includes(payment.status),
+          ).length} payments failed or expired`,
+          badge: "Risk",
+          icon: "volume",
+          tone: "indigo",
+        },
+        {
+          label: "Active Gateways",
+          value: `${new Set(
+            recentPayments
+              .map((payment) =>
+                getDisplayValue(payment.paymentGateway, "Manual entry"),
+              )
+              .filter(Boolean),
+          ).size}`,
+          note: "Payment channels tracked in this reporting window",
+          badge: "Mix",
+          icon: "success",
+          tone: "green",
+        },
+      ]
+    : [];
+
+  const reportRows = Object.values(
+    recentPayments.reduce((groups, payment) => {
+      const department = getDisplayValue(payment.department, "General");
+      const gateway = getDisplayValue(payment.paymentGateway, "Manual entry");
+      const createdAt = payment.updatedAt || payment.createdAt || null;
+      const amount = Number(payment.amount || 0);
+      const refundedAmount = Number(payment.refundedAmount || 0);
+
+      const currentGroup = groups[department] || {
+        label: department,
+        transactions: 0,
+        successfulTransactions: 0,
+        collectedAmount: 0,
+        pendingAmount: 0,
+        refundedAmount: 0,
+        gatewaySet: new Set(),
+        doctorSet: new Set(),
+        latestActivity: null,
+      };
+
+      currentGroup.transactions += 1;
+      currentGroup.refundedAmount += refundedAmount;
+      currentGroup.gatewaySet.add(gateway);
+
+      if (payment.doctorName) {
+        currentGroup.doctorSet.add(payment.doctorName);
+      }
+
+      if (payment.status === "SUCCESS") {
+        currentGroup.successfulTransactions += 1;
+        currentGroup.collectedAmount += amount;
+      }
+
+      if (payment.status === "PENDING") {
+        currentGroup.pendingAmount += amount;
+      }
+
+      if (
+        createdAt &&
+        (!currentGroup.latestActivity ||
+          new Date(createdAt) > new Date(currentGroup.latestActivity))
+      ) {
+        currentGroup.latestActivity = createdAt;
+      }
+
+      groups[department] = currentGroup;
+
+      return groups;
+    }, {}),
+  )
+    .map((group) => ({
+      ...group,
+      gatewayCount: group.gatewaySet.size,
+      leadDoctor:
+        Array.from(group.doctorSet)[0] || "No doctor assigned yet",
+      successRate: group.transactions
+        ? (group.successfulTransactions / group.transactions) * 100
+        : 0,
+    }))
+    .sort(
+      (firstGroup, secondGroup) =>
+        secondGroup.collectedAmount - firstGroup.collectedAmount ||
+        secondGroup.transactions - firstGroup.transactions,
+    );
+
+  const filteredReportRows = reportRows.filter((group) => {
+    if (!normalizedSearchTerm) {
+      return true;
+    }
+
+    return [
+      group.label,
+      group.leadDoctor,
+      group.latestActivity ? formatCompactDate(group.latestActivity) : "",
+      `${group.gatewayCount} gateways`,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearchTerm);
+  });
+
+  const gatewayReportRows = Object.values(
+    recentPayments.reduce((groups, payment) => {
+      const gateway = getDisplayValue(payment.paymentGateway, "Manual entry");
+      const amount = Number(payment.amount || 0);
+
+      const currentGroup = groups[gateway] || {
+        label: gateway,
+        transactions: 0,
+        successfulTransactions: 0,
+        collectedAmount: 0,
+      };
+
+      currentGroup.transactions += 1;
+
+      if (payment.status === "SUCCESS") {
+        currentGroup.successfulTransactions += 1;
+        currentGroup.collectedAmount += amount;
+      }
+
+      groups[gateway] = currentGroup;
+
+      return groups;
+    }, {}),
+  )
+    .map((group) => ({
+      ...group,
+      successRate: group.transactions
+        ? (group.successfulTransactions / group.transactions) * 100
+        : 0,
+    }))
+    .sort(
+      (firstGroup, secondGroup) =>
+        secondGroup.collectedAmount - firstGroup.collectedAmount ||
+        secondGroup.transactions - firstGroup.transactions,
+    )
+    .slice(0, 4);
+
+  const reportTimeline = (() => {
+    const formatter = new Intl.DateTimeFormat("en-LK", {
+      month: "short",
+      day: "numeric",
+    });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const timelineDays = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(today);
+      day.setDate(today.getDate() - (6 - index));
+
+      return {
+        key: day.toISOString().slice(0, 10),
+        label: formatter.format(day),
+        transactions: 0,
+        revenue: 0,
+      };
+    });
+
+    const dayLookup = Object.fromEntries(
+      timelineDays.map((day) => [day.key, day]),
+    );
+
+    recentPayments.forEach((payment) => {
+      const sourceDate = payment.createdAt || payment.updatedAt;
+
+      if (!sourceDate) {
+        return;
+      }
+
+      const parsedDate = new Date(sourceDate);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return;
+      }
+
+      const key = parsedDate.toISOString().slice(0, 10);
+      const timelineEntry = dayLookup[key];
+
+      if (!timelineEntry) {
+        return;
+      }
+
+      timelineEntry.transactions += 1;
+
+      if (payment.status === "SUCCESS") {
+        timelineEntry.revenue += Number(payment.amount || 0);
+      }
+    });
+
+    return timelineDays;
+  })();
+
+  const reportTimelineMaxRevenue = reportTimeline.reduce(
+    (maxRevenue, day) => Math.max(maxRevenue, day.revenue),
+    0,
+  );
+
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[#f6f7ff] px-3 py-3 text-slate-900 sm:px-4 lg:px-5">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(70,59,220,0.12)_0%,rgba(255,255,255,0)_38%,rgba(104,240,191,0.12)_100%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-60 [background:repeating-linear-gradient(90deg,rgba(255,255,255,0)_0px,rgba(255,255,255,0)_78px,rgba(196,211,255,0.28)_118px,rgba(255,255,255,0)_160px)]" />
-      <div className="pointer-events-none absolute -left-24 top-[-8rem] h-80 w-80 rounded-full bg-[#6b5cff]/18 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-[-6rem] right-[-4rem] h-96 w-96 rounded-full bg-[#6cf8bb]/16 blur-3xl" />
+      <div className="pointer-events-none absolute -left-24 -top-32 h-80 w-80 rounded-full bg-[#6b5cff]/18 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-16 h-96 w-96 rounded-full bg-[#6cf8bb]/16 blur-3xl" />
 
-      <div className="relative z-10 mx-auto flex max-w-[1700px] flex-col gap-4 xl:flex-row">
-        <aside className="flex w-full flex-col xl:sticky xl:top-3 xl:min-h-[calc(100vh+7rem)] xl:max-w-[305px]">
+      <div className="relative z-10 mx-auto flex max-w-425 flex-col gap-4 xl:flex-row">
+        <aside className="flex w-full flex-col xl:sticky xl:top-3 xl:min-h-[calc(100vh+7rem)] xl:max-w-76.25">
           <section className="flex h-full min-h-[calc(100vh+7rem)] flex-col rounded-[1.7rem] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.78),rgba(240,244,255,0.78))] p-4 text-slate-800 shadow-[0_20px_60px_rgba(148,163,184,0.14)] backdrop-blur-xl">
             <div className="rounded-[1.45rem] border border-white/80 bg-white/70 p-4 shadow-[0_12px_32px_rgba(103,94,182,0.08)]">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#4f46e5] to-[#6b5cff] text-white shadow-[0_14px_28px_rgba(67,56,202,0.26)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-[#4338ca] via-[#4f46e5] to-[#6b5cff] text-white shadow-[0_14px_28px_rgba(67,56,202,0.26)]">
                   <div className="h-5 w-5">
                     <DashboardIcon name="brand" />
                   </div>
@@ -592,7 +853,7 @@ function PaymentDashboard() {
                     key={item.id}
                     className={`flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? "bg-gradient-to-r from-[#4338ca] to-[#5b50f6] text-white shadow-[0_14px_28px_rgba(67,56,202,0.25)]"
+                        ? "bg-linear-to-r from-[#4338ca] to-[#5b50f6] text-white shadow-[0_14px_28px_rgba(67,56,202,0.25)]"
                         : "bg-white/60 text-slate-700 hover:bg-white hover:text-slate-950"
                     }`}
                     type="button"
@@ -631,7 +892,7 @@ function PaymentDashboard() {
                   </span>
                 </div>
 
-                <div className="mt-4 flex min-h-[440px] flex-col rounded-[1.25rem] bg-white/80 px-3.5 py-4 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.75)]">
+                <div className="mt-4 flex min-h-110 flex-col rounded-[1.25rem] bg-white/80 px-3.5 py-4 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.75)]">
                   <div className="flex justify-center">
                     <div
                       className="flex h-28 w-28 items-center justify-center rounded-full p-2"
@@ -719,7 +980,11 @@ function PaymentDashboard() {
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search transactions, customers..."
+                placeholder={
+                  isReportsView
+                    ? "Search reports, departments, doctors..."
+                    : "Search transactions, customers..."
+                }
                 className="w-full border-none bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
               />
             </label>
@@ -738,7 +1003,7 @@ function PaymentDashboard() {
               </button>
 
               <Link
-                className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-[#4338ca] to-[#5b50f6] px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_30px_rgba(67,56,202,0.24)] transition hover:brightness-105"
+                className="inline-flex items-center justify-center rounded-2xl bg-linear-to-r from-[#4338ca] to-[#5b50f6] px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_30px_rgba(67,56,202,0.24)] transition hover:brightness-105"
                 to="/payment"
               >
                 Open Payment Page
@@ -756,7 +1021,7 @@ function PaymentDashboard() {
               </button>
 
               <div
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ecebff] to-white text-sm font-bold text-[#4338ca] shadow-lg"
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-[#ecebff] to-white text-sm font-bold text-[#4338ca] shadow-lg"
                 aria-label="Payment dashboard user"
               >
                 PD
@@ -869,7 +1134,7 @@ function PaymentDashboard() {
           )}
 
           {isLoading ? (
-            <section className="mt-6 flex min-h-[320px] items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 text-center">
+            <section className="mt-6 flex min-h-80 items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 text-center">
               <div>
                 <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-sky-500" />
                 <p className="mt-4 text-sm font-medium text-slate-600">
@@ -879,7 +1144,336 @@ function PaymentDashboard() {
             </section>
           ) : null}
 
-          {!isLoading && summary ? (
+          {!isLoading && summary && isReportsView ? (
+            <>
+              <section className="mt-5 rounded-[1.55rem] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(245,247,255,0.88))] p-4 shadow-[0_14px_34px_rgba(103,94,182,0.08)] sm:p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <span className="inline-flex rounded-full bg-[#eef0ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#4338ca] ring-1 ring-inset ring-[#ddd8ff]">
+                      Reporting centre
+                    </span>
+                    <h2 className="mt-4 font-headline text-2xl font-bold text-slate-950">
+                      Payment performance reports
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm text-slate-500">
+                      Review revenue quality, refund exposure, and service-line
+                      performance from the latest payment activity tracked by
+                      the dashboard.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[1.3rem] border border-[#e4e8ff] bg-white px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Reporting window
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-slate-900">
+                        Last 7 captured days
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Based on recent dashboard transactions and settlement
+                        updates.
+                      </p>
+                    </div>
+                    <div className="rounded-[1.3rem] border border-[#e4e8ff] bg-[#f7f8ff] px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Search scope
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-slate-900">
+                        {filteredReportRows.length} service lines
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {normalizedSearchTerm
+                          ? `Filtered by "${searchTerm.trim()}".`
+                          : "Use the top search bar to filter departments or doctors."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {reportMetricCards.map((card) => {
+                    const toneClasses =
+                      metricToneMap[card.tone] || metricToneMap.blue;
+
+                    return (
+                      <article
+                        className="rounded-[1.45rem] border border-white/90 bg-white/92 p-4 shadow-[0_12px_28px_rgba(103,94,182,0.08)]"
+                        key={card.label}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span
+                            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClasses.icon}`}
+                          >
+                            <span className="h-5 w-5">
+                              <DashboardIcon name={card.icon} />
+                            </span>
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${toneClasses.badge}`}
+                          >
+                            {card.badge}
+                          </span>
+                        </div>
+
+                        <div className="mt-4">
+                          <p className="text-sm font-medium text-slate-500">
+                            {card.label}
+                          </p>
+                          <strong className="mt-2 block font-headline text-[1.5rem] font-bold text-slate-950">
+                            {card.value}
+                          </strong>
+                          <span className="mt-2 block text-sm text-slate-500">
+                            {card.note}
+                          </span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="mt-5 grid gap-5 xl:grid-cols-[1.25fr,0.95fr]">
+                <article className="rounded-[1.55rem] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(245,247,255,0.84))] p-4 shadow-[0_14px_34px_rgba(103,94,182,0.08)] sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-headline text-xl font-bold text-slate-950">
+                        Seven-day settlement trend
+                      </h3>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Successful payment totals compared across the latest
+                        seven captured dates.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-[#eef0ff] px-4 py-3 text-right">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#4338ca]">
+                        Peak day
+                      </p>
+                      <strong className="mt-1 block text-lg font-bold text-slate-950">
+                        {formatAmount(reportTimelineMaxRevenue, "LKR")}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+                    {reportTimeline.map((day) => {
+                      const heightPercentage = reportTimelineMaxRevenue
+                        ? Math.max(
+                            12,
+                            (day.revenue / reportTimelineMaxRevenue) * 100,
+                          )
+                        : 8;
+
+                      return (
+                        <div
+                          key={day.key}
+                          className="rounded-[1.35rem] border border-[#e6e9f8] bg-white px-3 py-4 shadow-sm"
+                        >
+                          <div className="flex h-36 items-end rounded-[1rem] bg-[#f7f8ff] px-2 py-3">
+                            <div
+                              className="w-full rounded-full bg-linear-to-t from-[#4338ca] via-[#5b50f6] to-[#7c73ff]"
+                              style={{ height: `${heightPercentage}%` }}
+                            />
+                          </div>
+                          <p className="mt-3 text-sm font-semibold text-slate-900">
+                            {day.label}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {day.transactions} transactions
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-[#4338ca]">
+                            {formatAmount(day.revenue, "LKR")}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+
+                <article className="rounded-[1.55rem] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(245,247,255,0.84))] p-4 shadow-[0_14px_34px_rgba(103,94,182,0.08)] sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-headline text-xl font-bold text-slate-950">
+                        Gateway mix
+                      </h3>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Top payment channels ranked by successful collections.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-[#f4fffb] px-4 py-3 text-right">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0f8a60]">
+                        Channels
+                      </p>
+                      <strong className="mt-1 block text-lg font-bold text-slate-950">
+                        {gatewayReportRows.length}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-3">
+                    {gatewayReportRows.map((gateway) => (
+                      <div
+                        className="rounded-[1.25rem] border border-[#e6e9f8] bg-white px-4 py-4 shadow-sm"
+                        key={gateway.label}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-base font-semibold text-slate-900">
+                              {gateway.label}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {gateway.transactions} transactions processed
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-[#eef0ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca]">
+                            {gateway.successRate.toFixed(1)}% success
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <p className="text-sm text-slate-500">
+                            Successful collections
+                          </p>
+                          <strong className="text-sm font-semibold text-slate-900">
+                            {formatAmount(gateway.collectedAmount, "LKR")}
+                          </strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </section>
+
+              <section className="mt-5 rounded-[1.55rem] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(245,247,255,0.84))] p-4 shadow-[0_14px_34px_rgba(103,94,182,0.08)] sm:p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <h3 className="font-headline text-2xl font-bold text-slate-950">
+                      Service-line performance
+                    </h3>
+                    <p className="mt-2 max-w-2xl text-sm text-slate-500">
+                      Department-level report summary for collections, refunds,
+                      and open payment exposure.
+                    </p>
+                  </div>
+
+                  <div className="inline-flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-500">
+                    <strong className="font-headline text-xl font-bold text-slate-950">
+                      {filteredReportRows.length}
+                    </strong>
+                    <span>report rows</span>
+                  </div>
+                </div>
+
+                {filteredReportRows.length ? (
+                  <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-[#e5e8fb] bg-white">
+                    <div className="max-h-190 overflow-auto">
+                      <table className="min-w-full divide-y divide-slate-200 text-sm">
+                        <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                          <tr>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Service line
+                            </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Transactions
+                            </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Collected
+                            </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Refunded
+                            </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Pending
+                            </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Success
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {filteredReportRows.map((group) => (
+                            <tr
+                              key={group.label}
+                              className="transition hover:bg-[#f4f2ff]/80"
+                            >
+                              <td className="px-5 py-4 align-top">
+                                <strong className="block font-semibold text-slate-900">
+                                  {group.label}
+                                </strong>
+                                <span className="mt-1 block text-slate-500">
+                                  {group.leadDoctor}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <strong className="block font-semibold text-slate-900">
+                                  {group.transactions}
+                                </strong>
+                                <span className="mt-1 block text-slate-500">
+                                  {group.gatewayCount} gateways
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <strong className="block font-semibold text-slate-900">
+                                  {formatAmount(group.collectedAmount, "LKR")}
+                                </strong>
+                                <span className="mt-1 block text-slate-500">
+                                  Net after refunds:{" "}
+                                  {formatAmount(
+                                    Math.max(
+                                      0,
+                                      group.collectedAmount -
+                                        group.refundedAmount,
+                                    ),
+                                    "LKR",
+                                  )}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <strong className="block font-semibold text-slate-900">
+                                  {formatAmount(group.refundedAmount, "LKR")}
+                                </strong>
+                                <span className="mt-1 block text-slate-500">
+                                  Reversed value
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <strong className="block font-semibold text-slate-900">
+                                  {formatAmount(group.pendingAmount, "LKR")}
+                                </strong>
+                                <span className="mt-1 block text-slate-500">
+                                  Awaiting settlement
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <span className="inline-flex rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca] ring-1 ring-inset ring-[#d9d5ff]">
+                                  {group.successRate.toFixed(1)}%
+                                </span>
+                                <span className="mt-2 block text-slate-500">
+                                  Updated {formatCompactDate(group.latestActivity)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 rounded-[1.5rem] border border-dashed border-[#dcdffc] bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(241,244,255,0.9))] px-6 py-12 text-center">
+                    <h3 className="font-headline text-xl font-semibold text-slate-900">
+                      No report rows match your search
+                    </h3>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Try another department, gateway, or doctor name in the
+                      search bar.
+                    </p>
+                  </div>
+                )}
+              </section>
+            </>
+          ) : null}
+
+          {!isLoading && summary && !isReportsView ? (
             <>
               <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {metricCards.map((card) => {
@@ -936,7 +1530,7 @@ function PaymentDashboard() {
                   </div>
 
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between xl:justify-end">
-                    <label className="flex min-w-[240px] items-center gap-3 rounded-2xl border border-[#dfe4ff] bg-white px-4 py-2.5 shadow-sm lg:min-w-[290px]">
+                    <label className="flex min-w-60 items-center gap-3 rounded-2xl border border-[#dfe4ff] bg-white px-4 py-2.5 shadow-sm lg:min-w-72.5">
                       <span className="h-4.5 w-4.5 text-[#4338ca]">
                         <DashboardIcon name="search" />
                       </span>
@@ -989,7 +1583,7 @@ function PaymentDashboard() {
                   ? filteredPayments.length
                   : filteredRefundPayments.length) ? (
                   <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-[#e5e8fb] bg-white">
-                    <div className="max-h-[760px] overflow-auto">
+                    <div className="max-h-190 overflow-auto">
                       <table className="min-w-full divide-y divide-slate-200 text-sm">
                         <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
                           <tr>
@@ -1022,8 +1616,8 @@ function PaymentDashboard() {
                               className="transition hover:bg-[#f4f2ff]/80"
                             >
                               <td className="px-5 py-4 align-top">
-                                <div className="flex min-w-[220px] items-center gap-3">
-                                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4338ca] to-[#5b50f6] text-sm font-bold text-white shadow-sm">
+                                <div className="flex min-w-55 items-center gap-3">
+                                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-[#4338ca] to-[#5b50f6] text-sm font-bold text-white shadow-sm">
                                     {getInitials(payment.customerName)}
                                   </span>
                                   <div className="min-w-0">
@@ -1048,20 +1642,21 @@ function PaymentDashboard() {
                                 </span>
                               </td>
                               <td className="px-5 py-4 align-top">
-                                <span
-                                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
-                                    paymentStatusPillMap[
-                                      statusToneMap[payment.status] || "pending"
-                                    ]
-                                  }`}
-                                >
-                                  {payment.status}
-                                </span>
+                                {(() => {
+                                  const statusBadge = getPaymentStatusBadge(payment);
+
+                                  return (
+                                    <span
+                                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
+                                        paymentStatusPillMap[statusBadge.tone]
+                                      }`}
+                                    >
+                                      {statusBadge.label}
+                                    </span>
+                                  );
+                                })()}
                                 <span className="mt-2 block text-slate-500">
-                                  {getDisplayValue(
-                                    payment.lastWebhookEvent,
-                                    "Awaiting webhook",
-                                  )}
+                                  {getPaymentStatusLabel(payment)}
                                 </span>
                               </td>
                               <td className="px-5 py-4 align-top">
@@ -1101,15 +1696,13 @@ function PaymentDashboard() {
                                         >
                                           {isProcessingRefund ? "Processing..." : "Partial refund"}
                                         </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleFullRefund(payment)}
-                                          disabled={isProcessingRefund}
-                                          className="inline-flex w-full items-center justify-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] transition bg-rose-600 text-white hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-500"
-                                        >
-                                          {isProcessingRefund ? "Processing..." : "Full refund"}
-                                        </button>
                                       </>
+                                    ) : payment.refundStatus !== "NONE" ? (
+                                      <span className="inline-flex rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca] ring-1 ring-inset ring-[#d9d5ff]">
+                                        {payment.refundStatus === "FULL"
+                                          ? "Fully refunded"
+                                          : "Partially refunded"}
+                                      </span>
                                     ) : (
                                       <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                                         Not eligible
@@ -1117,7 +1710,7 @@ function PaymentDashboard() {
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="inline-flex rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca]">
+                                  <span className="inline-flex rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4338ca] ring-1 ring-inset ring-[#d9d5ff]">
                                     {payment.refundStatus === "FULL"
                                       ? "Fully refunded"
                                       : payment.refundStatus === "PARTIAL"
