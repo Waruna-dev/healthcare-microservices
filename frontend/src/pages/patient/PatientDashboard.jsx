@@ -6,19 +6,158 @@ import {
   Heart, Activity, Moon, Footprints, 
   BrainCircuit, FileText, UploadCloud, ShieldCheck, 
   Bell, Settings, LogOut, ChevronRight, AlertTriangle, CheckCircle2,
-  ClipboardList, Stethoscope, User
+  ClipboardList, Stethoscope, User, Calendar, X, Clock
 } from 'lucide-react';
 import api from '../../services/api';
 
+// Sparkles component for AI icon
+const Sparkles = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+    <path d="M5 3v4M3 5h4"/>
+  </svg>
+);
+
+// Appointment Card Component
+const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => {
+  const navigate = useNavigate();
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-warning-container text-warning';
+      case 'accepted': return 'bg-primary-fixed text-primary';
+      case 'completed': return 'bg-secondary-container text-secondary';
+      case 'rejected': return 'bg-error-container text-error';
+      case 'cancelled': return 'bg-surface-container-low text-on-surface-variant';
+      default: return 'bg-surface-container-low text-on-surface-variant';
+    }
+  };
+
+  const getPaymentStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-warning-container text-warning';
+      case 'completed': return 'bg-secondary-container text-secondary';
+      case 'failed': return 'bg-error-container text-error';
+      default: return 'bg-surface-container-low text-on-surface-variant';
+    }
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const handleViewDetails = () => {
+    navigate(`/appointments/${appointment._id}`, { state: { appointment } });
+  };
+
+  const handleJoinCall = () => {
+    navigate(`/telemedicine/${appointment._id}`);
+  };
+
+  const canJoinCall = appointment.paymentStatus === 'completed' && 
+                      appointment.status === 'accepted' &&
+                      appointment.telemedicineLink;
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300 h-full flex flex-col">
+      <div className={`h-1.5 ${
+        appointment.status === 'pending' ? 'bg-warning' :
+        appointment.status === 'accepted' ? 'bg-primary' :
+        appointment.status === 'completed' ? 'bg-secondary' :
+        'bg-outline'
+      }`} />
+      
+      <div className="p-5 flex flex-col flex-grow">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary-fixed rounded-xl">
+              <Stethoscope className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-on-surface">Dr. {appointment.doctorName}</h3>
+              <p className="text-sm text-on-surface-variant">{appointment.doctorSpecialty}</p>
+            </div>
+          </div>
+          
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
+            {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-4">
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <Calendar className="w-4 h-4 text-outline" />
+            <span>{formatDate(appointment.date)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <Clock className="w-4 h-4 text-outline" />
+            <span>{appointment.startTime} - {appointment.endTime}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-t border-outline-variant/30 mb-4">
+          <div>
+            <p className="text-xs text-on-surface-variant">Consultation Fee</p>
+            <p className="font-semibold text-on-surface">LKR {appointment.consultationFee?.toLocaleString() || 0}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-on-surface-variant">Payment Status</p>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getPaymentStatusColor(appointment.paymentStatus)}`}>
+              {appointment.paymentStatus === 'pending' ? 'Payment Pending' : 
+               appointment.paymentStatus === 'completed' ? 'Paid' : 
+               appointment.paymentStatus === 'failed' ? 'Failed' : 'Pending'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-auto">
+          <button
+            onClick={handleViewDetails}
+            className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low rounded-xl hover:bg-surface-container transition-colors"
+          >
+            View Details
+          </button>
+          
+          {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
+            <button
+              onClick={() => onPaymentComplete?.(appointment)}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary rounded-xl hover:shadow-md transition-all"
+            >
+              Pay Now
+            </button>
+          )}
+          
+          {canJoinCall && (
+            <button
+              onClick={handleJoinCall}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-secondary rounded-xl hover:shadow-md transition-all"
+            >
+              Join Call
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PatientDashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState({ name: 'Patient' });
+  const [user, setUser] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   
   const [isUploading, setIsUploading] = useState(false);
   const [reports, setReports] = useState([]);
   const fileInputRef = useRef(null);
   
-  // --- NEW: Dropdown State & Ref ---
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -29,20 +168,96 @@ const PatientDashboard = () => {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
   };
 
-  useEffect(() => {
+  // Get patient info from localStorage
+  const getPatientInfo = () => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      const parsedUser = JSON.parse(storedUser).patient || JSON.parse(storedUser);
-      setUser(parsedUser);
-      if (parsedUser.uploadedReports) {
-        setReports(parsedUser.uploadedReports);
+      try {
+        const userData = JSON.parse(storedUser);
+        const patient = userData.patient || userData;
+        return {
+          patientId: patient._id || patient.id,
+          patientName: patient.name || 'Patient',
+          patientEmail: patient.email || 'patient@example.com'
+        };
+      } catch (e) {
+        console.error('Error parsing user:', e);
       }
-    } else {
-      navigate('/login');
     }
+    return {
+      patientId: null,
+      patientName: 'Patient',
+      patientEmail: 'patient@example.com'
+    };
+  };
+
+  // Fetch appointments from backend
+  const fetchAppointments = async () => {
+    const patientInfo = getPatientInfo();
+    if (!patientInfo.patientId) {
+      const savedAppointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+      setAppointments(savedAppointments);
+      return;
+    }
+    
+    try {
+      setLoadingAppointments(true);
+      const token = localStorage.getItem('token');
+      console.log('🔍 Fetching appointments for patient:', patientInfo.patientId);
+      
+      const response = await fetch(`http://localhost:5015/api/appointments/patient/${patientInfo.patientId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      console.log('📊 Appointments response:', data);
+      
+      if (data.success) {
+        setAppointments(data.appointments || []);
+        localStorage.setItem('appointments', JSON.stringify(data.appointments || []));
+      } else {
+        const savedAppointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+        setAppointments(savedAppointments);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      const savedAppointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+      setAppointments(savedAppointments);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          const patient = parsedUser.patient || parsedUser;
+          setUser(patient);
+          if (patient.uploadedReports) {
+            setReports(patient.uploadedReports);
+          }
+        } else {
+          navigate('/login');
+          return;
+        }
+        
+        await fetchAppointments();
+      } catch (error) {
+        console.error('Initialization error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    init();
   }, [navigate]);
 
-  // --- NEW: Close dropdown when clicking outside ---
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -53,9 +268,27 @@ const PatientDashboard = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleAppointmentUpdate = (updatedAppointment) => {
+    setAppointments(prevAppointments => 
+      prevAppointments.map(a => 
+        a._id === updatedAppointment._id ? updatedAppointment : a
+      )
+    );
+    const updatedAppointments = appointments.map(a => 
+      a._id === updatedAppointment._id ? updatedAppointment : a
+    );
+    localStorage.setItem('appointments', JSON.stringify(updatedAppointments));
+    showToast(`Appointment ${updatedAppointment.status} successfully!`, 'success');
+  };
+
+  const handlePaymentComplete = (appointment) => {
+    navigate(`/payment/${appointment._id}`, { state: { appointment } });
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('appointments');
     navigate('/login');
   };
 
@@ -69,7 +302,7 @@ const PatientDashboard = () => {
     }
 
     const formData = new FormData();
-    formData.append('reportFile', file); 
+    formData.append('reportFile', file);
 
     setIsUploading(true);
     try {
@@ -77,7 +310,7 @@ const PatientDashboard = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       
-      setReports(response.data.reports); 
+      setReports(response.data.reports);
       
       const storedUserString = localStorage.getItem('user');
       if (storedUserString) {
@@ -90,7 +323,7 @@ const PatientDashboard = () => {
         localStorage.setItem('user', JSON.stringify(storedUser));
       }
 
-      setTimeout(() => showToast("Report uploaded and AI analysis complete!", "success"), 500);
+      showToast("Report uploaded and AI analysis complete!", "success");
       
     } catch (error) {
       console.error("Upload failed:", error);
@@ -104,7 +337,9 @@ const PatientDashboard = () => {
   const handleDownload = async (file) => {
     if (!file) return;
     try {
-      const actualFilename = file.filePath.split(/[\\/]/).pop();
+      const actualFilename = file.filePath?.split(/[\\/]/).pop();
+      if (!actualFilename) return;
+      
       const response = await api.get(`/patients/reports/${actualFilename}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -123,9 +358,28 @@ const PatientDashboard = () => {
   const containerVars = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVars = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 50 } } };
 
-  // Grab the latest AI analysis data
-  const latestReport = reports.length > 0 ? reports[reports.length - 1] : null;
+  const latestReport = reports?.length > 0 ? reports[reports.length - 1] : null;
   const aiData = latestReport?.aiAnalysis;
+
+  // Get upcoming appointment (first pending or accepted)
+  const upcomingAppointment = appointments.find(
+    apt => apt.status === 'pending' || apt.status === 'accepted'
+  );
+
+  // Get all appointments for the "All Appointments" section (excluding the upcoming one if it exists)
+  const otherAppointments = appointments.filter(apt => apt._id !== upcomingAppointment?._id);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-surface">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
@@ -144,6 +398,9 @@ const PatientDashboard = () => {
           >
             {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
             {toast.message}
+            <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-70">
+              <X size={16} />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -156,8 +413,8 @@ const PatientDashboard = () => {
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
               <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
-              <span className="hover:text-primary cursor-pointer transition-colors">Records</span>
-              <span className="hover:text-primary cursor-pointer transition-colors">Specialists</span>
+              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
+              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
             </nav>
           </div>
           
@@ -166,7 +423,6 @@ const PatientDashboard = () => {
               <Bell size={20} />
             </button>
 
-            {/* --- UPDATED: PROFILE DROPDOWN MENU --- */}
             <div className="relative" ref={dropdownRef}>
               <button 
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -211,7 +467,6 @@ const PatientDashboard = () => {
                 )}
               </AnimatePresence>
             </div>
-            
           </div>
         </div>
       </header>
@@ -220,7 +475,7 @@ const PatientDashboard = () => {
         <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div className="space-y-2">
             <h1 className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface">
-              Welcome Back, <span className="text-primary">{user.name.split(' ')[0]}</span>
+              Welcome Back, <span className="text-primary">{user.name?.split(' ')[0] || 'Patient'}</span>
             </h1>
             <p className="text-on-surface-variant font-medium text-lg">Your digital sanctuary is secure and optimized.</p>
           </div>
@@ -258,12 +513,12 @@ const PatientDashboard = () => {
               ))}
             </div>
 
-            {/* --- PROACTIVE INSIGHTS CARD --- */}
+            {/* AI Analysis Card */}
             <motion.div variants={itemVars} className="bg-primary p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden text-on-primary shadow-elevated">
               <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
               
               <div className="relative z-10">
-                <div className="flex justify-between items-start mb-10">
+                <div className="flex justify-between items-start mb-10 flex-wrap gap-4">
                   <div>
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold tracking-widest uppercase mb-4">
                       <Sparkles size={14} /> AI Analysis Engine
@@ -281,7 +536,6 @@ const PatientDashboard = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {/* State 1: Uploading & Analyzing */}
                   {isUploading && (
                     <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 animate-pulse">
                       <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -294,7 +548,6 @@ const PatientDashboard = () => {
                     </div>
                   )}
 
-                  {/* State 2: Analysis Completed Successfully */}
                   {!isUploading && aiData?.status === 'completed' && (
                     <>
                       <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
@@ -302,8 +555,8 @@ const PatientDashboard = () => {
                           <ClipboardList size={20} />
                         </div>
                         <div className="w-full">
-                          <h4 className="font-bold text-lg mb-1">{aiData.summaryTitle}</h4>
-                          <p className="text-white/80 text-sm leading-relaxed">{aiData.summaryDescription}</p>
+                          <h4 className="font-bold text-lg mb-1">{aiData.summaryTitle || 'Health Analysis Complete'}</h4>
+                          <p className="text-white/80 text-sm leading-relaxed">{aiData.summaryDescription || 'Your health metrics have been analyzed successfully.'}</p>
                         </div>
                       </div>
 
@@ -318,7 +571,7 @@ const PatientDashboard = () => {
                             <div className="mb-4 mt-2">
                               <p className="text-white/90 text-sm font-semibold mb-2">Flagged Findings:</p>
                               <ul className="space-y-2 mb-3 bg-black/10 rounded-xl p-4 border border-white/10">
-                                {aiData.abnormalitiesFound.map((metric, i) => (
+                                {aiData.abnormalitiesFound.slice(0, 3).map((metric, i) => (
                                   <li key={i} className="text-white/80 text-sm flex items-start gap-3">
                                     <span className="opacity-50 mt-0.5">•</span>
                                     <span className="leading-snug">{metric}</span>
@@ -326,24 +579,23 @@ const PatientDashboard = () => {
                                 ))}
                               </ul>
                               <p className="text-white/80 text-sm leading-relaxed">
-                                Consider consulting a <strong>{aiData.recommendedSpecialization}</strong> for a detailed review.
+                                Consider consulting a <strong>{aiData.recommendedSpecialization || 'specialist'}</strong> for a detailed review.
                               </p>
                             </div>
                           ) : (
                             <p className="text-white/80 text-sm leading-relaxed mb-3">
-                              No major abnormalities detected. Consider consulting a <strong>{aiData.recommendedSpecialization}</strong> for a standard review.
+                              No major abnormalities detected. Consider consulting a <strong>{aiData.recommendedSpecialization || 'specialist'}</strong> for a standard review.
                             </p>
                           )}
 
-                          <button className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold transition-colors">
-                            Book {aiData.recommendedSpecialization}
-                          </button>
+                          <Link to="/doctor/listing" className="inline-block px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold transition-colors">
+                            Book {aiData.recommendedSpecialization || 'Appointment'}
+                          </Link>
                         </div>
                       </div>
                     </>
                   )}
 
-                  {/* State 3: Analysis Failed */}
                   {!isUploading && aiData?.status === 'failed' && (
                     <div className="flex gap-5 p-5 rounded-2xl bg-error-container/20 backdrop-blur-md border border-error/30 transition-colors">
                       <div className="w-12 h-12 rounded-full bg-error text-white flex items-center justify-center shrink-0">
@@ -358,8 +610,7 @@ const PatientDashboard = () => {
                     </div>
                   )}
 
-                  {/* State 4: Vault is Empty */}
-                  {!isUploading && (!aiData || aiData.status === 'pending') && (
+                  {!isUploading && (!aiData || aiData.status === 'pending') && reports.length === 0 && (
                     <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
                       <div className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center shrink-0">
                         <UploadCloud size={20} />
@@ -373,9 +624,58 @@ const PatientDashboard = () => {
                 </div>
               </div>
             </motion.div>
+
+            {/* UPCOMING APPOINTMENT SECTION */}
+            <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-primary-fixed text-primary rounded-lg"><Calendar size={20} /></div>
+                <h2 className="text-xl font-bold font-headline">Upcoming Appointment</h2>
+                {appointments.length > 1 && (
+                  <Link 
+                    to="/appointments/all" 
+                    className="ml-auto text-sm text-primary hover:text-primary-hover font-medium"
+                  >
+                    View All ({appointments.length})
+                  </Link>
+                )}
+              </div>
+              
+              {loadingAppointments ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : upcomingAppointment ? (
+                <AppointmentCard
+                  appointment={upcomingAppointment}
+                  onStatusUpdate={handleAppointmentUpdate}
+                  onPaymentComplete={handlePaymentComplete}
+                />
+              ) : appointments.length > 0 ? (
+                <div className="text-center py-8">
+                  <Calendar size={48} className="text-outline mx-auto mb-3" />
+                  <p className="text-on-surface-variant">No active appointments</p>
+                  <p className="text-sm text-on-surface-variant/70 mt-1">All your appointments are completed</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar size={48} className="text-outline mx-auto mb-3" />
+                  <p className="text-on-surface-variant text-sm">No appointments scheduled</p>
+                  <Link 
+                    to="/doctor/listing" 
+                    className="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-colors"
+                  >
+                    Book Your First Appointment
+                  </Link>
+                </div>
+              )}
+            </motion.div>
+
+            {/* ALL APPOINTMENTS SECTION - 3 PER ROW */}
+            
           </div>
 
           <div className="lg:col-span-4 space-y-8">
+            {/* Records Vault */}
             <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-primary-fixed text-primary rounded-lg"><FileText size={20} /></div>
@@ -398,7 +698,7 @@ const PatientDashboard = () => {
               <div className="space-y-3">
                 <h5 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Recently Processed</h5>
                 {reports.length > 0 ? (
-                  [...reports].reverse().map((file, idx) => (
+                  [...reports].reverse().slice(0, 3).map((file, idx) => (
                     <div key={idx} onClick={() => handleDownload(file)} className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-error-container text-error flex items-center justify-center"><FileText size={16} /></div>
@@ -422,8 +722,9 @@ const PatientDashboard = () => {
               </div>
             </motion.div>
 
+            {/* Access Control */}
             <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
-               <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-secondary-container text-secondary rounded-lg"><ShieldCheck size={20} /></div>
                 <h2 className="text-xl font-bold font-headline">Access Control</h2>
               </div>
@@ -453,12 +754,5 @@ const PatientDashboard = () => {
     </div>
   );
 };
-
-const Sparkles = ({ size }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-    <path d="M5 3v4M3 5h4"/>
-  </svg>
-);
 
 export default PatientDashboard;

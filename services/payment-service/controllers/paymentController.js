@@ -75,11 +75,14 @@ const syncPaymentStatusFromSession = async (payment) => {
 export const createCheckoutSession = async (req, res) => {
   try {
     const orderId = `${req.body.orderId || ""}`.trim();
+    const appointmentId = `${req.body.appointmentId || ""}`.trim();
+    const patientId = `${req.body.patientId || req.body.userId || ""}`.trim();
     const customerName = getCustomerName(req.body);
     const customerEmail = getCustomerEmail(req.body);
     const itemName = buildItemName(req.body);
     const amount = toAmount(req.body.amount);
     const currency = `${req.body.currency || "lkr"}`.trim().toLowerCase();
+    const paymentPagePath = appointmentId ? `/payment/${appointmentId}` : "/payment";
 
     const validationMessage = validateCheckoutPayload({
       orderId,
@@ -106,6 +109,10 @@ export const createCheckoutSession = async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      // Restrict checkout to direct card entry so Stripe Link doesn't
+      // reuse a previous browser-saved wallet on shared devices.
+      payment_method_types: ["card"],
+      customer_creation: "always",
       customer_email: customerEmail,
       client_reference_id: orderId,
       billing_address_collection: "auto",
@@ -128,21 +135,29 @@ export const createCheckoutSession = async (req, res) => {
       ],
       metadata: {
         orderId,
+        appointmentId,
+        patientId,
+        customerEmail,
+        customerName,
       },
       payment_intent_data: {
         metadata: {
           orderId,
+          appointmentId,
+          patientId,
+          customerEmail,
+          customerName,
         },
       },
-      success_url: `${getClientUrl()}/payment?payment=success&orderId=${orderId}`,
-      cancel_url: `${getClientUrl()}/payment?payment=cancel&orderId=${orderId}`,
+      success_url: `${getClientUrl()}${paymentPagePath}?payment=success&orderId=${orderId}`,
+      cancel_url: `${getClientUrl()}${paymentPagePath}?payment=cancel&orderId=${orderId}`,
     });
 
     const payment = await Payment.create({
       orderId,
       customerName,
       customerEmail,
-      appointmentId: `${req.body.appointmentId || ""}`.trim(),
+      appointmentId,
       doctorName: `${req.body.doctorName || ""}`.trim(),
       department: `${req.body.department || ""}`.trim(),
       appointmentDate: `${req.body.appointmentDate || ""}`.trim(),
@@ -191,7 +206,16 @@ export const getAdminDashboard = async (req, res) => {
             totalPayments: { $sum: 1 },
             totalRevenue: {
               $sum: {
-                $cond: [{ $eq: ["$status", "SUCCESS"] }, "$amount", 0],
+                $cond: [
+                  { $eq: ["$status", "SUCCESS"] },
+                  {
+                    $max: [
+                      { $subtract: ["$amount", { $ifNull: ["$refundedAmount", 0] }] },
+                      0,
+                    ],
+                  },
+                  0,
+                ],
               },
             },
             successfulPayments: {
@@ -225,7 +249,12 @@ export const getAdminDashboard = async (req, res) => {
                       },
                     ],
                   },
-                  "$amount",
+                  {
+                    $max: [
+                      { $subtract: ["$amount", { $ifNull: ["$refundedAmount", 0] }] },
+                      0,
+                    ],
+                  },
                   0,
                 ],
               },
@@ -368,6 +397,28 @@ export const handleWebhook = async (req, res) => {
       });
     }
 
+    if (event.type === "charge.refunded" || event.type === "charge.refund.updated") {
+      const charge = event.data.object;
+      const payment = await Payment.findOne({
+        gatewayPaymentIntentId:
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id,
+      });
+
+      if (payment) {
+        const refundedAmount = Number(charge.amount_refunded || 0) / 100;
+        payment.refundedAmount = refundedAmount;
+        payment.refundStatus = refundedAmount >= Number(payment.amount || 0)
+          ? "FULL"
+          : refundedAmount > 0
+          ? "PARTIAL"
+          : "NONE";
+        payment.lastWebhookEvent = event.type;
+        await payment.save();
+      }
+    }
+
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error("Webhook error:", error.message);
@@ -398,6 +449,82 @@ export const getPaymentByOrderId = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to get payment",
+      error: error.message,
+    });
+  }
+};
+
+export const refundPayment = async (req, res) => {
+  try {
+    const { orderId, amount, isFullRefund } = req.body;
+    const refundAmount = Number.parseFloat(amount);
+
+    if (!orderId || !Number.isFinite(refundAmount) || refundAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "orderId and valid refund amount are required",
+      });
+    }
+
+    const payment = await Payment.findOne({ orderId });
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    if (normalizeStatus(payment.status) !== "SUCCESS") {
+      return res.status(400).json({
+        success: false,
+        message: "Only successful payments can be refunded",
+      });
+    }
+
+    const availableRefund = Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+    if (refundAmount > availableRefund) {
+      return res.status(400).json({
+        success: false,
+        message: "Refund amount exceeds available refundable amount",
+      });
+    }
+
+    if (!payment.gatewayPaymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment intent identifier is missing for refund processing",
+      });
+    }
+
+    const refund = await stripe.refunds.create({
+      payment_intent: payment.gatewayPaymentIntentId,
+      amount: Math.round(refundAmount * 100),
+      metadata: {
+        isFullRefund: isFullRefund ? "true" : "false",
+      },
+    });
+
+    payment.refundedAmount = Number(payment.refundedAmount || 0) + refundAmount;
+    payment.gatewayRefundIds = Array.isArray(payment.gatewayRefundIds)
+      ? [...payment.gatewayRefundIds, refund.id]
+      : [refund.id];
+    payment.refundStatus = payment.refundedAmount >= Number(payment.amount)
+      ? "FULL"
+      : "PARTIAL";
+    payment.lastWebhookEvent = "refund.created";
+
+    await payment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Refund created successfully",
+      payment,
+      refund,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process refund",
       error: error.message,
     });
   }

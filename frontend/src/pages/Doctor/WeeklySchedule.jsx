@@ -1,19 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-
-function hasDoctorId(s) {
-  return typeof s === 'string' && s.trim().length > 0;
-}
-
-function readInitialDoctorId() {
-  try {
-    const saved = localStorage.getItem('scheduleDoctorId');
-    if (saved?.trim()) return saved.trim();
-  } catch {}
-  return '';
-}
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
 function authHeaders() {
-  const token = localStorage.getItem('doctorToken');
+  const token = localStorage.getItem('token');
   const h = { 'Content-Type': 'application/json' };
   if (token) h.Authorization = `Bearer ${token}`;
   console.log('Auth headers:', h);
@@ -31,12 +20,70 @@ const DAYS_OF_WEEK = [
 ];
 
 const WeeklySchedule = () => {
-  const [doctorId, setDoctorId] = useState(() => readInitialDoctorId());
+  const { user } = useAuth();
+  
+  // Extract doctor ID with better error handling and logging
+  const loggedInDoctorId = useMemo(() => {
+    if (!user) {
+      console.error('WeeklySchedule: No user found in auth context');
+      // Check what's in localStorage for debugging
+      const storedUser = localStorage.getItem('user');
+      console.log('WeeklySchedule - Stored user data:', storedUser);
+      return '';
+    }
+    
+    // Try multiple possible ID fields including nested structure
+    let doctorId = user._id || user.id || user.doctorId || '';
+    
+    // If no ID found directly, check nested structure (from AuthContext)
+    if (!doctorId && user.doctor) {
+      doctorId = user.doctor._id || user.doctor.id || '';
+    }
+    if (!doctorId && user.patient) {
+      doctorId = user.patient._id || user.patient.id || '';
+    }
+    
+    console.log('WeeklySchedule - User object:', user);
+    console.log('WeeklySchedule - Extracted doctor ID:', doctorId);
+    console.log('WeeklySchedule - User ID fields:', {
+      _id: user._id,
+      id: user.id,
+      doctorId: user.doctorId,
+      'doctor._id': user.doctor?._id,
+      'doctor.id': user.doctor?.id,
+      'patient._id': user.patient?._id,
+      'patient.id': user.patient?.id
+    });
+    
+    // Also check localStorage directly
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        console.log('WeeklySchedule - Parsed stored user:', parsed);
+        console.log('WeeklySchedule - Stored user ID fields:', {
+          _id: parsed._id,
+          id: parsed.id,
+          doctorId: parsed.doctorId,
+          doctor: parsed.doctor?._id || parsed.doctor?.id,
+          patient: parsed.patient?._id || parsed.patient?.id
+        });
+      } catch (e) {
+        console.error('WeeklySchedule - Error parsing stored user:', e);
+      }
+    }
+    
+    if (!doctorId) {
+      console.error('WeeklySchedule: No doctor ID found in user object:', user);
+      // Show an alert for debugging
+      alert('Error: No doctor ID found. Please check your login status.');
+    }
+    
+    return doctorId;
+  }, [user]);
+  
   const [weeklySchedule, setWeeklySchedule] = useState({});
-  const [loading, setLoading] = useState(() => {
-    const id = readInitialDoctorId();
-    return hasDoctorId(id);
-  });
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [selectedWeek, setSelectedWeek] = useState(new Date());
@@ -57,9 +104,13 @@ const WeeklySchedule = () => {
     return schedule;
   }, []);
 
-  const loadWeeklySchedule = useCallback(async (idOverride) => {
-    const id = (typeof idOverride === 'string' ? idOverride : doctorId).trim();
-    if (!hasDoctorId(id)) {
+  const loadWeeklySchedule = useCallback(async () => {
+    const id = loggedInDoctorId.trim();
+    console.log('loadWeeklySchedule - Using doctor ID:', id);
+    
+    if (!id) {
+      console.error('loadWeeklySchedule: No doctor ID available');
+      setMessage({ type: 'error', text: 'Doctor authentication required. Please log in again.' });
       setWeeklySchedule(initializeWeeklySchedule());
       setLoading(false);
       return;
@@ -81,12 +132,14 @@ const WeeklySchedule = () => {
       const startDate = weekStart.toISOString().split('T')[0];
       const endDate = weekEnd.toISOString().split('T')[0];
       
-      const res = await fetch(
-        `/api/doctors/availability/doctor/${encodeURIComponent(id)}?start=${startDate}&end=${endDate}&includeInactive=true`,
-        { headers: authHeaders() }
-      );
+      const apiUrl = `/api/doctors/availability/doctor/${encodeURIComponent(id)}?start=${startDate}&end=${endDate}&includeInactive=true`;
+      console.log('loadWeeklySchedule - API URL:', apiUrl);
+      
+      const res = await fetch(apiUrl, { headers: authHeaders() });
       
       const data = await res.json();
+      console.log('loadWeeklySchedule - API response:', data);
+      
       if (!res.ok || !data.success) {
         setMessage({ type: 'error', text: data.message || 'Could not load weekly schedule' });
         setWeeklySchedule(initializeWeeklySchedule());
@@ -120,13 +173,13 @@ const WeeklySchedule = () => {
       
       setWeeklySchedule(schedule);
     } catch (e) {
-      console.error(e);
+      console.error('loadWeeklySchedule error:', e);
       setMessage({ type: 'error', text: 'Network error loading weekly schedule' });
       setWeeklySchedule(initializeWeeklySchedule());
     } finally {
       setLoading(false);
     }
-  }, [doctorId, selectedWeek, initializeWeeklySchedule]);
+  }, [loggedInDoctorId, selectedWeek, initializeWeeklySchedule]);
 
   useEffect(() => {
     loadWeeklySchedule();
@@ -153,10 +206,24 @@ const WeeklySchedule = () => {
   };
 
   const saveWeeklySchedule = async () => {
-    const id = doctorId.trim();
-    if (!hasDoctorId(id)) {
-      setMessage({ type: 'error', text: 'Please enter a Doctor ID' });
+    const id = loggedInDoctorId.trim();
+    console.log('saveWeeklySchedule - Using doctor ID:', id);
+    
+    if (!id) {
+      console.error('saveWeeklySchedule: No doctor ID available');
+      setMessage({ type: 'error', text: 'Doctor authentication required. Please log in again.' });
+      alert('Error: No doctor ID found. Cannot save schedule. Please log in again.');
       return;
+    }
+
+    // Double-check that we're using the logged-in user's ID
+    if (user && (user._id || user.id || user.doctorId)) {
+      const expectedId = user._id || user.id || user.doctorId;
+      if (id !== expectedId) {
+        console.error('Doctor ID mismatch:', { id, expectedId });
+        setMessage({ type: 'error', text: 'Security error: Doctor ID mismatch' });
+        return;
+      }
     }
 
     setSaving(true);
@@ -177,10 +244,23 @@ const WeeklySchedule = () => {
         if (schedule.isAvailable) {
           const date = new Date(weekStart);
           date.setDate(weekStart.getDate() + index);
+          
+          // Check if the date is in the past using local time
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const checkDate = new Date(date);
+          checkDate.setHours(0, 0, 0, 0);
+          
+          if (checkDate < today) {
+            console.log(`Skipping ${day.name} - past date:`, date.toISOString().split('T')[0]);
+            return; // Skip past dates
+          }
+          
           const dateStr = date.toISOString().split('T')[0];
           
+          // Ensure we're always using the logged-in doctor's ID
           const body = {
-            doctorId: id,
+            doctorId: id, // This should be the logged-in doctor's ID
             date: dateStr,
             startTime: schedule.startTime,
             endTime: schedule.endTime,
@@ -195,7 +275,7 @@ const WeeklySchedule = () => {
             })()
           };
           
-          console.log(`Creating availability for ${day.name}:`, body);
+          console.log(`Creating availability for ${day.name} with doctor ID ${id}:`, body);
           
           if (schedule._id) {
             // Update existing
@@ -218,7 +298,21 @@ const WeeklySchedule = () => {
           }
         } else if (schedule._id) {
           // Delete if was available but now is not
-          console.log(`Deleting availability for ${day.name}:`, schedule._id);
+          const date = new Date(weekStart);
+          date.setDate(weekStart.getDate() + index);
+          
+          // Check if the date is in the past using local time
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const checkDate = new Date(date);
+          checkDate.setHours(0, 0, 0, 0);
+          
+          if (checkDate < today) {
+            console.log(`Skipping deletion for ${day.name} - past date:`, date.toISOString().split('T')[0]);
+            return; // Skip past dates
+          }
+          
+          console.log(`Deleting availability for ${day.name} with doctor ID ${id}:`, schedule._id);
           promises.push(
             fetch(`/api/doctors/availability/${schedule._id}?doctorId=${encodeURIComponent(id)}`, {
               method: 'DELETE',
@@ -228,7 +322,7 @@ const WeeklySchedule = () => {
         }
       });
 
-      console.log('Making API calls...');
+      console.log('Making API calls for doctor ID:', id);
       const results = await Promise.all(promises);
       console.log('API results:', results);
       
@@ -237,10 +331,8 @@ const WeeklySchedule = () => {
       if (hasErrors) {
         setMessage({ type: 'error', text: 'Some changes could not be saved' });
       } else {
-        setDoctorId(id);
-        localStorage.setItem('scheduleDoctorId', id);
         setMessage({ type: 'success', text: 'Weekly schedule saved successfully!' });
-        await loadWeeklySchedule(id);
+        await loadWeeklySchedule();
       }
     } catch (err) {
       console.error('Save error:', err);
@@ -269,6 +361,15 @@ const WeeklySchedule = () => {
     return `${weekStart.toLocaleDateString('en-US', options)} - ${weekEnd.toLocaleDateString('en-US', options)}`;
   };
 
+  const isDateInPast = (date) => {
+    const today = new Date();
+    // Set both dates to the start of the day in UTC to avoid timezone issues
+    today.setUTCHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setUTCHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -289,6 +390,13 @@ const WeeklySchedule = () => {
           <p className="text-indigo-100 mt-2 max-w-2xl">
             Set your availability for each day of the week. Configure working hours, break times, and consultation fees.
           </p>
+          {loggedInDoctorId && (
+            <div className="mt-4 p-3 bg-white/10 rounded-lg">
+              <p className="text-sm text-indigo-100">
+                <strong>Logged-in Doctor ID:</strong> {loggedInDoctorId}
+              </p>
+            </div>
+          )}
         </div>
 
         {message.text && (
@@ -326,34 +434,30 @@ const WeeklySchedule = () => {
           </div>
 
           <div className="p-4">
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Doctor ID <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={doctorId}
-                  onChange={(e) => setDoctorId(e.target.value)}
-                  placeholder="Enter Doctor ID"
-                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                <button
-                  type="button"
-                  onClick={() => loadWeeklySchedule(doctorId)}
-                  disabled={!hasDoctorId(doctorId)}
-                  className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm font-semibold hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Load Schedule
-                </button>
-              </div>
-            </div>
 
             <div className="space-y-4">
-              {DAYS_OF_WEEK.map((day) => {
+              {DAYS_OF_WEEK.map((day, index) => {
                 const schedule = weeklySchedule[day.id] || {};
+                
+                // Calculate the actual date for this day in the selected week
+                const weekStart = new Date(selectedWeek);
+                const dayOfWeek = weekStart.getDay();
+                const diff = weekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                weekStart.setDate(diff);
+                
+                const actualDate = new Date(weekStart);
+                actualDate.setDate(weekStart.getDate() + index);
+                
+                // Use local time for comparison to be consistent with date calculation
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const checkDate = new Date(actualDate);
+                checkDate.setHours(0, 0, 0, 0);
+                const isPast = checkDate < today;
+                const isToday = checkDate.getTime() === today.getTime();
+                
                 return (
-                  <div key={day.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/30">
+                  <div key={day.id} className={`border rounded-xl p-4 ${isPast || isToday ? 'border-slate-300 bg-slate-100/50 opacity-75' : 'border-slate-200 bg-slate-50/30'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <label className="flex items-center cursor-pointer">
@@ -361,13 +465,30 @@ const WeeklySchedule = () => {
                             type="checkbox"
                             checked={schedule.isAvailable || false}
                             onChange={() => handleDayToggle(day.id)}
-                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            disabled={isPast}
+                            className={`w-4 h-4 rounded focus:ring-indigo-500 ${
+                              isPast 
+                                ? 'text-slate-400 bg-slate-200 border-slate-300 cursor-not-allowed' 
+                                : 'text-indigo-600'
+                            }`}
                           />
-                          <span className="ml-2 font-semibold text-slate-700">{day.name}</span>
+                          <span className={`ml-2 font-semibold ${isPast || isToday ? 'text-slate-500' : 'text-slate-700'}`}>
+                            {day.name}
+                            {isToday && (
+                              <span className="ml-2 text-xs text-indigo-600 font-normal">(Today)</span>
+                            )}
+                          </span>
                         </label>
+                        {actualDate && (
+                          <span className="text-xs text-slate-500">
+                            {actualDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
                       </div>
                       {schedule.isAvailable && (
-                        <span className="text-xs text-emerald-600 font-medium">Available</span>
+                        <span className={`text-xs font-medium ${isPast || isToday ? 'text-slate-500' : 'text-emerald-600'}`}>
+                          {isPast ? 'Past date' : 'Available'}
+                        </span>
                       )}
                     </div>
 
@@ -379,7 +500,12 @@ const WeeklySchedule = () => {
                             type="time"
                             value={schedule.startTime || '09:00'}
                             onChange={(e) => handleDayChange(day.id, 'startTime', e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            disabled={isPast}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                              isPast || isToday
+                                ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                                : 'border-slate-200'
+                            }`}
                           />
                         </div>
                         <div>
@@ -388,7 +514,12 @@ const WeeklySchedule = () => {
                             type="time"
                             value={schedule.endTime || '17:00'}
                             onChange={(e) => handleDayChange(day.id, 'endTime', e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            disabled={isPast}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                              isPast || isToday
+                                ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                                : 'border-slate-200'
+                            }`}
                           />
                         </div>
                         <div>
@@ -400,7 +531,12 @@ const WeeklySchedule = () => {
                             step={5}
                             value={schedule.slotDuration || 20}
                             onChange={(e) => handleDayChange(day.id, 'slotDuration', parseInt(e.target.value, 10) || 20)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            disabled={isPast}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                              isPast || isToday
+                                ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                                : 'border-slate-200'
+                            }`}
                           />
                         </div>
                         <div>
@@ -409,7 +545,12 @@ const WeeklySchedule = () => {
                             type="time"
                             value={schedule.breakStart || ''}
                             onChange={(e) => handleDayChange(day.id, 'breakStart', e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            disabled={isPast}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                              isPast || isToday
+                                ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                                : 'border-slate-200'
+                            }`}
                           />
                         </div>
                         <div>
@@ -418,7 +559,12 @@ const WeeklySchedule = () => {
                             type="time"
                             value={schedule.breakEnd || ''}
                             onChange={(e) => handleDayChange(day.id, 'breakEnd', e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            disabled={isPast}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                              isPast || isToday
+                                ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                                : 'border-slate-200'
+                            }`}
                           />
                         </div>
                         <div>
@@ -430,9 +576,19 @@ const WeeklySchedule = () => {
                             value={schedule.consultationFee || ''}
                             onChange={(e) => handleDayChange(day.id, 'consultationFee', e.target.value)}
                             placeholder="Optional"
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            disabled={isPast}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                              isPast || isToday
+                                ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                                : 'border-slate-200'
+                            }`}
                           />
                         </div>
+                      </div>
+                    )}
+                    {isPast && (
+                      <div className="mt-3 text-xs text-slate-500 italic">
+                        Past dates cannot be modified
                       </div>
                     )}
                   </div>
@@ -444,7 +600,7 @@ const WeeklySchedule = () => {
               <button
                 type="button"
                 onClick={saveWeeklySchedule}
-                disabled={saving || !hasDoctorId(doctorId)}
+                disabled={saving}
                 className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 {saving ? 'Saving…' : 'Save Weekly Schedule'}

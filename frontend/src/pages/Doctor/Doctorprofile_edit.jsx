@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import axios from 'axios';
 import img1 from '../../assets/images/1e73cdf4e73454e4db41a709b9163cac.jpg';
 import img2 from '../../assets/images/9339706cc8079c7b463d4fb452f097d3.jpg';
 
+function authHeaders(useFormData = false) {
+  const token = localStorage.getItem('token');
+  const h = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  // Don't set Content-Type for FormData - browser sets it automatically
+  if (!useFormData) h['Content-Type'] = 'application/json';
+  return h;
+}
+
 const DoctorProfileEdit = () => {
   const navigate = useNavigate();
   const { doctorId } = useParams(); // Get doctor ID from URL params
+  const { user, updateUser } = useAuth(); // Get logged-in user data and update function
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -30,17 +41,22 @@ const DoctorProfileEdit = () => {
 
   // Fetch doctor data on component mount
   useEffect(() => {
-    if (doctorId) {
-      fetchDoctorData();
+    // Use logged-in user's ID if available, otherwise use URL param
+    const effectiveDoctorId = user?._id || user?.id || doctorId;
+    
+    if (effectiveDoctorId) {
+      fetchDoctorData(effectiveDoctorId);
     } else {
-      setError('No doctor ID provided');
+      setError('No doctor ID available');
       setFetchLoading(false);
     }
-  }, [doctorId]);
+  }, [doctorId, user?._id, user?.id]);
 
-  const fetchDoctorData = async () => {
+  const fetchDoctorData = async (doctorIdToUse) => {
     try {
-      const response = await fetch(`http://localhost:5025/api/doctors/${doctorId}`);
+      const response = await fetch(`/api/doctors/${doctorIdToUse}`, {
+        headers: authHeaders()
+      });
       const data = await response.json();
       
       if (data.success && data.doctor) {
@@ -186,47 +202,49 @@ const DoctorProfileEdit = () => {
     setMessage('');
 
     try {
-      const payload = new FormData();
-      
-      // Add all form fields
-      Object.keys(formData).forEach(key => {
-        if (key === 'qualifications' || key === 'specializations') {
-          // Handle arrays separately
-          return;
-        } else {
-          payload.append(key, formData[key]);
-        }
-      });
+      // Prepare payload as JSON object
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        specialty: formData.specialty,
+        phone: formData.phone,
+        licenseNumber: formData.licenseNumber,
+        experience: formData.experience,
+        address: formData.address,
+        about: formData.about,
+        gender: formData.gender,
+        qualifications: formData.qualifications.filter(q => q.trim() !== ''),
+        specializations: formData.specializations.filter(s => s.trim() !== ''),
+        profilePicture: imageUrl || user?.profilePicture
+      };
 
-      // Add qualifications as JSON string
-      const validQualifications = formData.qualifications.filter(q => q.trim() !== '');
-      payload.append('qualifications', JSON.stringify(validQualifications));
-      
-      // Add specializations as JSON string
-      const validSpecializations = formData.specializations.filter(s => s.trim() !== '');
-      payload.append('specializations', JSON.stringify(validSpecializations));
-      
-      // Add profile image URL only if uploaded to Cloudinary
-      if (imageUrl) {
-        payload.append('profileImageUrl', imageUrl);
-        console.log('Adding profileImageUrl to payload:', imageUrl);
-      } else {
-        console.log('No imageUrl to add to payload');
-      }
+      console.log('Submitting payload:', payload);
 
-      console.log('FormData contents:');
-      for (let [key, value] of payload.entries()) {
-        console.log(key, value);
-      }
-
-      const response = await fetch(`http://localhost:5025/api/doctors/${doctorId}`, {
-        method: 'PUT', // Use PUT for updating
-        body: payload
+      const effectiveDoctorId = user?._id || user?.id || doctorId;
+      const response = await fetch(`/api/doctors/${effectiveDoctorId}`, {
+        method: 'PUT',
+        headers: authHeaders(), // Use JSON headers
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
+      console.log('Update response:', data);
       
-      if (response.ok) {
+      if (data.success) {
+        // Update user data in AuthContext with the updated doctor data from response
+        const updatedUserData = {
+          ...user,
+          name: formData.name,
+          email: formData.email,
+          specialty: formData.specialty,
+          phone: formData.phone,
+          address: formData.address,
+          profilePicture: imageUrl || user?.profilePicture,
+          qualifications: formData.qualifications.filter(q => q.trim() !== ''),
+          specializations: formData.specializations.filter(s => s.trim() !== '')
+        };
+        updateUser(updatedUserData);
+        
         setMessage('✅ Profile updated successfully! Redirecting to dashboard...');
         setTimeout(() => navigate('/doctor/dashboard'), 2000);
       } else {
@@ -234,7 +252,7 @@ const DoctorProfileEdit = () => {
       }
     } catch (err) {
       console.error('Update error:', err);
-      setError('Cannot connect to server. Please make sure backend is running on port 5025');
+      setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
     }

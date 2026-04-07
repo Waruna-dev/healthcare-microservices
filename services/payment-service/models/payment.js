@@ -74,6 +74,19 @@ const paymentSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    refundedAmount: {
+      type: Number,
+      default: 0,
+    },
+    refundStatus: {
+      type: String,
+      enum: ["NONE", "PARTIAL", "FULL"],
+      default: "NONE",
+    },
+    gatewayRefundIds: {
+      type: [String],
+      default: [],
+    },
     status: {
       type: String,
       enum: ["PENDING", "SUCCESS", "FAILED", "EXPIRED"],
