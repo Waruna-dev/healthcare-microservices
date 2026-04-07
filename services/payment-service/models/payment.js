@@ -96,6 +96,10 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    successEmailSentAt: {
+      type: Date,
+      default: null,
+    },
     failureReason: {
       type: String,
       default: "",
