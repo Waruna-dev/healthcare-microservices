@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, Clock, User, Stethoscope, CheckCircle, XCircle, 
   Eye, Filter, Search, AlertCircle, Activity,
-  FileText, DollarSign, Mail,
+  FileText,  Mail,
   TrendingUp, Calendar as CalendarIcon,
   Grid3x3, List, ChevronLeft, ChevronRight,
   Download, Video, CreditCard
@@ -366,7 +366,7 @@ const DoctorAppointments = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <DollarSign size={20} className="text-green-600" />
+                
                 <div>
                   <p className="text-xs text-gray-500">Consultation Fee</p>
                   <p className="font-medium text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</p>
@@ -552,7 +552,7 @@ const DoctorAppointments = () => {
               <span>{appointment.startTime} - {appointment.endTime}</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-600 col-span-2">
-              <DollarSign size={12} className="text-green-500" />
+              
               <span className="font-semibold text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</span>
             </div>
           </div>
@@ -650,7 +650,7 @@ const DoctorAppointments = () => {
                   {appointment.startTime}
                 </span>
                 <span className="flex items-center gap-1 text-green-600 font-semibold">
-                  <DollarSign size={12} />
+                 
                   LKR {appointment.consultationFee?.toLocaleString()}
                 </span>
               </div>
@@ -788,7 +788,7 @@ const DoctorAppointments = () => {
             >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-200">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
                     Date Range
                   </label>
                   <select
@@ -806,7 +806,7 @@ const DoctorAppointments = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
                     Patient Name
                   </label>
                   <input
