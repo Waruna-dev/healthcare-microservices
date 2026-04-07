@@ -51,6 +51,7 @@ function App() {
           <Route path="/features" element={<Features />} />
           <Route path="/security" element={<Security />} />
           <Route path="/integration" element={<Integration />} />
+          <Route path="/doctor/listing" element={<DoctorListing />} />
         </Route>
 
         {/* Patient Routes */}
@@ -63,9 +64,7 @@ function App() {
 
         {/* Doctor Public Routes */}
         <Route path="/doctor/register" element={<DoctorRegister />} />
-        <Route path="/doctor/listing" element={<DoctorListing />} />
         <Route path="/doctor/:id" element={<ShowDoctorDetails />} />
-        <Route path="/doctor/edit-profile/:doctorId" element={<DoctorProfileEdit />} />
 
         {/* Doctor Panel with Sidebar - Using Outlet pattern */}
         <Route path="/doctor" element={<DoctorLayout />}>
@@ -73,6 +72,7 @@ function App() {
           <Route path="dashboard" element={<DoctorDashboard />} />
           <Route path="doctors" element={<AllDoctors />} />
           <Route path="profile" element={<DoctorProfile />} />
+          <Route path="edit-profile/:doctorId" element={<DoctorProfileEdit />} />
           <Route path="schedule" element={<DoctorSchedule />} />
           <Route path="weekly-schedule" element={<WeeklySchedule />} />
           <Route path="slots/:date" element={<SlotDisplay />} />

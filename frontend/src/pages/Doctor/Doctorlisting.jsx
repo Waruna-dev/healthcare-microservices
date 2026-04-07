@@ -48,33 +48,34 @@ const DoctorListing = () => {
   const fetchDoctors = async () => {
     try {
       setLoading(true);
-      // Fetch all doctors
-      const response = await fetch(`${API_BASE}?limit=1000`);
+      // Fetch approved doctors with smaller limit for faster loading
+      const response = await fetch(`${API_BASE}?limit=50&status=approved`);
       const data = await response.json();
       
       if (data.success && data.doctors) {
-        // Process doctors without individual schedule calls for faster loading
-        const doctorsWithSchedule = data.doctors.map(doctor => ({
-          ...doctor,
-          // Map database fields to component fields
+        // Filter only approved doctors (in case backend doesn't filter)
+        const approvedDoctors = data.doctors.filter(doctor => 
+          doctor.registrationStatus === 'approved' || 
+          doctor.status === 'approved' || 
+          doctor.isApproved === true
+        );
+        
+        // Simplified data processing - only map essential fields
+        const processedDoctors = approvedDoctors.map(doctor => ({
+          _id: doctor._id,
           name: doctor.name,
           specialty: doctor.specialty,
           experience: doctor.experience,
           consultationFee: doctor.consultationFee,
-          gender: doctor.gender,
-          rating: doctor.rating || 0,
-          reviewCount: doctor.totalRatings || 0,
           isAvailable: doctor.isAvailable,
           bio: doctor.bio,
-          profileImage: doctor.profilePicture,
-          email: doctor.email,
-          phone: doctor.phone,
-          address: doctor.address,
-          schedule: null // Skip schedule fetching for faster loading
+          profilePicture: doctor.profilePicture,
+          rating: doctor.rating || 0,
+          totalRatings: doctor.totalRatings || 0
         }));
         
-        setDoctors(doctorsWithSchedule);
-        setError(null); // Clear any previous errors
+        setDoctors(processedDoctors);
+        setError(null);
       } else {
         setError('Failed to fetch doctors from database');
       }
@@ -140,7 +141,7 @@ const DoctorListing = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30 py-8 px-4">
+    <div className="bg-gradient-to-br from-gray-50 via-white to-emerald-50/30 pt-16 pb-12 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="mb-8 text-center">
@@ -225,7 +226,7 @@ const DoctorListing = () => {
                   <div className="flex items-start gap-3 mb-4">
                     <div className="relative flex-shrink-0">
                       <img
-                        src={getImageUrl(doctor.profileImage) || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name.replace('Dr. ', ''))}&background=0F6E56&color=fff&size=128`}
+                        src={getImageUrl(doctor.profilePicture) || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name.replace('Dr. ', ''))}&background=0F6E56&color=fff&size=128`}
                         alt={doctor.name}
                         className="w-16 h-16 rounded-full object-cover border-3 border-white shadow-md"
                         onError={(e) => {
