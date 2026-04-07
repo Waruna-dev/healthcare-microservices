@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, Clock, User, Stethoscope, CheckCircle, XCircle, 
   Eye, Filter, Search, AlertCircle, Activity,
-  FileText, DollarSign, Mail,
+  FileText,  Mail,
   TrendingUp, Calendar as CalendarIcon,
   Grid3x3, List, ChevronLeft, ChevronRight,
   Download, Video, CreditCard
@@ -366,7 +366,7 @@ const DoctorAppointments = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <DollarSign size={20} className="text-green-600" />
+                
                 <div>
                   <p className="text-xs text-gray-500">Consultation Fee</p>
                   <p className="font-medium text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</p>
@@ -552,7 +552,7 @@ const DoctorAppointments = () => {
               <span>{appointment.startTime} - {appointment.endTime}</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-600 col-span-2">
-              <DollarSign size={12} className="text-green-500" />
+              
               <span className="font-semibold text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</span>
             </div>
           </div>
@@ -605,6 +605,16 @@ const DoctorAppointments = () => {
                 </button>
               </>
             )}
+            
+            {canJoinCall(appointment) && (
+              <button
+                onClick={() => handleJoinCall(appointment)}
+                className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+              >
+                <Video size={12} />
+                Join Call
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
@@ -650,7 +660,7 @@ const DoctorAppointments = () => {
                   {appointment.startTime}
                 </span>
                 <span className="flex items-center gap-1 text-green-600 font-semibold">
-                  <DollarSign size={12} />
+                 
                   LKR {appointment.consultationFee?.toLocaleString()}
                 </span>
               </div>
@@ -692,6 +702,16 @@ const DoctorAppointments = () => {
                   Reject
                 </button>
               </>
+            )}
+            
+            {canJoinCall(appointment) && (
+              <button
+                onClick={() => handleJoinCall(appointment)}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+              >
+                <Video size={12} />
+                Join Call
+              </button>
             )}
           </div>
         </div>
@@ -788,7 +808,7 @@ const DoctorAppointments = () => {
             >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-200">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
                     Date Range
                   </label>
                   <select
@@ -806,7 +826,7 @@ const DoctorAppointments = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
                     Patient Name
                   </label>
                   <input

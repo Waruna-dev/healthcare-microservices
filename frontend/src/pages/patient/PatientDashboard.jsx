@@ -66,8 +66,8 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
   return (
     <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300 h-full flex flex-col">
       <div className={`h-1.5 ${
-        appointment.status === 'pending' ? 'bg-warning' :
-        appointment.status === 'accepted' ? 'bg-primary' :
+        appointment.status === 'pending' ? 'bg-yellow-500' :
+        appointment.status === 'accepted' ? 'bg-blue-500' :
         appointment.status === 'completed' ? 'bg-secondary' :
         'bg-outline'
       }`} />
@@ -75,8 +75,8 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
       <div className="p-5 flex flex-col flex-grow">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-fixed rounded-xl">
-              <Stethoscope className="w-5 h-5 text-primary" />
+            <div className="p-2 bg-secondary-container -fixed rounded-xl">
+              <Stethoscope className="w-5 h-5  text-primary" />
             </div>
             <div>
               <h3 className="font-semibold text-on-surface">Dr. {appointment.doctorName}</h3>
@@ -103,10 +103,10 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
         <div className="flex items-center justify-between py-3 border-t border-outline-variant/30 mb-4">
           <div>
             <p className="text-xs text-on-surface-variant">Consultation Fee</p>
-            <p className="font-semibold text-on-surface">LKR {appointment.consultationFee?.toLocaleString() || 0}</p>
+            <p className="font-semibold text-green-700">LKR {appointment.consultationFee?.toLocaleString() || 0}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-on-surface-variant">Payment Status</p>
+            <p className="text-xs text-on-surface-variant underline ">Payment Status</p>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getPaymentStatusColor(appointment.paymentStatus)}`}>
               {appointment.paymentStatus === 'pending' ? 'Payment Pending' : 
                appointment.paymentStatus === 'completed' ? 'Paid' : 
@@ -118,7 +118,7 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
         <div className="flex gap-3 mt-auto">
           <button
             onClick={handleViewDetails}
-            className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low rounded-xl hover:bg-surface-container transition-colors"
+            className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
           >
             View Details
           </button>
@@ -126,7 +126,7 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
           {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
             <button
               onClick={() => onPaymentComplete?.(appointment)}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary rounded-xl hover:shadow-md transition-all"
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-700 rounded-xl hover:shadow-md transition-all"
             >
               Pay Now
             </button>

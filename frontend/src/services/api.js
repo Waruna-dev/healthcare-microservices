@@ -138,4 +138,17 @@ export const appointmentAPI = {
   }
 };
 
+export const telemedicineAPI = {
+  getSessionInfo: async (appointmentId) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`http://localhost:5015/api/appointments/${appointmentId}/telemedicine`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.json();
+  }
+};
+
 export default api;

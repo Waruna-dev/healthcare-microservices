@@ -32,7 +32,7 @@ const processPaymentRequest = async (appointmentId, amount, patientId, paymentMe
 };
 
 // Helper function to call telemedicine service
-const createTelemedicineSession = async (appointmentId, doctorName, patientName, scheduledTime) => {
+const createTelemedicineSession = async (appointmentId, doctorName, patientName, scheduledDate, scheduledTime, roomName, meetingLink) => {
     try {
         const response = await fetch(`${process.env.TELEMEDICINE_SERVICE_URL || 'http://localhost:5018'}/api/telemedicine/create`, {
             method: 'POST',
@@ -41,7 +41,10 @@ const createTelemedicineSession = async (appointmentId, doctorName, patientName,
                 appointmentId,
                 doctorName,
                 patientName,
-                scheduledTime
+                scheduledDate,
+                scheduledTime,
+                roomName,
+                meetingLink
             })
         });
         return await response.json();
@@ -357,27 +360,25 @@ const processPayment = async (req, res) => {
         appointment.paymentId = paymentResult.paymentId;
         appointment.paymentDetails = paymentResult.details || {};
         
-        // Create telemedicine session
-        const telemedicineResult = await createTelemedicineSession(
+        // Create local link data
+        const telemedicineData = generateTelemedicineLink(
+            id,
+            appointment.doctorName,
+            appointment.patientName
+        );
+        appointment.telemedicineLink = telemedicineData.telemedicineLink;
+        appointment.telemedicineRoomId = telemedicineData.telemedicineRoomId;
+
+        // Sync with telemedicine service
+        await createTelemedicineSession(
             id,
             appointment.doctorName,
             appointment.patientName,
-            new Date(appointment.date)
+            appointment.date,
+            appointment.startTime,
+            telemedicineData.telemedicineRoomId,
+            telemedicineData.telemedicineLink
         );
-        
-        if (telemedicineResult.success) {
-            appointment.telemedicineLink = telemedicineResult.telemedicineLink;
-            appointment.telemedicineRoomId = telemedicineResult.roomId;
-        } else {
-            // Fallback to local generation
-            const telemedicineData = generateTelemedicineLink(
-                id,
-                appointment.doctorName,
-                appointment.patientName
-            );
-            appointment.telemedicineLink = telemedicineData.telemedicineLink;
-            appointment.telemedicineRoomId = telemedicineData.telemedicineRoomId;
-        }
         
         await appointment.save();
 
@@ -397,6 +398,7 @@ const processPayment = async (req, res) => {
 };
 
 // @desc    Get telemedicine session info
+// @desc    Get telemedicine session info - UPDATED VERSION
 const getTelemedicineInfo = async (req, res) => {
     try {
         const { id } = req.params;
@@ -417,6 +419,19 @@ const getTelemedicineInfo = async (req, res) => {
             });
         }
 
+        // ALWAYS generate telemedicine link if missing
+        if (!appointment.telemedicineLink || !appointment.telemedicineRoomId) {
+            console.log("Generating telemedicine link for appointment:", id);
+            const telemedicineData = generateTelemedicineLink(
+                id,
+                appointment.doctorName,
+                appointment.patientName
+            );
+            appointment.telemedicineLink = telemedicineData.telemedicineLink;
+            appointment.telemedicineRoomId = telemedicineData.telemedicineRoomId;
+            await appointment.save();
+        }
+
         // Check if current time is within appointment time (allow 20 minutes before)
         const now = new Date();
         const appointmentDate = new Date(appointment.date);
@@ -434,6 +449,14 @@ const getTelemedicineInfo = async (req, res) => {
         const canJoin = now >= canJoinTime && now <= appointmentEnd;
         const isEarly = now < canJoinTime;
         const isLate = now > appointmentEnd;
+        
+        // Calculate minutes until join window
+        let minutesUntilJoin = null;
+        if (isEarly) {
+            minutesUntilJoin = Math.ceil((canJoinTime - now) / (1000 * 60));
+        }
+
+        console.log('Session status:', { canJoin, isEarly, isLate, minutesUntilJoin });
 
         res.json({
             success: true,
@@ -451,6 +474,7 @@ const getTelemedicineInfo = async (req, res) => {
                 canJoin,
                 isEarly,
                 isLate,
+                minutesUntilJoin,
                 canJoinTime: canJoinTime,
                 sessionStartTime: appointmentDate,
                 sessionEndTime: appointmentEnd
@@ -464,7 +488,6 @@ const getTelemedicineInfo = async (req, res) => {
         });
     }
 };
-
 // @desc    Complete appointment and add prescription
 const completeAppointment = async (req, res) => {
     try {
@@ -597,6 +620,71 @@ const checkSlotAvailability = async (req, res) => {
         });
     }
 };
+// @desc    Update appointment status from Payment Webhook
+const webhookPaymentSuccess = async (req, res) => {
+    try {
+        const { appointmentId, paymentId, paymentDetails } = req.body;
+        
+        console.log('🔗 Webhook Payment Success Hit:', { appointmentId, paymentId });
+
+        if (!appointmentId) {
+            return res.status(400).json({ success: false, message: 'appointmentId is required' });
+        }
+
+        const appointment = await Appointment.findById(appointmentId);
+        
+        if (!appointment) {
+            return res.status(404).json({ success: false, message: 'Appointment not found' });
+        }
+
+        // Only process if it is not already completed
+        if (appointment.paymentStatus === 'completed') {
+            return res.json({ success: true, message: 'Payment already completed', appointment });
+        }
+
+        appointment.paymentStatus = 'completed';
+        appointment.paymentId = paymentId || '';
+        if (paymentDetails) {
+            appointment.paymentDetails = paymentDetails;
+        }
+        
+        // Create local link data safely
+        const telemedicineData = generateTelemedicineLink(
+            appointmentId,
+            appointment.doctorName,
+            appointment.patientName
+        );
+        
+        appointment.telemedicineLink = telemedicineData.telemedicineLink;
+        appointment.telemedicineRoomId = telemedicineData.telemedicineRoomId;
+        
+        // Sync with telemedicine service
+        await createTelemedicineSession(
+            appointmentId,
+            appointment.doctorName,
+            appointment.patientName,
+            appointment.date,
+            appointment.startTime,
+            telemedicineData.telemedicineRoomId,
+            telemedicineData.telemedicineLink
+        );
+        
+        await appointment.save();
+
+        res.json({
+            success: true,
+            message: 'Payment status updated to completed via webhook',
+            appointment
+        });
+    } catch (error) {
+        console.error('Webhook payment success error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 module.exports = {
     createAppointment,
     getPatientAppointments,
@@ -608,5 +696,6 @@ module.exports = {
     completeAppointment,
     cancelAppointment,
     getUpcomingAppointment,
-    checkSlotAvailability
+    checkSlotAvailability,
+    webhookPaymentSuccess
 };
