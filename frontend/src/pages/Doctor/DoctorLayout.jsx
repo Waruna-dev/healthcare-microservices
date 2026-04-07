@@ -6,7 +6,7 @@ const DoctorLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, authKey } = useAuth(); // Add authKey
+  const { user, authKey, logout } = useAuth(); // Add logout function
   const [menuItems, setMenuItems] = useState([
     { path: '/doctor/dashboard', name: 'Dashboard', icon: '📊' },
     { path: '/doctor/appointments', name: 'Appointments', icon: '📅' },
@@ -16,7 +16,7 @@ const DoctorLayout = () => {
     { path: '/doctor/availability', name: 'Availability', icon: '⏰' },
     { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },
-    { path: '/doctor/settings', name: 'Settings', icon: '⚙️' },
+    { path: '/doctor/settings', name: 'Logout', icon: '⚙️', action: 'logout' }, // Add action for logout
   ]);
 
   // Reset sidebar state when user changes
@@ -27,6 +27,16 @@ const DoctorLayout = () => {
 
   const goToHome = () => {
     navigate('/');
+  };
+
+  const handleMenuClick = (item) => {
+    if (item.action === 'logout') {
+      // Handle logout
+      logout();
+      navigate('/');
+    } else {
+      navigate(item.path);
+    }
   };
 
   return (
@@ -71,7 +81,7 @@ const DoctorLayout = () => {
           {menuItems.map((item) => (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleMenuClick(item)}
               className={`w-full flex items-center px-4 py-3 transition-colors ${
                 location.pathname === item.path
                   ? 'bg-white/20 border-r-4 border-white'
