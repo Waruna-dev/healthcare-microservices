@@ -7,6 +7,8 @@ const app = express();
 
 const PAYMENT_SERVICE_URL =
   process.env.PAYMENT_SERVICE_URL || "http://localhost:5040";// Default to localhost if not set in .env
+const NOTIFICATION_SERVICE_URL =
+  process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5035";
 const PORT = process.env.PORT || 5000;
 
 // Enable CORS
@@ -124,6 +126,28 @@ app.use('/api/appointments', createProxyMiddleware({
   }
 }));
 
+// 5. Notification Service Proxy
+app.use(
+  "/api/notifications",
+  createProxyMiddleware({
+    target: NOTIFICATION_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/notifications${path}`,
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(
+        `[Proxying Notification]: ${req.method} ${req.originalUrl} -> ${NOTIFICATION_SERVICE_URL}/api/notifications${req.url}`,
+      );
+    },
+    onError: (err, req, res) => {
+      console.error("Notification Service Error:", err.message);
+      res.status(503).json({
+        success: false,
+        message: "Notification service temporarily unavailable",
+      });
+    },
+  }),
+);
+
 // Placeholders for future services
 /*
 app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:5003', changeOrigin: true }));
@@ -150,6 +174,9 @@ app.listen(PORT, () => {
   console.log(`📍 Admin Service   : http://localhost:5002 (via /api/admin)`);
   console.log(
     `📍 Payment Service : ${PAYMENT_SERVICE_URL} (via /api/payments)`,
+  );
+  console.log(
+    `📍 Notification Service : ${NOTIFICATION_SERVICE_URL} (via /api/notifications)`,
   );
   console.log(`🌐 Frontend should use: http://localhost:${PORT}/api/...`);
 });

@@ -2,6 +2,8 @@ import Stripe from "stripe";
 import Payment from "../models/payment.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const NOTIFICATION_SERVICE_URL =
+  process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5035";
 
 const toAmount = (value) => Number.parseFloat(value);
 const normalizeStatus = (value) => `${value || ""}`.trim().toUpperCase();
@@ -42,6 +44,37 @@ const validateCheckoutPayload = ({ orderId, customerName, customerEmail, amount 
 
 const getClientUrl = () => process.env.CLIENT_URL || "http://localhost:5173";
 
+const triggerPaymentSuccessEmail = async (payment) => {
+  if (!payment || payment.successEmailSentAt) {
+    return;
+  }
+
+  const endpoint = `${NOTIFICATION_SERVICE_URL}/api/notifications/payment-success`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: payment.customerEmail,
+      patientName: payment.customerName,
+      orderId: payment.orderId,
+      amount: payment.amount,
+      currency: `${payment.currency || "LKR"}`.toUpperCase(),
+      appointmentDate: payment.appointmentDate,
+      appointmentTime: payment.appointmentTime,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Notification service responded with ${response.status}: ${errorText}`);
+  }
+
+  payment.successEmailSentAt = new Date();
+  await payment.save();
+};
+
 const syncPaymentStatusFromSession = async (payment) => {
   if (!payment?.gatewaySessionId || normalizeStatus(payment.status) !== "PENDING") {
     return payment;
@@ -59,6 +92,13 @@ const syncPaymentStatusFromSession = async (payment) => {
     payment.failureReason = "";
     payment.lastWebhookEvent = "checkout.session.sync";
     await payment.save();
+
+    try {
+      await triggerPaymentSuccessEmail(payment);
+    } catch (error) {
+      console.error("Failed to send payment success email:", error.message);
+    }
+
     return payment;
   }
 
@@ -337,7 +377,7 @@ export const handleWebhook = async (req, res) => {
       const session = event.data.object;
       const orderId = session.metadata?.orderId || session.client_reference_id;
 
-      await Payment.findOneAndUpdate(
+      const payment = await Payment.findOneAndUpdate(
         { orderId },
         {
           status: "SUCCESS",
@@ -350,7 +390,16 @@ export const handleWebhook = async (req, res) => {
           failureReason: "",
           lastWebhookEvent: event.type,
         },
+        { new: true },
       );
+
+      if (payment) {
+        try {
+          await triggerPaymentSuccessEmail(payment);
+        } catch (error) {
+          console.error("Failed to send payment success email:", error.message);
+        }
+      }
     }
 
     if (event.type === "checkout.session.async_payment_failed") {
