@@ -116,12 +116,7 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
         </div>
 
         <div className="flex gap-3 mt-auto">
-          <button
-            onClick={handleViewDetails}
-            className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
-          >
-            View Details
-          </button>
+          
           
           {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
             <button
