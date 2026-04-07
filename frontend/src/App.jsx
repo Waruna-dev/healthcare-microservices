@@ -40,6 +40,7 @@ import PaymentPage from "./pages/payment/PaymentPage";
 import PaymentDashboard from "./pages/payment/paymentAdminDashboard";
 
 import AppointmentBook from './components/appointment/AppointmentBooking';
+import TelemedicineRoom from "./pages/telemedicine/TelemedicineRoom";
 
 function App() {
   return (
@@ -63,6 +64,8 @@ function App() {
         <Route path="/profile" element={<PatientProfile />} />
         <Route path="/appointments/all" element={<AllAppointments />} />
         <Route path="/appointments/book/:id" element={<AppointmentBook />} />
+
+        <Route path="/telemedicine/:id" element={<TelemedicineRoom />} />
 
         {/* Doctor Public Routes */}
         <Route path="/doctor/register" element={<DoctorRegister />} />

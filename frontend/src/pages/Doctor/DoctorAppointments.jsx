@@ -605,6 +605,16 @@ const DoctorAppointments = () => {
                 </button>
               </>
             )}
+            
+            {canJoinCall(appointment) && (
+              <button
+                onClick={() => handleJoinCall(appointment)}
+                className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+              >
+                <Video size={12} />
+                Join Call
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
@@ -692,6 +702,16 @@ const DoctorAppointments = () => {
                   Reject
                 </button>
               </>
+            )}
+            
+            {canJoinCall(appointment) && (
+              <button
+                onClick={() => handleJoinCall(appointment)}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+              >
+                <Video size={12} />
+                Join Call
+              </button>
             )}
           </div>
         </div>

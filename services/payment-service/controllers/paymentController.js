@@ -4,6 +4,8 @@ import Payment from "../models/payment.js";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const NOTIFICATION_SERVICE_URL =
   process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5035";
+const APPOINTMENT_SERVICE_URL =
+  process.env.APPOINTMENT_SERVICE_URL || "http://localhost:5015";
 
 const toAmount = (value) => Number.parseFloat(value);
 const normalizeStatus = (value) => `${value || ""}`.trim().toUpperCase();
@@ -75,6 +77,40 @@ const triggerPaymentSuccessEmail = async (payment) => {
   await payment.save();
 };
 
+const notifyAppointmentServicePaymentSuccess = async (payment) => {
+  if (!payment || !payment.appointmentId) {
+    return;
+  }
+
+  const endpoint = `${APPOINTMENT_SERVICE_URL}/api/appointments/webhook/payment-success`;
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        appointmentId: payment.appointmentId,
+        paymentId: payment.gatewayPaymentIntentId || payment.gatewaySessionId,
+        paymentDetails: {
+          orderId: payment.orderId,
+          amount: payment.amount,
+          currency: payment.currency
+        }
+      }),
+    });
+    
+    if (!response.ok) {
+       const errText = await response.text();
+       console.error("Failed to notify appointment service:", errText);
+    } else {
+       console.log("Successfully notified appointment service about payment success.");
+    }
+  } catch (error) {
+    console.error("Error notifying appointment service:", error.message);
+  }
+};
+
 const syncPaymentStatusFromSession = async (payment) => {
   if (!payment?.gatewaySessionId || normalizeStatus(payment.status) !== "PENDING") {
     return payment;
@@ -97,6 +133,12 @@ const syncPaymentStatusFromSession = async (payment) => {
       await triggerPaymentSuccessEmail(payment);
     } catch (error) {
       console.error("Failed to send payment success email:", error.message);
+    }
+    
+    try {
+      await notifyAppointmentServicePaymentSuccess(payment);
+    } catch (error) {
+      console.error("Failed to notify appointment service:", error.message);
     }
 
     return payment;
@@ -398,6 +440,12 @@ export const handleWebhook = async (req, res) => {
           await triggerPaymentSuccessEmail(payment);
         } catch (error) {
           console.error("Failed to send payment success email:", error.message);
+        }
+        
+        try {
+          await notifyAppointmentServicePaymentSuccess(payment);
+        } catch (error) {
+          console.error("Failed to notify appointment service:", error.message);
         }
       }
     }
