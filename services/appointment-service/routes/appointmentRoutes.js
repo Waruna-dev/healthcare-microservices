@@ -14,7 +14,8 @@ const {
     cancelAppointment,
     getUpcomingAppointment,
     checkSlotAvailability,
-    webhookPaymentSuccess
+    webhookPaymentSuccess,
+    checkAndCancelExpiredAppointments
 } = require('../controllers/appointmentController');
 const { protect } = require('../middleware/auth');
 
@@ -89,9 +90,11 @@ router.get('/doctor/public/:doctorId', async (req, res) => {
         console.log('🔍 PUBLIC endpoint - Fetching for doctorId:', doctorId);
         
         const Appointment = require('../models/Appointment');
-        const appointments = await Appointment.find({ 
+        let appointments = await Appointment.find({ 
             doctorId: doctorId.toString() 
         }).sort({ date: -1, createdAt: -1 });
+        
+        appointments = await checkAndCancelExpiredAppointments(appointments);
         
         console.log(`📊 Found ${appointments.length} appointments`);
         

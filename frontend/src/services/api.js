@@ -136,7 +136,10 @@ export const appointmentAPI = {
     const response = await api.get(`/appointments/check-slot?doctorId=${doctorId}&date=${date}&startTime=${startTime}`);
     return response.data;
   }
+  
 };
+
+
 
 export const telemedicineAPI = {
   getSessionInfo: async (appointmentId) => {
