@@ -27,6 +27,7 @@ const DoctorAppointmentDetail = () => {
       setLoading(true);
       setError(null);
       
+      // Use the single appointment endpoint
       const url = `http://localhost:5015/api/appointments/${id}`;
       console.log('Fetching from:', url);
       
@@ -112,28 +113,6 @@ const DoctorAppointmentDetail = () => {
     }
   };
 
-  const handleJoinCall = () => {
-    window.open(`/telemedicine/${appointment._id}`, '_blank');
-  };
-
-  const canJoinCall = () => {
-    if (!appointment) return false;
-    if (appointment.paymentStatus !== 'completed') return false;
-    if (appointment.status !== 'accepted') return false;
-    
-    const now = new Date();
-    const meetingDate = new Date(appointment.date);
-    const [hour, minute] = appointment.startTime.split(':');
-    meetingDate.setHours(parseInt(hour), parseInt(minute), 0);
-    
-    const joinWindowStart = new Date(meetingDate);
-    joinWindowStart.setMinutes(joinWindowStart.getMinutes() - 20);
-    const joinWindowEnd = new Date(meetingDate);
-    joinWindowEnd.setMinutes(joinWindowEnd.getMinutes() + 60);
-    
-    return now >= joinWindowStart && now <= joinWindowEnd;
-  };
-
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-US', {
@@ -150,9 +129,6 @@ const DoctorAppointmentDetail = () => {
       case 'accepted': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'completed': return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
-      case 'cancelled': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'no_show': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'doctor_no_show': return 'bg-purple-100 text-purple-800 border-purple-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -163,9 +139,6 @@ const DoctorAppointmentDetail = () => {
       case 'accepted': return CheckCircle;
       case 'completed': return CheckCircle;
       case 'rejected': return XCircle;
-      case 'cancelled': return XCircle;
-      case 'no_show': return AlertCircle;
-      case 'doctor_no_show': return AlertCircle;
       default: return AlertCircle;
     }
   };
@@ -220,11 +193,7 @@ const DoctorAppointmentDetail = () => {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <StatusIcon size={20} />
-            <span className="font-semibold capitalize">
-              {appointment.status === 'no_show' ? 'Patient No-Show' : 
-               appointment.status === 'doctor_no_show' ? 'Doctor No-Show' : 
-               appointment.status}
-            </span>
+            <span className="font-semibold capitalize">{appointment.status}</span>
             {appointment.status === 'accepted' && appointment.paymentStatus === 'pending' && (
               <span className="text-sm text-orange-600 ml-2">⏰ Waiting for payment (48 hours)</span>
             )}
@@ -253,46 +222,6 @@ const DoctorAppointmentDetail = () => {
             </div>
           )}
         </div>
-        
-        {/* No-Show Information */}
-        {appointment.status === 'no_show' && (
-          <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-orange-600" />
-              <span className="font-semibold text-orange-800">Patient No-Show</span>
-            </div>
-            <p className="text-sm text-orange-700 mt-1">
-              The patient did not join the telemedicine session. This appointment is marked as no-show.
-            </p>
-            {appointment.callDuration !== undefined && appointment.callDuration === 0 && (
-              <p className="text-xs text-orange-600 mt-1">
-                Doctor waited but patient never joined the call.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Doctor No-Show Information */}
-        {appointment.status === 'doctor_no_show' && (
-          <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-purple-600" />
-              <span className="font-semibold text-purple-800">Doctor No-Show</span>
-            </div>
-            <p className="text-sm text-purple-700 mt-1">
-              You did not join the telemedicine session. Patient may request a refund.
-            </p>
-          </div>
-        )}
-
-        {/* Call Duration Info */}
-        {appointment.callDuration > 0 && (
-          <div className="mt-2 text-sm text-gray-600">
-            <Clock size={14} className="inline mr-1" />
-            Call duration: {Math.floor(appointment.callDuration / 60)} minutes {appointment.callDuration % 60} seconds
-          </div>
-        )}
-
         {appointment.rejectionReason && (
           <div className="mt-3 p-2 bg-red-50 rounded text-sm text-red-700">
             <strong>Rejection Reason:</strong> {appointment.rejectionReason}
@@ -429,84 +358,6 @@ const DoctorAppointmentDetail = () => {
               </div>
             </div>
           </div>
-
-          {/* Join Call Button Section */}
-          {appointment.paymentStatus === 'completed' && appointment.status === 'accepted' && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-              <h2 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <Video size={20} className="text-blue-600" /> Telemedicine Session
-              </h2>
-              
-              {canJoinCall() ? (
-                <button
-                  onClick={handleJoinCall}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
-                >
-                  <Video size={20} />
-                  Join Telemedicine Session
-                </button>
-              ) : (
-                <div className="text-center p-4 bg-white rounded-xl">
-                  <Clock size={32} className="mx-auto text-gray-400 mb-2" />
-                  <p className="text-gray-600 font-medium">Meeting Available 20 Minutes Before</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Scheduled Time: {appointment.startTime} - {appointment.endTime}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    The join button will appear 20 minutes before the scheduled time
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Waiting for payment message */}
-          {appointment.paymentStatus !== 'completed' && appointment.status === 'accepted' && (
-            <div className="bg-orange-50 rounded-xl p-6 border border-orange-200">
-              <div className="flex items-center gap-3 mb-3">
-                <CreditCard size={20} className="text-orange-600" />
-                <h2 className="text-lg font-semibold text-gray-800">Awaiting Payment</h2>
-              </div>
-              <p className="text-sm text-gray-600">
-                The patient needs to complete the payment before the telemedicine session can begin.
-              </p>
-              <p className="text-xs text-orange-600 mt-2">
-                Payment deadline: {appointment.paymentDeadline ? new Date(appointment.paymentDeadline).toLocaleString() : '48 hours from acceptance'}
-              </p>
-            </div>
-          )}
-
-          {/* No-Show Information Card */}
-          {appointment.status === 'no_show' && (
-            <div className="bg-orange-100 rounded-xl p-6 border border-orange-300">
-              <div className="flex items-center gap-3 mb-3">
-                <AlertCircle size={20} className="text-orange-700" />
-                <h2 className="text-lg font-semibold text-orange-800">Appointment Status: No-Show</h2>
-              </div>
-              <p className="text-sm text-orange-700">
-                The patient did not join the scheduled telemedicine session.
-              </p>
-              <p className="text-xs text-orange-600 mt-2">
-                You may reschedule or contact the patient for follow-up.
-              </p>
-            </div>
-          )}
-
-          {/* Doctor No-Show Information Card */}
-          {appointment.status === 'doctor_no_show' && (
-            <div className="bg-purple-100 rounded-xl p-6 border border-purple-300">
-              <div className="flex items-center gap-3 mb-3">
-                <AlertCircle size={20} className="text-purple-700" />
-                <h2 className="text-lg font-semibold text-purple-800">Appointment Status: Doctor No-Show</h2>
-              </div>
-              <p className="text-sm text-purple-700">
-                You missed this scheduled telemedicine session.
-              </p>
-              <p className="text-xs text-purple-600 mt-2">
-                Please contact the patient to apologize and reschedule.
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -551,6 +402,8 @@ const DoctorAppointmentDetail = () => {
           </div>
         </div>
       )}
+
+      
     </div>
   );
 };

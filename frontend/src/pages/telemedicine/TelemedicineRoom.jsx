@@ -13,24 +13,12 @@ const TelemedicineRoom = () => {
   const [timeUntilJoin, setTimeUntilJoin] = useState(null);
   const [jitsiLoaded, setJitsiLoaded] = useState(false);
   const [jitsiInitializing, setJitsiInitializing] = useState(false);
-  const [showOutcomeModal, setShowOutcomeModal] = useState(false);
-  const [userRole, setUserRole] = useState('patient');
   const containerRef = useRef(null);
   const jitsiApiRef = useRef(null);
   const intervalRef = useRef(null);
 
   // Fetch telemedicine info on mount
   useEffect(() => {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const userObj = JSON.parse(userStr);
-        if (userObj.doctor) setUserRole('doctor');
-        else if (userObj.patient) setUserRole('patient');
-        else setUserRole(userObj.role || 'patient');
-      }
-    } catch (e) {}
-
     fetchTelemedicineInfo();
     
     return () => {
@@ -133,20 +121,14 @@ const TelemedicineRoom = () => {
 
     // Determine current user display name
     let displayName = appointmentData?.patientName || 'User';
+    let userRole = 'patient';
     try {
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const userObj = JSON.parse(userStr);
-        const actualUser = userObj.doctor || userObj.patient || userObj;
-        
-        displayName = actualUser.name || actualUser.firstName || actualUser.username || displayName;
-        
-        let detectedRole = 'patient';
-        if (userObj.doctor) detectedRole = 'doctor';
-        else if (userObj.patient) detectedRole = 'patient';
-        else detectedRole = actualUser.role || 'patient';
-
-        if (detectedRole === 'doctor' && !displayName.toLowerCase().includes('dr')) {
+        displayName = userObj.name || userObj.firstName || userObj.username || displayName;
+        userRole = userObj.role || 'patient';
+        if (userRole === 'doctor' && !displayName.toLowerCase().includes('dr')) {
           displayName = `Dr. ${displayName}`;
         }
       }
@@ -192,14 +174,7 @@ const TelemedicineRoom = () => {
       
       api.addListener('videoConferenceLeft', () => {
         console.log('👋 Left telemedicine session (user clicked hangup)');
-        // Unmount Jitsi iframe so we can show the modal clearly
-        if (jitsiApiRef.current) {
-          try {
-            jitsiApiRef.current.dispose();
-          } catch (e) {}
-          jitsiApiRef.current = null;
-        }
-        setShowOutcomeModal(true);
+        handleEndCall();
       });
       
       api.addListener('readyToClose', () => {
@@ -286,39 +261,48 @@ const TelemedicineRoom = () => {
     }
   };
 
-  const submitOutcome = async (finalStatus) => {
+  const handleEndCall = async () => {
     try {
-      // If patient just selects "Ended normally", they just leave without mutating the status
-      // We leave the status alone so the doctor can write prescriptions later
-      if (userRole === 'patient' && finalStatus === 'leave') {
-        return navigate('/dashboard');
-      }
-
-      console.log(`Sending request to mark appointment as ${finalStatus}...`, id);
+      console.log('Sending request to mark appointment as completed...', id);
       const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5015/api/appointments/${id}/complete`, {
+      const response = await fetch(`http://localhost:5015/api/appointments/${id}/complete`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
-          consultationNotes: 
-            finalStatus === 'no-show' ? 'Patient did not attend the session' : 
-            finalStatus === 'doctor-no-show' ? 'Patient reported that doctor did not attend' :
-            'Telemedicine session completed',
-          status: finalStatus
-        })
+        body: JSON.stringify({ consultationNotes: 'Telemedicine session completed' })
       });
+      const data = await response.json();
+      console.log('Completion response:', data);
     } catch (error) {
-      console.error('Error recording outcome:', error);
+      console.error('Error completing appointment:', error);
     }
     
-    if (userRole === 'doctor') {
-      navigate('/doctor/appointments');
-    } else {
-      navigate('/dashboard');
+    // Clean up Jitsi
+    if (jitsiApiRef.current) {
+      try {
+        jitsiApiRef.current.dispose();
+      } catch (e) {
+        console.error('Error disposing Jitsi:', e);
+      }
+      jitsiApiRef.current = null;
     }
+    
+    // Redirect based on user role
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.role === 'doctor') {
+          return navigate('/doctor/appointments');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to parse user', err);
+    }
+    
+    navigate('/dashboard');
   };
 
   const formatTimeUntilJoin = (ms) => {
@@ -410,77 +394,24 @@ const TelemedicineRoom = () => {
             Dr. {appointment?.doctorName} • {appointment?.startTime}
           </p>
         </div>
-        <div className="text-right text-sm text-gray-400 flex items-center gap-4">
-          <p className="hidden sm:block">{appointment && formatDateTime(appointment.date)}</p>
+        <div className="text-right text-sm text-gray-400">
+          <p>{appointment && formatDateTime(appointment.date)}</p>
         </div>
       </div>
       
       {/* Jitsi Container - Jitsi has its own end call button */}
-      {!showOutcomeModal && (
-        <div 
-          ref={containerRef} 
-          className="flex-1 w-full relative z-0"
-          style={{ minHeight: 'calc(100vh - 60px)' }}
-        />
-      )}
+      <div 
+        ref={containerRef} 
+        className="flex-1 w-full relative z-0"
+        style={{ minHeight: 'calc(100vh - 60px)' }}
+      />
       
       {/* Loading overlay while Jitsi initializes */}
-      {jitsiInitializing && !jitsiLoaded && !showOutcomeModal && (
+      {jitsiInitializing && !jitsiLoaded && (
         <div className="absolute inset-x-0 bottom-0 top-[60px] flex items-center justify-center bg-gray-900/90 z-10">
           <div className="text-center">
             <Loader className="w-10 h-10 text-white animate-spin mx-auto mb-4" />
             <p className="text-white text-sm">Preparing secure session...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Outcome Modal shown after Hang Up */}
-      {showOutcomeModal && (
-        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Session Ended</h2>
-            <p className="text-gray-600 mb-8">Please confirm the outcome of this meeting to update the records.</p>
-            
-            <div className="space-y-3">
-              {userRole === 'doctor' ? (
-                <>
-                  <button
-                    onClick={() => submitOutcome('completed')}
-                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition"
-                  >
-                    Consultation Completed Successfully
-                  </button>
-                  <button
-                    onClick={() => submitOutcome('no-show')}
-                    className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-medium transition"
-                  >
-                    Patient Did Not Show Up
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => submitOutcome('leave')}
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition"
-                  >
-                    Leave Session Successfully
-                  </button>
-                  <button
-                    onClick={() => submitOutcome('doctor-no-show')}
-                    className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-medium transition"
-                  >
-                    Doctor Did Not Show Up
-                  </button>
-                </>
-              )}
-            </div>
-            
-            <button
-              onClick={() => submitOutcome(userRole === 'patient' ? 'leave' : 'completed')}
-              className="mt-6 text-sm text-gray-500 hover:text-gray-700 underline"
-            >
-              Skip and return to dashboard
-            </button>
           </div>
         </div>
       )}

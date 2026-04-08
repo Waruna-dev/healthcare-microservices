@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Bell, User } from 'lucide-react';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
 const API_BASE = 'http://localhost:5025/api/doctors';
@@ -42,6 +43,7 @@ const DoctorProfile = () => {
   const [schedule, setSchedule] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState({ name: 'John Doe', email: 'patient@example.com' });
 
   useEffect(() => {
     const fetchDoctorData = async () => {
@@ -106,7 +108,7 @@ const DoctorProfile = () => {
     return (
       <div className="flex justify-center items-center h-96">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <p className="text-gray-500 text-sm">Loading doctor profile...</p>
         </div>
       </div>
@@ -118,12 +120,43 @@ const DoctorProfile = () => {
   const initials = doctor.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30 py-8 px-4">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30">
+      {/* Patient Dashboard Header */}
+      <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
+        <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+          <div className="flex items-center gap-12">
+            <Link to="/" className="text-2xl font-extrabold text-primary font-headline tracking-tighter hover:opacity-80 transition-opacity">
+              CareSync
+            </Link>
+            <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
+              <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
+              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
+              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
+            </nav>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all">
+              <Bell size={20} />
+            </button>
+
+            <div className="relative">
+              <button 
+                className="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-center bg-primary-container text-primary font-bold shadow-sm hover:shadow-md"
+              >
+                {user && user.name ? user.name.charAt(0) : <User size={20} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <div className="py-8 px-4">
+        <div className="max-w-5xl mx-auto">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-emerald-600 font-semibold hover:text-emerald-700 transition-colors mb-6 group"
+          className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-700 transition-colors mb-6 group"
         >
           <svg className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -140,7 +173,7 @@ const DoctorProfile = () => {
 
         {/* Hero Card */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-6">
-          <div className="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-500" />
+          <div className="h-1.5 bg-gradient-to-r from-blue-500 to-blue-600" />
           
           <div className="p-6 md:p-8">
             <div className="flex flex-col md:flex-row gap-6 items-start">
@@ -150,18 +183,18 @@ const DoctorProfile = () => {
                   <img
                     src={doctor.profileImage}
                     alt={doctor.name}
-                    className="w-28 h-28 rounded-full object-cover border-4 border-emerald-100 shadow-md"
+                    className="w-28 h-28 rounded-full object-cover border-4 border-blue-100 shadow-md"
                     onError={(e) => {
                       e.target.style.display = 'none';
                       e.target.nextSibling.style.display = 'flex';
                     }}
                   />
                 ) : null}
-                <div className={`w-28 h-28 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-emerald-100 shadow-md ${doctor.profileImage ? 'hidden' : 'flex'}`}>
+                <div className={`w-28 h-28 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white text-3xl font-bold border-4 border-blue-100 shadow-md ${doctor.profileImage ? 'hidden' : 'flex'}`}>
                   {initials}
                 </div>
                 <span className={`absolute bottom-2 right-2 w-4 h-4 rounded-full border-2 border-white ${
-                  doctor.isAvailable ? 'bg-green-500' : 'bg-gray-400'
+                  doctor.isAvailable ? 'bg-blue-500' : 'bg-gray-400'
                 }`} />
               </div>
 
@@ -173,8 +206,8 @@ const DoctorProfile = () => {
 
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2 mb-3">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
+                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
                     {doctor.specialty}
                   </span>
                   {doctor.qualifications?.map((q, idx) => (
@@ -214,9 +247,9 @@ const DoctorProfile = () => {
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Reviews</p>
                     <p className="text-base font-bold text-gray-800">{doctor.reviewCount}</p>
                   </div>
-                  <div className={`p-3 text-center border-l border-gray-100 ${doctor.isAvailable ? 'bg-emerald-50' : ''}`}>
+                  <div className={`p-3 text-center border-l border-gray-100 ${doctor.isAvailable ? 'bg-blue-50' : ''}`}>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Status</p>
-                    <p className={`text-sm font-bold ${doctor.isAvailable ? 'text-emerald-600' : 'text-gray-500'}`}>
+                    <p className={`text-sm font-bold ${doctor.isAvailable ? 'text-blue-600' : 'text-gray-500'}`}>
                       {doctor.isAvailable ? 'Available' : 'Busy'}
                     </p>
                   </div>
@@ -233,7 +266,7 @@ const DoctorProfile = () => {
             {/* About */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-lg">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-lg">
                   👤
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800">About</h3>
@@ -245,7 +278,7 @@ const DoctorProfile = () => {
             {doctor.specializations?.length > 0 && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-lg">
+                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-lg">
                     🏥
                   </div>
                   <h3 className="text-lg font-semibold text-gray-800">Specializations</h3>
@@ -263,7 +296,7 @@ const DoctorProfile = () => {
             {/* Details */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-lg">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-lg">
                   📋
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800">Details</h3>
@@ -279,7 +312,7 @@ const DoctorProfile = () => {
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm text-gray-500">Email</span>
-                  <span className="text-sm font-semibold text-emerald-600">{doctor.email || 'Not provided'}</span>
+                  <span className="text-sm font-semibold text-blue-600">{doctor.email || 'Not provided'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm text-gray-500">Location</span>
@@ -292,11 +325,11 @@ const DoctorProfile = () => {
           {/* Right Column */}
           <div className="space-y-6">
             {/* Booking CTA */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-6 shadow-lg">
-              <p className="text-xs text-emerald-100 uppercase tracking-wider mb-1">Consultation Fee</p>
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 shadow-lg">
+              <p className="text-xs text-blue-100 uppercase tracking-wider mb-1">Consultation Fee</p>
               <p className="text-3xl font-bold text-white mb-2">
                 LKR{schedule?.price?.toLocaleString() || doctor.consultationFee?.toLocaleString() || 'N/A'}
-                <span className="text-sm font-medium text-emerald-200"> / session</span>
+                <span className="text-sm font-medium text-blue-200"> / session</span>
               </p>
               
               {/* Schedule Info */}
@@ -322,7 +355,7 @@ const DoctorProfile = () => {
                 disabled={!doctor.isAvailable}
                 className={`w-full py-3 rounded-xl font-semibold transition-all mb-3 ${
                   doctor.isAvailable
-                    ? 'bg-white text-emerald-600 hover:shadow-lg transform hover:-translate-y-0.5'
+                    ? 'bg-white text-blue-600 hover:shadow-lg transform hover:-translate-y-0.5'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
@@ -339,7 +372,7 @@ const DoctorProfile = () => {
             {/* Availability Schedule */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-lg">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-lg">
                   🗓️
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800">Weekly Availability</h3>
@@ -349,7 +382,7 @@ const DoctorProfile = () => {
                   <div key={day} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                     <span className="text-sm font-medium text-gray-700 w-24">{day}</span>
                     {open ? (
-                      <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                      <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
                         {time}
                       </span>
                     ) : (
@@ -380,6 +413,7 @@ const DoctorProfile = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

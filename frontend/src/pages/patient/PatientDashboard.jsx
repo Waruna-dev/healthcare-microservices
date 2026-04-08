@@ -1,6 +1,6 @@
 // src/pages/patient/PatientDashboard.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Heart, Activity, Moon, Footprints, 
@@ -112,6 +112,12 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
         </div>
 
         <div className="flex gap-3 mt-auto">
+<button
+  onClick={handleViewDetails}
+  className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
+>
+  View Details
+</button>
           {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
             <button
               onClick={() => onPaymentComplete?.(appointment)}
@@ -137,6 +143,7 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
 
 const PatientDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
@@ -462,9 +469,34 @@ const PatientDashboard = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <span className="text-primary border-b-2 border-primary pb-1">Dashboard</span>
-              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
-              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
+<Link 
+  to="/patient/dashboard" 
+  className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Sanctuary
+</Link>
+
+<Link 
+  to="/doctor/listing" 
+  className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Specialists
+</Link>
+
+<Link 
+  to="/appointments/all" 
+  className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Appointments
+</Link>
+
+<Link 
+  to="/prescriptions" 
+  className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
+>
+  <FileText size={16} />
+  Prescriptions
+</Link>
             </nav>
           </div>
           
