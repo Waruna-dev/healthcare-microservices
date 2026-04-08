@@ -407,7 +407,7 @@ const PatientDashboard = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
+              <span className="text-primary border-b-2 border-primary pb-1">Dashboard</span>
               <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
               <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
             </nav>

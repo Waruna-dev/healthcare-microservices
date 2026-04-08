@@ -6,6 +6,7 @@ import axios from 'axios';
 const ManageDoctor = () => {
   const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false); // NEW: Tracks button loading states
   const [searchTerm, setSearchTerm] = useState('');
   
   // Modal States
@@ -25,7 +26,6 @@ const ManageDoctor = () => {
     'Emergency Medicine', 'Family Medicine', 'Internal Medicine'
   ];
 
-  // 1. Fetch all APPROVED doctors on load
   useEffect(() => {
     fetchDoctors();
   }, []);
@@ -34,13 +34,12 @@ const ManageDoctor = () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('adminToken');
-      // Fetching all doctors through the Admin Service
+      
       const response = await axios.get('http://localhost:5002/doctors', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       const allDoctors = response.data.data || [];
-      // Filter to only show approved doctors in this management table
       const approvedDoctors = allDoctors.filter(doc => doc.status === 'approved');
       setDoctors(approvedDoctors);
     } catch (error) {
@@ -51,7 +50,6 @@ const ManageDoctor = () => {
     }
   };
 
-  // Helper: Show Custom Toast
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => {
@@ -59,14 +57,13 @@ const ManageDoctor = () => {
     }, 3000); 
   };
 
-  // 2. Handle Search Filter
+  // FIX: Added optional chaining (?.) to prevent crashes if a field is undefined
   const filteredDoctors = doctors.filter(doc => 
-    doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doc.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     doc.licenseNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // 3. Edit Doctor Controls
   const openEditModal = (doctor) => {
     setSelectedDoctor({ ...doctor, password: '' }); 
     setIsEditModalOpen(true);
@@ -79,20 +76,24 @@ const ManageDoctor = () => {
   const handleUpdateDoctor = async (e) => {
     e.preventDefault();
     try {
+      setIsProcessing(true); // Disable button
       const token = localStorage.getItem('adminToken');
       await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}`, selectedDoctor, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setDoctors(doctors.map(d => d._id === selectedDoctor._id ? selectedDoctor : d));
+      // FIX: Fetch fresh data instead of guessing the array state
+      await fetchDoctors(); 
+      
       setIsEditModalOpen(false);
       showToast("Doctor profile updated successfully!", "success");
     } catch (error) {
       showToast("Failed to update doctor details.", "error");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  // 4. Delete Doctor Controls
   const openDeleteModal = (doctor) => {
     setDoctorToDelete(doctor);
   };
@@ -101,23 +102,28 @@ const ManageDoctor = () => {
     if (!doctorToDelete) return;
 
     try {
+      setIsProcessing(true); // Disable button
       const token = localStorage.getItem('adminToken');
       await axios.delete(`http://localhost:5002/doctors/${doctorToDelete._id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setDoctors(doctors.filter(d => d._id !== doctorToDelete._id));
+      
+      // FIX: Fetch fresh data to guarantee the UI matches the database perfectly
+      await fetchDoctors();
+      
       setDoctorToDelete(null); 
       showToast("Doctor permanently deleted.", "success");
     } catch (error) {
       setDoctorToDelete(null);
       showToast("Failed to delete doctor.", "error");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return (
     <div className="p-8 font-body bg-surface min-h-screen text-on-surface relative">
       
-      {/* Header & Search */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline text-primary">Manage Doctors</h1>
@@ -136,7 +142,6 @@ const ManageDoctor = () => {
         </div>
       </div>
 
-      {/* Data Table */}
       <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -196,7 +201,6 @@ const ManageDoctor = () => {
         </div>
       </div>
 
-      {/* --- 1. UPDATE MODAL --- */}
       {isEditModalOpen && selectedDoctor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-surface-container-lowest w-full max-w-2xl rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col max-h-[90vh]">
@@ -253,7 +257,6 @@ const ManageDoctor = () => {
                   </div>
                 </div>
 
-                {/* --- NEW PASSWORD RESET FIELD --- */}
                 <div className="space-y-1 border-t border-outline-variant/20 pt-4">
                   <label className="text-sm font-bold ml-1">Reset Password <span className="text-on-surface-variant font-normal italic">(Optional)</span></label>
                   <div className="relative">
@@ -270,8 +273,10 @@ const ManageDoctor = () => {
                 </div>
 
                 <div className="pt-4 flex gap-3 justify-end">
-                  <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors">Cancel</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl font-bold bg-primary text-white shadow-md hover:bg-primary-container transition-colors">Save Changes</button>
+                  <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors" disabled={isProcessing}>Cancel</button>
+                  <button type="submit" className="px-5 py-2.5 rounded-xl font-bold bg-primary text-white shadow-md hover:bg-primary-container transition-colors disabled:opacity-50" disabled={isProcessing}>
+                    {isProcessing ? 'Saving...' : 'Save Changes'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -279,7 +284,6 @@ const ManageDoctor = () => {
         </div>
       )}
 
-      {/* --- 2. DELETE CONFIRMATION MODAL --- */}
       {doctorToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-surface-container-lowest w-full max-w-md rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden p-6 text-center transform transition-all">
@@ -297,21 +301,22 @@ const ManageDoctor = () => {
               <button 
                 onClick={() => setDoctorToDelete(null)} 
                 className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50"
+                disabled={isProcessing}
               >
                 Cancel
               </button>
               <button 
                 onClick={executeDelete} 
-                className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors"
+                className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors disabled:opacity-50"
+                disabled={isProcessing}
               >
-                Yes, Delete
+                {isProcessing ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- 3. CUSTOM TOAST NOTIFICATION --- */}
       {toast.show && (
         <div className={`fixed bottom-8 right-8 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl transform transition-all duration-300 animate-in slide-in-from-bottom-5 ${
           toast.type === 'error' ? 'bg-error text-white' : 'bg-surface-container-highest text-on-surface'

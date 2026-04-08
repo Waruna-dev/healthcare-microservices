@@ -106,7 +106,7 @@ const buildDoctorRejectionEmail = ({ name }) => {
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5; margin-bottom: 20px;">
           If you have updated credentials, obtained a new medical license, or believe your application was rejected in error, you are welcome to submit a new application.
         </p>
-        <a href="http://localhost:5173/register" style="background-color: #111827; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
+        <a href="http://localhost:5173/doctor/register" style="background-color: #111827; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
       </div>
       <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 40px 0 20px 0;" />
       <div style="text-align: center; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">

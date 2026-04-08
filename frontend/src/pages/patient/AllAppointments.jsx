@@ -968,7 +968,7 @@ const handleUpdateSuccess = (updatedAppointment) => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-gray-600">
-              <Link to="/dashboard" className="hover:text-blue-600 cursor-pointer transition-colors">Sanctuary</Link>
+              <Link to="/dashboard" className="hover:text-blue-600 cursor-pointer transition-colors">Dashboard</Link>
               <Link to="/doctor/listing" className="hover:text-blue-600 cursor-pointer transition-colors">Specialists</Link>
               <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
             </nav>
