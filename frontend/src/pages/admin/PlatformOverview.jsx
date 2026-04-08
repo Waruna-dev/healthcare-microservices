@@ -24,7 +24,7 @@ const PlatformOverview = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  // --- NEW: Custom Reject Modal State ---
+  // Custom Reject Modal State
   const [isRejectConfirmOpen, setIsRejectConfirmOpen] = useState(false);
 
   // Fetch Dashboard Data
@@ -54,7 +54,7 @@ const PlatformOverview = () => {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
   };
 
-  // --- 1. OPEN MODAL & FETCH DOCTOR DETAILS ---
+  // 1. OPEN MODAL & FETCH DOCTOR DETAILS
   const handleReviewClick = async (doctorId) => {
     try {
       const token = localStorage.getItem('adminToken');
@@ -71,7 +71,7 @@ const PlatformOverview = () => {
     }
   };
 
-  // --- 2. APPROVE DOCTOR ---
+  // 2. APPROVE DOCTOR
   const handleApprove = async () => {
     setIsActionLoading(true);
     try {
@@ -84,7 +84,8 @@ const PlatformOverview = () => {
       if (response.data.success) {
         showToast("Doctor approved! Temporary password sent via email.");
         setIsModalOpen(false);
-        fetchDashboardStats(); // Refresh the lists and stats
+        // FIX: Added 'await' so the UI doesn't refresh until the new data arrives
+        await fetchDashboardStats(); 
       }
     } catch (error) {
       showToast(error.response?.data?.message || "Failed to approve doctor", "error");
@@ -93,7 +94,7 @@ const PlatformOverview = () => {
     }
   };
 
-  // --- 3. CONFIRM & REJECT DOCTOR ---
+  // 3. CONFIRM & REJECT DOCTOR
   const confirmReject = async () => {
     setIsActionLoading(true);
     try {
@@ -105,9 +106,10 @@ const PlatformOverview = () => {
 
       if (response.data.success) {
         showToast("Doctor registration rejected and data deleted.", "error");
-        setIsRejectConfirmOpen(false); // Close confirm modal
-        setIsModalOpen(false); // Close review modal
-        fetchDashboardStats(); // Refresh the list
+        setIsRejectConfirmOpen(false); 
+        setIsModalOpen(false); 
+        // FIX: Added 'await' so the UI doesn't refresh until the new data arrives
+        await fetchDashboardStats(); 
       }
     } catch (error) {
       showToast(error.response?.data?.message || "Failed to reject doctor", "error");
@@ -185,16 +187,16 @@ const PlatformOverview = () => {
 
               <div className="p-6 bg-surface-container-low border-t border-outline-variant/30 flex gap-4">
                 <button 
-                  onClick={() => setIsRejectConfirmOpen(true)} // <-- Trigger the custom modal
+                  onClick={() => setIsRejectConfirmOpen(true)} 
                   disabled={isActionLoading}
-                  className="flex-1 py-3 px-4 rounded-xl font-bold text-error bg-error-container hover:bg-error hover:text-white transition-colors flex justify-center items-center gap-2"
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-error bg-error-container hover:bg-error hover:text-white transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
                 >
                   <XCircle size={18} /> Reject
                 </button>
                 <button 
                   onClick={handleApprove}
                   disabled={isActionLoading}
-                  className="flex-[2] py-3 px-4 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 shadow-md transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                  className="flex-[2] py-3 px-4 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 shadow-md transition-all active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50"
                 >
                   {isActionLoading ? 'Processing...' : <><Check size={18} /> Approve & Send Password</>}
                 </button>
@@ -204,7 +206,7 @@ const PlatformOverview = () => {
         )}
       </AnimatePresence>
 
-      {/* --- NEW: CUSTOM REJECT CONFIRMATION MODAL --- */}
+      {/* --- CUSTOM REJECT CONFIRMATION MODAL --- */}
       <AnimatePresence>
         {isRejectConfirmOpen && selectedDoctor && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -227,14 +229,14 @@ const PlatformOverview = () => {
                 <button 
                   onClick={() => setIsRejectConfirmOpen(false)} 
                   disabled={isActionLoading}
-                  className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50"
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={confirmReject} 
                   disabled={isActionLoading}
-                  className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors flex justify-center items-center gap-2"
+                  className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
                 >
                   {isActionLoading ? 'Processing...' : 'Yes, Reject'}
                 </button>

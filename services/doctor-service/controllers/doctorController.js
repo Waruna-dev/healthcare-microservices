@@ -1,6 +1,7 @@
 const Doctor = require('../models/Doctor');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { clearCache } = require('../middleware/cache'); 
 
 // ==================== GET ALL DOCTORS ====================
 const getAllDoctors = async (req, res) => {
@@ -52,7 +53,7 @@ const getAllDoctors = async (req, res) => {
             total,
             page: parseInt(page),
             pages: Math.ceil(total / parseInt(limit)),
-            doctors: doctors
+            data: doctors // Matches your React frontend!
         });
     } catch (error) {
         console.error('Error fetching doctors:', error);
@@ -159,6 +160,9 @@ const registerDoctor = async (req, res) => {
         });
 
         await doctor.save();
+
+        // CLEAR CACHE WHEN NEW DOCTOR REGISTERS 
+        clearCache('doctors');
 
         const doctorResponse = doctor.toJSON();
 
@@ -289,6 +293,9 @@ const updateDoctor = async (req, res) => {
             });
         }
 
+        // CLEAR CACHE WHEN DOCTOR PROFILE IS UPDATED 
+        clearCache('doctors');
+
         res.status(200).json({
             success: true,
             message: 'Doctor updated successfully',
@@ -323,6 +330,9 @@ const deleteDoctor = async (req, res) => {
                 message: 'Doctor not found'
             });
         }
+
+        //  CLEAR CACHE WHEN DOCTOR IS DELETED 
+        clearCache('doctors');
 
         res.status(200).json({
             success: true,
@@ -390,6 +400,9 @@ const toggleDoctorAvailability = async (req, res) => {
         doctor.updatedAt = Date.now();
         await doctor.save();
 
+        //  CLEAR CACHE WHEN AVAILABILITY CHANGES 
+        clearCache('doctors');
+
         res.status(200).json({
             success: true,
             message: `Doctor availability ${doctor.isAvailable ? 'activated' : 'deactivated'}`,
@@ -420,6 +433,9 @@ const adminUpdateDoctor = async (req, res) => {
         if (!updatedDoctor) {
             return res.status(404).json({ success: false, message: 'Doctor not found' });
         }
+
+        //  CLEAR CACHE WHEN ADMIN APPROVES/REJECTS 
+        clearCache('doctors');
 
         res.status(200).json({ success: true, data: updatedDoctor });
     } catch (error) {
