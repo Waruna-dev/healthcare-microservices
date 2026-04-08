@@ -369,6 +369,55 @@ const updateProfilePicture = async (req, res) => {
     }
 };
 
+// @desc    Delete a specific medical report
+// @route   DELETE /api/patients/reports/:filename
+const deleteMedicalReport = async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const patientId = req.patient._id || req.patient.id;
+    
+    const patient = await Patient.findById(patientId);
+
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+
+    // 1. Find the index of the report in the patient's array
+    const reportIndex = patient.uploadedReports.findIndex(
+      report => report.fileName === filename || report.filePath.includes(filename)
+    );
+
+    if (reportIndex === -1) {
+      return res.status(404).json({ message: 'Report not found in your records.' });
+    }
+
+    // 2. Get the file path so we can delete the actual PDF from the server
+    const reportToDelete = patient.uploadedReports[reportIndex];
+    // This matches the logic you used in the deletePatientAccount function
+    const physicalFilePath = path.join(__dirname, '../', reportToDelete.filePath);
+
+    // 3. Remove it from the MongoDB array
+    patient.uploadedReports.splice(reportIndex, 1);
+    await patient.save();
+
+    // 4. Delete the physical file from the 'uploads' folder
+    if (fs.existsSync(physicalFilePath)) {
+      fs.unlinkSync(physicalFilePath);
+    }
+
+    // 5. Send back the updated list of reports so React updates instantly!
+    res.status(200).json({ 
+      success: true, 
+      message: 'Report deleted successfully',
+      reports: patient.uploadedReports 
+    });
+
+  } catch (error) {
+    console.error('Delete Report Error:', error);
+    res.status(500).json({ message: 'Server error while deleting report.' });
+  }
+};
+
 module.exports = { 
   registerPatient, 
   loginPatient, 
@@ -380,5 +429,6 @@ module.exports = {
   updatePatientById,
   deletePatientById,
   getAllPatients,
-  updateProfilePicture
+  updateProfilePicture,
+  deleteMedicalReport
 };
