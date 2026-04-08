@@ -59,6 +59,10 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
                       appointment.status === 'accepted' &&
                       appointment.telemedicineLink;
 
+  const handleViewDetails = () => {
+    navigate(`/appointments/${appointment._id}`);
+  };
+
   return (
     <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300 h-full flex flex-col">
       <div className={`h-1.5 ${
