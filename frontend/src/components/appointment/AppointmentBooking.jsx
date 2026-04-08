@@ -103,7 +103,7 @@ const AppointmentBooking = () => {
             if (data.success && data.appointments) {
                 const booked = new Set();
                 data.appointments.forEach(apt => {
-                    if (['pending', 'accepted', 'cancelled','completed', 'no_show', 'doctor_no_show'].includes(apt.status)) {
+                    if (apt.status === 'pending' || apt.status === 'accepted') {
                         const aptDate = new Date(apt.date).toISOString().split('T')[0];
                         const slotKey = `${aptDate}_${apt.startTime}`;
                         booked.add(slotKey);
