@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 const appointmentSchema = new mongoose.Schema({
     patientId: {
-        type: String,  // Changed from ObjectId to String to avoid model dependency
+        type: String,
         required: true,
         index: true
     },
     doctorId: {
-        type: String,  // Changed from ObjectId to String
+        type: String,
         required: true,
         index: true
     },
@@ -20,6 +20,10 @@ const appointmentSchema = new mongoose.Schema({
         default: ''
     },
     doctorName: {
+        type: String,
+        default: ''
+    },
+    doctorEmail: {
         type: String,
         default: ''
     },
@@ -49,13 +53,17 @@ const appointmentSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'accepted', 'rejected', 'cancelled', 'completed'],
+        enum: ['pending', 'accepted', 'rejected', 'cancelled', 'completed', 'no_show', 'doctor_no_show'],
         default: 'pending'
     },
     paymentStatus: {
         type: String,
         enum: ['pending', 'completed', 'failed', 'refunded'],
         default: 'pending'
+    },
+    paymentDeadline: {
+        type: Date,
+        default: null
     },
     paymentId: {
         type: String,
@@ -96,6 +104,27 @@ const appointmentSchema = new mongoose.Schema({
     },
     rejectionReason: {
         type: String,
+        default: null
+    },
+    // NEW FIELDS FOR NO-SHOW TRACKING
+    callDuration: {
+        type: Number,
+        default: 0
+    },
+    hasDoctorJoined: {
+        type: Boolean,
+        default: false
+    },
+    hasPatientJoined: {
+        type: Boolean,
+        default: false
+    },
+    callStartTime: {
+        type: Date,
+        default: null
+    },
+    callEndTime: {
+        type: Date,
         default: null
     }
 }, {
