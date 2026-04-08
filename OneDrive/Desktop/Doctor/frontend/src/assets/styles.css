@@ -1,9 +1,0 @@
-/* 1. Import Fonts and Icons */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined');
-
-/* 2. The NEW Tailwind v4 Import (This fixes the VS Code warning!) */
-@import "tailwindcss";
-
-/* 3. Tell Tailwind v4 to load our custom Digital Sanctuary configuration */
-@config "../../tailwind.config.js";
