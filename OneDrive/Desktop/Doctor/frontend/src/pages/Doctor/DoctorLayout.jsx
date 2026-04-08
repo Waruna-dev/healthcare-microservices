@@ -10,10 +10,8 @@ const DoctorLayout = () => {
   const [menuItems, setMenuItems] = useState([
     { path: '/doctor/dashboard', name: 'Dashboard', icon: '📊' },
     { path: '/doctor/appointments', name: 'Appointments', icon: '📅' },
-    { path: '/doctor/patients', name: 'My Patients', icon: '👥' },
     { path: '/doctor/schedule', name: 'Schedule', icon: '📆' },
     { path: '/doctor/weekly-schedule', name: 'Weekly Schedule', icon: '📅' },
-    { path: '/doctor/availability', name: 'Availability', icon: '⏰' },
     { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },
     { path: '/doctor/settings', name: 'Settings', icon: '⚙️' },
