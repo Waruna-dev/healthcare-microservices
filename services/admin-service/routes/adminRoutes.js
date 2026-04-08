@@ -8,7 +8,6 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 const { protectAdmin } = require('../middleware/authAdmin');
-const sendEmail = require('../utils/sendEmail');
 
 // --- NEW: Import Message Controllers ---
 const { 
@@ -186,160 +185,79 @@ router.get('/doctors/:id', protectAdmin, async (req, res) => {
 });
 
 // ==========================================
-// PUT /doctors/:id/approve - Approve & Email Doctor
+// PUT /doctors/:id/approve
 // ==========================================
 router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
   try {
     const doctorId = req.params.id;
     const { name, email } = req.body; 
 
-    if (!email || !name) {
-      return res.status(400).json({ message: "Doctor email and name are required to send the approval email." });
-    }
+    if (!email || !name) return res.status(400).json({ message: "Doctor email and name are required." });
 
     const tempPassword = crypto.randomBytes(4).toString('hex');
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-    try {
-      await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
-        status: 'approved',
-        password: hashedPassword
-      });
-    } catch (err) {
-      console.error("Failed to update doctor in Doctor Microservice:", err.message);
-      return res.status(500).json({ message: "Failed to update doctor status in the database." });
-    }
-
-    // --- BEAUTIFUL APPROVAL EMAIL HTML ---
-    const approvalHTML = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; color: #374151;">
-        <h1 style="text-align: center; color: #111827; margin-bottom: 30px; font-size: 28px;">CareSync</h1>
-        
-        <p style="font-size: 16px; color: #4b5563;">Hello Dr. ${name},</p>
-        
-        <p style="font-size: 16px; color: #4b5563; line-height: 1.6;">
-          We are pleased to inform you that your medical registration has been verified and approved. You are now a certified member of the CareSync network.
-        </p>
-
-        <div style="background-color: #f3f4f6; padding: 30px; border-radius: 12px; text-align: center; margin: 30px 0;">
-          <p style="font-size: 12px; font-weight: bold; color: #6b7280; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px;">Your Temporary Password</p>
-          <p style="font-size: 28px; font-weight: bold; color: #111827; margin: 0; font-family: monospace; letter-spacing: 2px;">${tempPassword}</p>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="http://localhost:5173/login" style="background-color: #5454e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 16px; display: inline-block;">Access Dashboard</a>
-        </div>
-
-        <div style="text-align: center; margin-top: 20px;">
-          <p style="font-size: 13px; color: #9ca3af;">Or copy and paste this link into your browser:</p>
-          <a href="http://localhost:5173/login" style="font-size: 13px; color: #5454e5;">http://localhost:5173/login</a>
-        </div>
-
-        <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 40px 0 20px 0;" />
-        
-        <div style="text-align: center; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
-          <p>© 2026 CARESYNC. QUALITY CARE BY DESIGN.</p>
-          <p style="text-transform: none;">If you did not expect this approval, please contact our support team immediately.</p>
-        </div>
-      </div>
-    `;
-
-    try {
-      await sendEmail({
-        email: email,
-        subject: 'CareSync: Your Account is Approved!',
-        message: `Welcome Dr. ${name}! Your account is approved. Your temporary password is: ${tempPassword}`,
-        html: approvalHTML
-      });
-    } catch (emailError) {
-      console.error("Email failed:", emailError);
-      return res.status(200).json({
-        success: true,
-        message: 'Doctor approved, but failed to send the notification email.',
-        tempPasswordForAdminToShare: tempPassword 
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Doctor approved and email sent successfully!'
+    // 1. Update Database via Doctor Service
+    await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
+      status: 'approved',
+      password: hashedPassword
     });
 
+    // --- 🚨 NEW DEBUG CONSOLE LOGS 🚨 ---
+    const targetUrl = `${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-approved`;
+    
+    console.log("\n==========================================");
+    console.log("🚀 DEBUG: CALLING NOTIFICATION SERVICE");
+    console.log("🔗 EXACT URL: ", targetUrl);
+    console.log("📦 PAYLOAD: ", { email, name, tempPassword });
+    console.log("==========================================\n");
+    // ------------------------------------
+
+    // 2. Trigger Email via Notification Service
+    try {
+      await axios.post(targetUrl, {
+        email,
+        name,
+        tempPassword
+      });
+    } catch (emailError) {
+      console.error("Notification Service Failed:", emailError.message);
+      return res.status(200).json({ success: true, message: 'Doctor approved, but failed to reach notification service.', tempPassword });
+    }
+
+    res.status(200).json({ success: true, message: 'Doctor approved and email sent successfully!' });
   } catch (error) {
-    console.error("Error approving doctor:", error);
     res.status(500).json({ message: 'Failed to approve doctor.' });
   }
 });
 
 // ==========================================
-// PUT /doctors/:id/reject - Reject & Delete Doctor
+// PUT /doctors/:id/reject
 // ==========================================
 router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
   try {
     const doctorId = req.params.id;
     const { name, email } = req.body; 
 
-    if (!email || !name) {
-      return res.status(400).json({ message: "Doctor email and name are required to send the rejection email." });
-    }
+    if (!email || !name) return res.status(400).json({ message: "Doctor email and name are required." });
     
+    // 1. Delete Database via Doctor Service
+    await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
+
+    // 2. Trigger Email via Notification Service
     try {
-      await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
-    } catch (err) {
-      console.error("Failed to delete doctor in Doctor Microservice:", err.message);
-      return res.status(500).json({ message: "Failed to delete doctor from the database." });
-    }
-
-    // --- BEAUTIFUL REJECTION EMAIL HTML ---
-    const rejectionHTML = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; color: #374151;">
-        <h1 style="text-align: center; color: #111827; margin-bottom: 30px; font-size: 28px;">CareSync</h1>
-        
-        <p style="font-size: 16px; color: #4b5563;">Hello Dr. ${name},</p>
-        
-        <p style="font-size: 16px; color: #4b5563; line-height: 1.6;">
-          Thank you for your interest in joining the CareSync network. After careful review of your application and credentials by our administration team, we regret to inform you that we are unable to approve your registration at this time.
-        </p>
-
-        <p style="font-size: 16px; color: #4b5563; line-height: 1.6;">
-          To protect your privacy, any personal data, documents, and information submitted during your registration process has been <strong>permanently deleted</strong> from our systems.
-        </p>
-
-        <div style="background-color: #f3f4f6; border-left: 4px solid #5454e5; padding: 24px; border-radius: 0 8px 8px 0; margin: 30px 0;">
-          <h3 style="margin-top: 0; color: #111827; font-size: 16px;">We invite you to reapply</h3>
-          <p style="font-size: 14px; color: #4b5563; line-height: 1.5; margin-bottom: 20px;">
-            If you have updated credentials, obtained a new medical license, or believe your application was rejected in error due to missing information, you are welcome to submit a new application.
-          </p>
-          <a href="http://localhost:5173/register" style="background-color: #111827; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
-        </div>
-
-        <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 40px 0 20px 0;" />
-        
-        <div style="text-align: center; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
-          <p>© 2026 CARESYNC. QUALITY CARE BY DESIGN.</p>
-        </div>
-      </div>
-    `;
-
-    try {
-      await sendEmail({
-        email: email,
-        subject: 'CareSync: Application Update',
-        message: `Dear Dr. ${name}, we regret to inform you that your application to join CareSync has been declined.`,
-        html: rejectionHTML
+      await axios.post(`${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-rejected`, {
+        email,
+        name
       });
     } catch (emailError) {
-      console.error("Email failed:", emailError);
-      return res.status(200).json({
-        success: true,
-        message: 'Doctor deleted from database, but failed to send the notification email.'
-      });
+      console.error("Notification Service Failed:", emailError.message);
+      return res.status(200).json({ success: true, message: 'Doctor deleted, but failed to reach notification service.' });
     }
 
     res.status(200).json({ success: true, message: 'Doctor rejected, data deleted, and email sent successfully.' });
   } catch (error) {
-    console.error("Error rejecting doctor:", error);
     res.status(500).json({ message: 'Failed to reject doctor.' });
   }
 });
