@@ -477,7 +477,7 @@ const PatientDashboard = () => {
   to="/patient/dashboard" 
   className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
 >
-  Sanctuary
+  Dashboard
 </Link>
 
 <Link 
