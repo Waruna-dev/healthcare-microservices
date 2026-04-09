@@ -1,7 +1,7 @@
 // src/pages/patient/TelemedicineRoom.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Video, Mic, MicOff, VideoOff, PhoneOff, Clock, AlertCircle, Loader } from 'lucide-react';
+import { Loader, AlertCircle, Clock } from 'lucide-react';
 
 const TelemedicineRoom = () => {
   const { id } = useParams();
@@ -57,7 +57,6 @@ const TelemedicineRoom = () => {
         if (data.sessionStatus?.canJoin) {
           console.log('✅ Can join immediately');
           setCanJoin(true);
-          // Load Jitsi right away
           loadJitsiMeet(data.telemedicineLink, data.telemedicineRoomId, data.appointment);
         } else if (data.sessionStatus?.isEarly) {
           console.log('⏰ Session starts later');
@@ -90,7 +89,6 @@ const TelemedicineRoom = () => {
         intervalRef.current = null;
         setCanJoin(true);
         setTimeUntilJoin(null);
-        // Load Jitsi when countdown ends
         loadJitsiMeet(sessionData.telemedicineLink, sessionData.telemedicineRoomId, sessionData.appointment);
       } else {
         setTimeUntilJoin(diff);
@@ -112,15 +110,29 @@ const TelemedicineRoom = () => {
 
     setJitsiInitializing(true);
     console.log('🎥 Loading Jitsi Meet...');
-    console.log('Container element:', containerRef.current);
     
     // Clear container
     containerRef.current.innerHTML = '';
     
     const domain = 'meet.jit.si';
-    const roomName = roomId || `CareSync_${id}`;
+    const roomName = roomId || `CareSync_Consultation_${id}`;
     
-    console.log('Room name:', roomName);
+    console.log('🔗 Connecting to Room:', roomName);
+
+    // Determine current user display name
+    let displayName = appointmentData?.patientName || 'User';
+    let userRole = 'patient';
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        displayName = userObj.name || userObj.firstName || userObj.username || displayName;
+        userRole = userObj.role || 'patient';
+        if (userRole === 'doctor' && !displayName.toLowerCase().includes('dr')) {
+          displayName = `Dr. ${displayName}`;
+        }
+      }
+    } catch (err) {}
     
     const options = {
       roomName: roomName,
@@ -128,7 +140,7 @@ const TelemedicineRoom = () => {
       height: '100%',
       parentNode: containerRef.current,
       userInfo: {
-        displayName: appointmentData?.patientName || 'Patient',
+        displayName: displayName,
         email: localStorage.getItem('userEmail') || ''
       },
       configOverwrite: {
@@ -161,7 +173,7 @@ const TelemedicineRoom = () => {
       });
       
       api.addListener('videoConferenceLeft', () => {
-        console.log('👋 Left telemedicine session');
+        console.log('👋 Left telemedicine session (user clicked hangup)');
         handleEndCall();
       });
       
@@ -182,7 +194,6 @@ const TelemedicineRoom = () => {
         jitsiApiRef.current = new window.JitsiMeetExternalAPI(domain, options);
         setupJitsiEvents(jitsiApiRef.current);
         
-        // Disable the initializing overlay immediately so user can interact with Jitsi permission prompts!
         setJitsiInitializing(false);
         setJitsiLoaded(true);
         
@@ -213,7 +224,6 @@ const TelemedicineRoom = () => {
       
       script.onload = () => {
         console.log('Jitsi script loaded successfully');
-        // Small delay to ensure API is ready
         setTimeout(() => {
           const success = initJitsi();
           if (!success) {
@@ -231,7 +241,6 @@ const TelemedicineRoom = () => {
       
       document.body.appendChild(script);
     } else if (window.JitsiMeetExternalAPI) {
-      // Script exists and API is ready
       setTimeout(() => {
         const success = initJitsi();
         if (!success) {
@@ -240,7 +249,6 @@ const TelemedicineRoom = () => {
         }
       }, 100);
     } else {
-      // Script exists but not loaded yet
       script.onload = () => {
         setTimeout(() => {
           const success = initJitsi();
@@ -255,7 +263,7 @@ const TelemedicineRoom = () => {
 
   const handleEndCall = async () => {
     try {
-      console.log('Sending request to mark appointment fully completed...', id);
+      console.log('Sending request to mark appointment as completed...', id);
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5015/api/appointments/${id}/complete`, {
         method: 'POST',
@@ -281,7 +289,7 @@ const TelemedicineRoom = () => {
       jitsiApiRef.current = null;
     }
     
-    // Check if doctor
+    // Redirect based on user role
     try {
       const userStr = localStorage.getItem('user');
       if (userStr) {
@@ -376,42 +384,37 @@ const TelemedicineRoom = () => {
 
   return (
     <div className="fixed inset-0 bg-gray-900 flex flex-col">
-      {/* Header */}
+      {/* Simple Header - No custom end call button */}
       <div className="bg-gray-800 px-4 py-3 flex justify-between items-center z-10">
         <div>
-          <p className="text-white font-semibold">Dr. {appointment?.doctorName}</p>
-          <p className="text-xs text-gray-400">{appointment?.patientName}</p>
+          <p className="text-white font-semibold">
+            Telemedicine Consultation
+          </p>
+          <p className="text-xs text-gray-400">
+            Dr. {appointment?.doctorName} • {appointment?.startTime}
+          </p>
         </div>
         <div className="text-right text-sm text-gray-400">
           <p>{appointment && formatDateTime(appointment.date)}</p>
         </div>
       </div>
       
-      {/* Jitsi Container - FIXED HEIGHT */}
+      {/* Jitsi Container - Jitsi has its own end call button */}
       <div 
         ref={containerRef} 
         className="flex-1 w-full relative z-0"
         style={{ minHeight: 'calc(100vh - 60px)' }}
       />
       
-      {/* Loading overlay while Jitsi script downloads ONLY */}
+      {/* Loading overlay while Jitsi initializes */}
       {jitsiInitializing && !jitsiLoaded && (
-        <div className="absolute inset-x-0 bottom-0 top-[60px] flex items-center justify-center bg-gray-900 z-10 pointer-events-none">
+        <div className="absolute inset-x-0 bottom-0 top-[60px] flex items-center justify-center bg-gray-900/90 z-10">
           <div className="text-center">
             <Loader className="w-10 h-10 text-white animate-spin mx-auto mb-4" />
             <p className="text-white text-sm">Preparing secure session...</p>
           </div>
         </div>
       )}
-      
-      {/* End Call Button */}
-      <button
-        onClick={handleEndCall}
-        className="absolute bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium shadow-lg transition-all z-20 flex items-center gap-2"
-      >
-        <PhoneOff className="w-5 h-5" />
-        End Call
-      </button>
     </div>
   );
 };

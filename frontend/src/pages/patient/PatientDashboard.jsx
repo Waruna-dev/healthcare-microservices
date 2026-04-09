@@ -1,12 +1,12 @@
 // src/pages/patient/PatientDashboard.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Heart, Activity, Moon, Footprints, 
   BrainCircuit, FileText, UploadCloud, ShieldCheck, 
   Bell, Settings, LogOut, ChevronRight, AlertTriangle, CheckCircle2,
-  ClipboardList, Stethoscope, User, Calendar, X, Clock
+  ClipboardList, Stethoscope, User, Calendar, X, Clock, Trash2 
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -51,10 +51,6 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
     });
   };
 
-  const handleViewDetails = () => {
-    navigate(`/appointments/${appointment._id}`, { state: { appointment } });
-  };
-
   const handleJoinCall = () => {
     navigate(`/telemedicine/${appointment._id}`);
   };
@@ -62,6 +58,10 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
   const canJoinCall = appointment.paymentStatus === 'completed' && 
                       appointment.status === 'accepted' &&
                       appointment.telemedicineLink;
+
+  const handleViewDetails = () => {
+    navigate(`/appointments/${appointment._id}`);
+  };
 
   return (
     <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300 h-full flex flex-col">
@@ -116,13 +116,12 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
         </div>
 
         <div className="flex gap-3 mt-auto">
-          <button
-            onClick={handleViewDetails}
-            className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
-          >
-            View Details
-          </button>
-          
+<button
+  onClick={handleViewDetails}
+  className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
+>
+  View Details
+</button>
           {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
             <button
               onClick={() => onPaymentComplete?.(appointment)}
@@ -148,11 +147,11 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
 
 const PatientDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedAppointment, setSelectedAppointment] = useState(null);
   
   const [isUploading, setIsUploading] = useState(false);
   const [reports, setReports] = useState([]);
@@ -161,6 +160,10 @@ const PatientDashboard = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // --- DELETE CONFIRMATION STATES ---
+  const [reportToDelete, setReportToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   const showToast = (message, type = 'success') => {
@@ -168,7 +171,6 @@ const PatientDashboard = () => {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
   };
 
-  // Get patient info from localStorage
   const getPatientInfo = () => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
@@ -184,14 +186,9 @@ const PatientDashboard = () => {
         console.error('Error parsing user:', e);
       }
     }
-    return {
-      patientId: null,
-      patientName: 'Patient',
-      patientEmail: 'patient@example.com'
-    };
+    return { patientId: null, patientName: 'Patient', patientEmail: 'patient@example.com' };
   };
 
-  // Fetch appointments from backend
   const fetchAppointments = async () => {
     const patientInfo = getPatientInfo();
     if (!patientInfo.patientId) {
@@ -203,7 +200,6 @@ const PatientDashboard = () => {
     try {
       setLoadingAppointments(true);
       const token = localStorage.getItem('token');
-      console.log('🔍 Fetching appointments for patient:', patientInfo.patientId);
       
       const response = await fetch(`http://localhost:5015/api/appointments/patient/${patientInfo.patientId}`, {
         headers: {
@@ -212,7 +208,6 @@ const PatientDashboard = () => {
         }
       });
       const data = await response.json();
-      console.log('📊 Appointments response:', data);
       
       if (data.success) {
         setAppointments(data.appointments || []);
@@ -257,7 +252,6 @@ const PatientDashboard = () => {
     init();
   }, [navigate]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -270,9 +264,7 @@ const PatientDashboard = () => {
 
   const handleAppointmentUpdate = (updatedAppointment) => {
     setAppointments(prevAppointments => 
-      prevAppointments.map(a => 
-        a._id === updatedAppointment._id ? updatedAppointment : a
-      )
+      prevAppointments.map(a => a._id === updatedAppointment._id ? updatedAppointment : a)
     );
     const updatedAppointments = appointments.map(a => 
       a._id === updatedAppointment._id ? updatedAppointment : a
@@ -355,19 +347,50 @@ const PatientDashboard = () => {
     }
   };
 
+  const executeDeleteReport = async () => {
+    if (!reportToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const actualFilename = reportToDelete.filePath?.split(/[\\/]/).pop() || reportToDelete.fileName;
+      
+      const response = await api.delete(`/patients/reports/${actualFilename}`);
+
+      if (response.data.success) {
+        const updatedReports = response.data.reports;
+        setReports(updatedReports);
+
+        const storedUserString = localStorage.getItem('user');
+        if (storedUserString) {
+          const storedUser = JSON.parse(storedUserString);
+          if (storedUser.patient) {
+            storedUser.patient.uploadedReports = updatedReports;
+          } else {
+            storedUser.uploadedReports = updatedReports;
+          }
+          localStorage.setItem('user', JSON.stringify(storedUser));
+        }
+
+        showToast("Report deleted successfully.", "success");
+      }
+    } catch (error) {
+      console.error("Failed to delete report", error);
+      showToast(error.response?.data?.message || "Failed to delete report.", "error");
+    } finally {
+      setIsDeleting(false);
+      setReportToDelete(null); 
+    }
+  };
+
   const containerVars = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVars = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 50 } } };
 
   const latestReport = reports?.length > 0 ? reports[reports.length - 1] : null;
   const aiData = latestReport?.aiAnalysis;
 
-  // Get upcoming appointment (first pending or accepted)
   const upcomingAppointment = appointments.find(
     apt => apt.status === 'pending' || apt.status === 'accepted'
   );
-
-  // Get all appointments for the "All Appointments" section (excluding the upcoming one if it exists)
-  const otherAppointments = appointments.filter(apt => apt._id !== upcomingAppointment?._id);
 
   if (loading) {
     return (
@@ -377,9 +400,7 @@ const PatientDashboard = () => {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
@@ -405,6 +426,46 @@ const PatientDashboard = () => {
         )}
       </AnimatePresence>
 
+      {/* DELETE REPORT CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {reportToDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface-container-lowest w-full max-w-md rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden p-6 text-center"
+            >
+              <div className="w-16 h-16 bg-error-container text-error rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <AlertTriangle size={32} />
+              </div>
+              
+              <h3 className="text-xl font-bold font-headline text-on-surface mb-2">Delete Report?</h3>
+              <p className="text-on-surface-variant mb-6 text-sm leading-relaxed">
+                Are you sure you want to permanently delete <span className="font-bold text-on-surface">{reportToDelete.fileName}</span>? This action cannot be undone and will remove the associated AI analysis.
+              </p>
+
+              <div className="flex gap-3 justify-center">
+                <button 
+                  onClick={() => setReportToDelete(null)} 
+                  disabled={isDeleting}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={executeDeleteReport} 
+                  disabled={isDeleting}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-12">
@@ -412,9 +473,34 @@ const PatientDashboard = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
-              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
-              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
+<Link 
+  to="/patient/dashboard" 
+  className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Dashboard
+</Link>
+
+<Link 
+  to="/doctor/listing" 
+  className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Specialists
+</Link>
+
+<Link 
+  to="/appointments/all" 
+  className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Appointments
+</Link>
+
+<Link 
+  to="/prescriptions" 
+  className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
+>
+  <FileText size={16} />
+  Prescriptions
+</Link>
             </nav>
           </div>
           
@@ -669,8 +755,6 @@ const PatientDashboard = () => {
                 </div>
               )}
             </motion.div>
-
-            {/* ALL APPOINTMENTS SECTION - 3 PER ROW */}
             
           </div>
 
@@ -699,7 +783,11 @@ const PatientDashboard = () => {
                 <h5 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Recently Processed</h5>
                 {reports.length > 0 ? (
                   [...reports].reverse().slice(0, 3).map((file, idx) => (
-                    <div key={idx} onClick={() => handleDownload(file)} className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+                    <div 
+                      key={idx} 
+                      onClick={() => handleDownload(file)} 
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer group"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-error-container text-error flex items-center justify-center"><FileText size={16} /></div>
                         <div>
@@ -707,7 +795,20 @@ const PatientDashboard = () => {
                           <p className="text-[10px] text-primary font-bold uppercase tracking-wider mt-1">Click to download</p>
                         </div>
                       </div>
-                      <ChevronRight size={16} className="text-outline" />
+                      
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation(); 
+                            setReportToDelete(file);
+                          }}
+                          className="p-2 text-on-surface-variant hover:text-error hover:bg-error-container/50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete Report"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <ChevronRight size={16} className="text-outline" />
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -719,33 +820,6 @@ const PatientDashboard = () => {
                     <p className="text-xs text-on-surface-variant mt-1 max-w-[180px]">Your securely processed medical reports will appear here.</p>
                   </div>
                 )}
-              </div>
-            </motion.div>
-
-            {/* Access Control */}
-            <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-secondary-container text-secondary rounded-lg"><ShieldCheck size={20} /></div>
-                <h2 className="text-xl font-bold font-headline">Access Control</h2>
-              </div>
-              <div className="space-y-5">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-sm text-on-surface">Data Sharing</p>
-                    <p className="text-xs text-on-surface-variant">2 Authorized Providers</p>
-                  </div>
-                  <button className="text-xs font-bold text-primary hover:underline">Manage</button>
-                </div>
-                <div className="w-full h-px bg-outline-variant/30"></div>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-sm text-on-surface">Biometric Sync</p>
-                    <p className="text-xs text-on-surface-variant">Apple Health Connected</p>
-                  </div>
-                  <div className="w-10 h-6 bg-primary rounded-full relative cursor-pointer">
-                    <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-                  </div>
-                </div>
               </div>
             </motion.div>
           </div>
