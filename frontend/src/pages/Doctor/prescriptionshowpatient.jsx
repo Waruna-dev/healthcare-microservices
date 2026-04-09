@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Calendar, User, ArrowLeft, Search, Filter, Download, Eye } from 'lucide-react';
+import Header from '../../components/Header';
 
 const PrescriptionShowPatient = () => {
   const navigate = useNavigate();
@@ -8,8 +9,15 @@ const PrescriptionShowPatient = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredPrescriptions, setFilteredPrescriptions] = useState([]);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      const patient = parsedUser.patient || parsedUser;
+      setUser(patient);
+    }
     fetchPrescriptions();
   }, []);
 
@@ -64,6 +72,13 @@ const PrescriptionShowPatient = () => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('appointments');
+    navigate('/login');
   };
 
   const handleDownloadPDF = (prescription) => {
@@ -193,36 +208,8 @@ const PrescriptionShowPatient = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-gray-200 shadow-sm">
-        <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
-          <div className="flex items-center gap-12">
-            <Link to="/" className="text-2xl font-extrabold text-blue-600 font-headline tracking-tighter hover:opacity-80 transition-opacity">
-              CareSync
-            </Link>
-            <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-gray-600">
-              <Link to="/patient/dashboard" className="hover:text-blue-600 cursor-pointer transition-colors">Sanctuary</Link>
-              <Link to="/doctor/listing" className="hover:text-blue-600 cursor-pointer transition-colors">Specialists</Link>
-              <Link to="/appointments/all" className="hover:text-blue-600 cursor-pointer transition-colors">Appointments</Link>
-              <Link to="/prescriptions" className="flex items-center gap-2 text-blue-600 border-b-2 border-blue-600 pb-1 cursor-pointer transition-colors">
-                <FileText size={16} />
-                Prescriptions
-              </Link>
-            </nav>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <button className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-xl transition-all">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
-            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              P
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Reusable Header Component */}
+      <Header user={user} onLogout={handleLogout} />
 
       {/* Main Content */}
       <div className="py-10 px-6">
@@ -278,7 +265,7 @@ const PrescriptionShowPatient = () => {
                         <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                           <div className="flex items-center gap-1">
                             <User size={14} />
-                            {prescription.doctorName}
+                            Dr. {prescription.doctorName}
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar size={14} />
@@ -290,13 +277,10 @@ const PrescriptionShowPatient = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button className="p-2 hover:bg-white rounded-lg transition-colors">
-                          <Eye size={18} className="text-blue-600" />
-                        </button>
                         <button 
                           onClick={() => handleDownloadPDF(prescription)}
                           className="p-2 hover:bg-white rounded-lg transition-colors"
-                          title="Download PDF"
+                          title="Download Prescription"
                         >
                           <Download size={18} className="text-blue-600" />
                         </button>
