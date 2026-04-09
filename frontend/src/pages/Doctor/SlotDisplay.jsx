@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 function hasDoctorId(s) {
   return typeof s === 'string' && s.trim().length > 0;
@@ -14,7 +15,7 @@ function readInitialDoctorId() {
 }
 
 function authHeaders() {
-  const token = localStorage.getItem('doctorToken');
+  const token = localStorage.getItem('token');
   const h = { 'Content-Type': 'application/json' };
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
@@ -73,15 +74,32 @@ function generateTimeSlots(startTime, endTime, slotDuration, breakStart = '', br
 const SlotDisplay = () => {
   const { date } = useParams();
   const navigate = useNavigate();
-  const [doctorId, setDoctorId] = useState(() => readInitialDoctorId());
+  const { user } = useAuth();
   const [availability, setAvailability] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  // Extract doctor ID from auth context (same logic as WeeklySchedule)
+  const loggedInDoctorId = useMemo(() => {
+    if (!user) return '';
+    
+    let doctorId = user._id || user.id || user.doctorId || '';
+    
+    if (!doctorId && user.doctor) {
+      doctorId = user.doctor._id || user.doctor.id || '';
+    }
+    if (!doctorId && user.patient) {
+      doctorId = user.patient._id || user.patient.id || '';
+    }
+    
+    return doctorId;
+  }, [user]);
+
   useEffect(() => {
     const loadAvailability = async () => {
-      const id = doctorId.trim();
-      if (!hasDoctorId(id) || !date) {
+      const id = loggedInDoctorId.trim();
+      if (!id || !date) {
+        setMessage({ type: 'error', text: 'Doctor authentication required or no date selected' });
         setLoading(false);
         return;
       }
@@ -90,12 +108,14 @@ const SlotDisplay = () => {
       setMessage({ type: '', text: '' });
 
       try {
+        console.log('Loading availability for doctor:', id, 'date:', date);
         const res = await fetch(
           `/api/doctors/availability/doctor/${encodeURIComponent(id)}?start=${date}&end=${date}&includeInactive=true`,
           { headers: authHeaders() }
         );
         
         const data = await res.json();
+        console.log('Availability response:', data);
         
         if (!res.ok || !data.success) {
           setMessage({ type: 'error', text: data.message || 'Could not load availability' });
@@ -104,9 +124,10 @@ const SlotDisplay = () => {
         }
 
         const availabilityData = data.availability && data.availability.length > 0 ? data.availability[0] : null;
+        console.log('Availability data found:', availabilityData);
         setAvailability(availabilityData);
       } catch (e) {
-        console.error(e);
+        console.error('Error loading availability:', e);
         setMessage({ type: 'error', text: 'Network error loading availability' });
         setAvailability(null);
       } finally {
@@ -115,7 +136,7 @@ const SlotDisplay = () => {
     };
 
     loadAvailability();
-  }, [doctorId, date]);
+  }, [loggedInDoctorId, date]);
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr + 'T00:00:00');

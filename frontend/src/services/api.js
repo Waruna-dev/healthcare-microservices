@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // 1. Create a configured Axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api', 
   headers: {
     'Content-Type': 'application/json',
   },
@@ -12,8 +12,6 @@ const api = axios.create({
 // 2. Request Interceptor (SMART TOKEN INJECTION)
 api.interceptors.request.use(
   (config) => {
-    console.log('📤 API Request:', config.method.toUpperCase(), config.url);
-    
     // If the API request is going to an admin route, use the adminToken
     if (config.url.includes('/admin')) {
       const adminToken = localStorage.getItem('adminToken');
@@ -37,6 +35,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
+      
       // Check if the user is currently in the Admin Portal
       if (window.location.pathname.includes('/admin')) {
         localStorage.removeItem('adminToken');
@@ -58,7 +57,8 @@ api.interceptors.response.use(
   }
 );
 
-// Appointment API - FIXED ENDPOINTS
+
+// Appointment API
 export const appointmentAPI = {
   // Get all appointments for a patient
   getPatientAppointments: async (patientId) => {
@@ -135,6 +135,19 @@ export const appointmentAPI = {
     console.log('📡 Checking slot availability:', { doctorId, date, startTime });
     const response = await api.get(`/appointments/check-slot?doctorId=${doctorId}&date=${date}&startTime=${startTime}`);
     return response.data;
+  }
+};
+
+export const telemedicineAPI = {
+  getSessionInfo: async (appointmentId) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`http://localhost:5015/api/appointments/${appointmentId}/telemedicine`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.json();
   }
 };
 

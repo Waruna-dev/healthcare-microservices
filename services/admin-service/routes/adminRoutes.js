@@ -8,7 +8,6 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 const { protectAdmin } = require('../middleware/authAdmin');
-const sendEmail = require('../utils/sendEmail');
 
 // --- NEW: Import Message Controllers ---
 const { 
@@ -113,7 +112,7 @@ router.get('/demographics', protectAdmin, async (req, res) => {
     
     try {
       if (process.env.DOCTOR_SERVICE_URL) {
-        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
+        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/?limit=1000`);
         
         let allDoctors = [];
         
@@ -186,95 +185,79 @@ router.get('/doctors/:id', protectAdmin, async (req, res) => {
 });
 
 // ==========================================
-// PUT /doctors/:id/approve - Approve & Email Doctor
+// PUT /doctors/:id/approve
 // ==========================================
 router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
   try {
     const doctorId = req.params.id;
     const { name, email } = req.body; 
 
-    if (!email || !name) {
-      return res.status(400).json({ message: "Doctor email and name are required to send the approval email." });
-    }
+    if (!email || !name) return res.status(400).json({ message: "Doctor email and name are required." });
 
     const tempPassword = crypto.randomBytes(4).toString('hex');
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-    try {
-      await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
-        status: 'approved',
-        password: hashedPassword
-      });
-    } catch (err) {
-      console.error("Failed to update doctor in Doctor Microservice:", err.message);
-      return res.status(500).json({ message: "Failed to update doctor status in the database." });
-    }
-
-    try {
-      await sendEmail({
-        email: email,
-        subject: 'CareSync: Your Account is Approved!',
-        message: `Welcome Dr. ${name}! Your account is approved. Your temporary password is: ${tempPassword}`,
-        html: `<p>Welcome Dr. ${name}!</p><p>Your temporary password is: <strong>${tempPassword}</strong></p>`
-      });
-    } catch (emailError) {
-      console.error("Email failed:", emailError);
-      return res.status(200).json({
-        success: true,
-        message: 'Doctor approved, but failed to send the notification email.',
-        tempPasswordForAdminToShare: tempPassword 
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Doctor approved and email sent successfully!'
+    // 1. Update Database via Doctor Service
+    await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
+      status: 'approved',
+      password: hashedPassword
     });
 
+    // --- NEW DEBUG CONSOLE LOGS ---
+    const targetUrl = `${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-approved`;
+    
+    console.log("\n==========================================");
+    console.log("🚀 DEBUG: CALLING NOTIFICATION SERVICE");
+    console.log("🔗 EXACT URL: ", targetUrl);
+    console.log("📦 PAYLOAD: ", { email, name, tempPassword });
+    console.log("==========================================\n");
+    // ------------------------------------
+
+    // 2. Trigger Email via Notification Service
+    try {
+      await axios.post(targetUrl, {
+        email,
+        name,
+        tempPassword
+      });
+    } catch (emailError) {
+      console.error("Notification Service Failed:", emailError.message);
+      return res.status(200).json({ success: true, message: 'Doctor approved, but failed to reach notification service.', tempPassword });
+    }
+
+    res.status(200).json({ success: true, message: 'Doctor approved and email sent successfully!' });
   } catch (error) {
-    console.error("Error approving doctor:", error);
     res.status(500).json({ message: 'Failed to approve doctor.' });
   }
 });
 
 // ==========================================
-// PUT /doctors/:id/reject - Reject & Delete Doctor
+// PUT /doctors/:id/reject
 // ==========================================
 router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
   try {
     const doctorId = req.params.id;
     const { name, email } = req.body; 
 
-    if (!email || !name) {
-      return res.status(400).json({ message: "Doctor email and name are required to send the rejection email." });
-    }
+    if (!email || !name) return res.status(400).json({ message: "Doctor email and name are required." });
     
-    try {
-      await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
-    } catch (err) {
-      console.error("Failed to delete doctor in Doctor Microservice:", err.message);
-      return res.status(500).json({ message: "Failed to delete doctor from the database." });
-    }
+    // 1. Delete Database via Doctor Service
+    await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
 
+    // 2. Trigger Email via Notification Service
     try {
-      await sendEmail({
-        email: email,
-        subject: 'CareSync: Application Update',
-        message: `Dear Dr. ${name}, we regret to inform you that your application to join CareSync has been declined.`,
-        html: `<p>Dear Dr. ${name}, your application was declined.</p>`
+      await axios.post(`${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-rejected`, {
+        email,
+        name
       });
     } catch (emailError) {
-      console.error("Email failed:", emailError);
-      return res.status(200).json({
-        success: true,
-        message: 'Doctor deleted from database, but failed to send the notification email.'
-      });
+      console.error("Notification Service Failed:", emailError.message);
+      return res.status(200).json({ success: true, message: 'Doctor deleted, but failed to reach notification service.' });
     }
 
     res.status(200).json({ success: true, message: 'Doctor rejected, data deleted, and email sent successfully.' });
   } catch (error) {
-    console.error("Error rejecting doctor:", error);
     res.status(500).json({ message: 'Failed to reject doctor.' });
   }
 });
@@ -358,7 +341,7 @@ router.delete('/profile', protectAdmin, async (req, res) => {
 // ==========================================
 router.get('/doctors', protectAdmin, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/`);
+    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/?limit=1000`);
     
     let allDoctors = [];
     if (response.data.doctors && Array.isArray(response.data.doctors)) {

@@ -5,6 +5,15 @@ import axios from 'axios';
 import img1 from '../../assets/images/1e73cdf4e73454e4db41a709b9163cac.jpg';
 import img2 from '../../assets/images/9339706cc8079c7b463d4fb452f097d3.jpg';
 
+function authHeaders(useFormData = false) {
+  const token = localStorage.getItem('token');
+  const h = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  // Don't set Content-Type for FormData - browser sets it automatically
+  if (!useFormData) h['Content-Type'] = 'application/json';
+  return h;
+}
+
 const DoctorProfileEdit = () => {
   const navigate = useNavigate();
   const { doctorId } = useParams(); // Get doctor ID from URL params
@@ -45,7 +54,9 @@ const DoctorProfileEdit = () => {
 
   const fetchDoctorData = async (doctorIdToUse) => {
     try {
-      const response = await fetch(`http://localhost:5025/api/doctors/${doctorIdToUse}`);
+      const response = await fetch(`/api/doctors/${doctorIdToUse}`, {
+        headers: authHeaders()
+      });
       const data = await response.json();
       
       if (data.success && data.doctor) {
@@ -191,56 +202,46 @@ const DoctorProfileEdit = () => {
     setMessage('');
 
     try {
-      const payload = new FormData();
-      
-      // Add all form fields
-      Object.keys(formData).forEach(key => {
-        if (key === 'qualifications' || key === 'specializations') {
-          // Handle arrays separately
-          return;
-        } else {
-          payload.append(key, formData[key]);
-        }
-      });
+      // Prepare payload as JSON object
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        specialty: formData.specialty,
+        phone: formData.phone,
+        licenseNumber: formData.licenseNumber,
+        experience: formData.experience,
+        address: formData.address,
+        about: formData.about,
+        gender: formData.gender,
+        qualifications: formData.qualifications.filter(q => q.trim() !== ''),
+        specializations: formData.specializations.filter(s => s.trim() !== ''),
+        profilePicture: imageUrl || user?.profilePicture
+      };
 
-      // Add qualifications as JSON string
-      const validQualifications = formData.qualifications.filter(q => q.trim() !== '');
-      payload.append('qualifications', JSON.stringify(validQualifications));
-      
-      // Add specializations as JSON string
-      const validSpecializations = formData.specializations.filter(s => s.trim() !== '');
-      payload.append('specializations', JSON.stringify(validSpecializations));
-      
-      // Add profile image URL only if uploaded to Cloudinary
-      if (imageUrl) {
-        payload.append('profileImageUrl', imageUrl);
-        console.log('Adding profileImageUrl to payload:', imageUrl);
-      } else {
-        console.log('No imageUrl to add to payload');
-      }
-
-      console.log('FormData contents:');
-      for (let [key, value] of payload.entries()) {
-        console.log(key, value);
-      }
+      console.log('Submitting payload:', payload);
 
       const effectiveDoctorId = user?._id || user?.id || doctorId;
-      const response = await fetch(`http://localhost:5025/api/doctors/${effectiveDoctorId}`, {
-        method: 'PUT', // Use PUT for updating
-        body: payload
+      const response = await fetch(`/api/doctors/${effectiveDoctorId}`, {
+        method: 'PUT',
+        headers: authHeaders(), // Use JSON headers
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
+      console.log('Update response:', data);
       
-      if (response.ok) {
-        // Update the user data in AuthContext with the updated profile
+      if (data.success) {
+        // Update user data in AuthContext with the updated doctor data from response
         const updatedUserData = {
+          ...user,
           name: formData.name,
           email: formData.email,
           specialty: formData.specialty,
           phone: formData.phone,
           address: formData.address,
-          profilePicture: imageUrl || user?.profilePicture
+          profilePicture: imageUrl || user?.profilePicture,
+          qualifications: formData.qualifications.filter(q => q.trim() !== ''),
+          specializations: formData.specializations.filter(s => s.trim() !== '')
         };
         updateUser(updatedUserData);
         
@@ -251,7 +252,7 @@ const DoctorProfileEdit = () => {
       }
     } catch (err) {
       console.error('Update error:', err);
-      setError('Cannot connect to server. Please make sure backend is running on port 5025');
+      setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -269,9 +270,8 @@ const DoctorProfileEdit = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-xl shadow-lg p-8">
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Edit Doctor Profile</h1>
             <p className="text-gray-600">Update your professional information</p>
@@ -571,7 +571,6 @@ const DoctorProfileEdit = () => {
             </div>
           </form>
         </div>
-      </div>
     </div>
   );
 };

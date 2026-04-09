@@ -1,7 +1,7 @@
 // src/pages/patient/PatientLogin.jsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext'; // Import useAuth
+import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 import api from '../../services/api';
 
 const PatientLogin = () => {

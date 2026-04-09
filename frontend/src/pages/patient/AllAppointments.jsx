@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, Calendar, Clock, User, Stethoscope, 
-  DollarSign, FileText, Activity, AlertCircle, 
+  FileText, Activity, AlertCircle, 
   CheckCircle, XCircle, Download, Eye, CreditCard, Video,
-  Bell, Settings, LogOut, Filter, Search, X
+  Bell, Settings, LogOut, Filter, Search, X, DollarSign
 } from 'lucide-react';
 
 const AllAppointments = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [filteredAppointments, setFilteredAppointments] = useState([]);
@@ -23,13 +24,61 @@ const AllAppointments = () => {
     status: '',
     paymentStatus: '',
     doctorName: '',
-    date: ''  // Single date filter instead of from/to
+    date: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   
   // Dropdown state
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Add this CSS to hide scrollbars globally for modals
+  useEffect(() => {
+    // Add style to hide scrollbars when modal is open
+    if (showDetailsModal) {
+      document.body.style.overflow = 'hidden';
+      // Add a class to hide scrollbars
+      const style = document.createElement('style');
+      style.id = 'hide-scrollbars';
+      style.innerHTML = `
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .modal-content::-webkit-scrollbar {
+          display: none;
+        }
+        
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .modal-content {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        
+        /* Hide scrollbar for the modal overlay */
+        .modal-overlay {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        
+        .modal-overlay::-webkit-scrollbar {
+          display: none;
+        }
+      `;
+      document.head.appendChild(style);
+    } else {
+      document.body.style.overflow = 'auto';
+      const existingStyle = document.getElementById('hide-scrollbars');
+      if (existingStyle) {
+        existingStyle.remove();
+      }
+    }
+    
+    return () => {
+      document.body.style.overflow = 'auto';
+      const existingStyle = document.getElementById('hide-scrollbars');
+      if (existingStyle) {
+        existingStyle.remove();
+      }
+    };
+  }, [showDetailsModal]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -41,12 +90,10 @@ const AllAppointments = () => {
     fetchAppointments();
   }, []);
 
-  // Apply filters whenever appointments or filter criteria change
   useEffect(() => {
     applyFilters();
   }, [appointments, filters, searchTerm]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -83,7 +130,6 @@ const AllAppointments = () => {
   const applyFilters = () => {
     let filtered = [...appointments];
     
-    // Search filter (doctor name or symptoms)
     if (searchTerm) {
       filtered = filtered.filter(apt => 
         apt.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -92,24 +138,20 @@ const AllAppointments = () => {
       );
     }
     
-    // Status filter
     if (filters.status) {
       filtered = filtered.filter(apt => apt.status === filters.status);
     }
     
-    // Payment status filter
     if (filters.paymentStatus) {
       filtered = filtered.filter(apt => apt.paymentStatus === filters.paymentStatus);
     }
     
-    // Doctor name filter
     if (filters.doctorName) {
       filtered = filtered.filter(apt => 
         apt.doctorName?.toLowerCase().includes(filters.doctorName.toLowerCase())
       );
     }
     
-    // Single date filter - shows appointments on the selected date
     if (filters.date) {
       const selectedDate = new Date(filters.date);
       selectedDate.setHours(0, 0, 0, 0);
@@ -157,17 +199,15 @@ const AllAppointments = () => {
   const getStatusConfig = (status) => {
     switch (status) {
       case 'pending':
-        return { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle };
+        return { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle, borderColor: 'border-yellow-700', bgLight: 'bg-yellow-50' };
       case 'accepted':
-        return { label: 'Accepted', color: 'bg-blue-100 text-blue-800', icon: CheckCircle };
+        return { label: 'Accepted', color: 'bg-blue-100 text-blue-800', icon: CheckCircle, borderColor: 'border-blue-500', bgLight: 'bg-blue-50' };
       case 'completed':
-        return { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle };
+        return { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle, borderColor: 'border-green-700', bgLight: 'bg-green-50' };
       case 'rejected':
-        return { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle };
-      case 'cancelled':
-        return { label: 'Cancelled', color: 'bg-gray-100 text-gray-800', icon: XCircle };
+        return { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle, borderColor: 'border-red-700', bgLight: 'bg-red-50' };
       default:
-        return { label: status, color: 'bg-gray-100 text-gray-800', icon: AlertCircle };
+        return { label: status, color: 'bg-gray-100 text-gray-800', icon: AlertCircle, borderColor: 'border-gray-700', bgLight: 'bg-gray-50' };
     }
   };
 
@@ -191,10 +231,6 @@ const AllAppointments = () => {
       day: 'numeric',
       year: 'numeric'
     });
-  };
-
-  const formatDateForInput = (date) => {
-    return new Date(date).toISOString().split('T')[0];
   };
 
   const formatTimeRemaining = (paymentDeadline) => {
@@ -241,6 +277,40 @@ const AllAppointments = () => {
     return now >= joinWindowStart && now <= joinWindowEnd;
   };
 
+  // Function to handle report view/download
+  const handleViewReport = (report) => {
+    try {
+      console.log('Opening report:', report);
+      
+      let fileUrl;
+      const baseUrl = 'http://localhost:5015';
+      
+      if (report.filePath) {
+        if (report.filePath.startsWith('http')) {
+          fileUrl = report.filePath;
+        } else if (report.filePath.startsWith('/uploads')) {
+          fileUrl = `${baseUrl}${report.filePath}`;
+        } else {
+          const filename = report.filePath.split(/[\\/]/).pop();
+          fileUrl = `${baseUrl}/uploads/appointments/${filename}`;
+        }
+      } else if (report.fileName) {
+        fileUrl = `${baseUrl}/uploads/appointments/${report.fileName}`;
+      } else {
+        console.error('Invalid report path:', report);
+        alert('Unable to view report: Invalid file path');
+        return;
+      }
+      
+      console.log('Opening URL:', fileUrl);
+      window.open(fileUrl, '_blank');
+    } catch (error) {
+      console.error('Error opening report:', error);
+      alert('Unable to view report. Please try again later.');
+    }
+  };
+
+  // Modern Appointment Details Modal with Blur Background - NO SCROLLBAR
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
     
@@ -249,32 +319,62 @@ const AllAppointments = () => {
     const paymentConfig = getPaymentStatusConfig(appointment.paymentStatus);
     
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-          {/* Modal Header */}
-          
-          <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-900">Appointment Details</h2>
-            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
-              <XCircle size={24} className="text-gray-500" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay"
+        style={{ background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(8px)' }}
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          transition={{ duration: 0.3, type: 'spring', damping: 25 }}
+          className="bg-white rounded-3xl max-w-3xl w-full max-h-[85vh] overflow-y-auto modal-content shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Modal Header with Gradient */}
+          <div className="sticky top-0 bg-primary px-10 py-5 flex justify-between items-center rounded-t-3xl z-10 shadow-md">
+            <div className="flex items-center gap-3">
+              
+              <h2 className="text-xl font-bold text-white">Appointment Details</h2>
+            </div>
+            <button 
+              onClick={onClose} 
+              className="p-2 hover:bg-white/20 rounded-xl transition-all duration-200"
+            >
+              <X size={22} className="text-white" />
             </button>
           </div>
           
           <div className="p-6 space-y-6">
             {/* Status Banner */}
-            <div className={`p-4 rounded-xl ${statusConfig.color.replace('text', 'bg').replace('800', '50')} border`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <StatusIcon size={20} />
-                  <span className="font-semibold capitalize">{statusConfig.label}</span>
-                  {appointment.status === 'accepted' && appointment.paymentStatus === 'pending' && (
-                    <span className="text-sm text-orange-600 ml-2">
-                      ⏰ {formatTimeRemaining(appointment.paymentDeadline)}
-                    </span>
-                  )}
+            <div className={`p-4 rounded-2xl ${statusConfig.bgLight} border ${statusConfig.borderColor}`}>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${statusConfig.color} bg-white shadow-sm`}>
+                    <StatusIcon size={18} />
+                  </div>
+                  <div>
+                    <span className="font-semibold capitalize text-gray-900">{statusConfig.label}</span>
+                    {appointment.status === 'accepted' && appointment.paymentStatus === 'pending' && (
+                      <div className="text-xs text-orange-600 mt-0.5">
+                         {formatTimeRemaining(appointment.paymentDeadline)}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {appointment.paymentStatus === 'completed' && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 rounded-full">
+                    <CheckCircle size={14} className="text-green-600" />
+                    <span className="text-xs font-medium text-green-700">Payment Received</span>
+                  </div>
+                )}
                 {appointment.rejectionReason && (
-                  <div className="text-sm text-red-600">
+                  <div className="text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-xl">
                     Reason: {appointment.rejectionReason}
                   </div>
                 )}
@@ -282,108 +382,112 @@ const AllAppointments = () => {
             </div>
             
             {/* Doctor Info */}
-            <div className="flex items-start gap-4 pb-4 border-b">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                {appointment.doctorName?.charAt(0) || 'D'}
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Dr. {appointment.doctorName}</h3>
-                <p className="text-gray-500">{appointment.doctorSpecialty}</p>
+            <div className="flex items-start gap-5 p-5 bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 shadow-sm">
+              
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-gray-900">Dr. {appointment.doctorName}</h3>
+                <p className="text-gray-500 mt-1 flex items-center gap-2">
+                  <Stethoscope size={14} className="text-blue-500" />
+                  {appointment.doctorSpecialty}
+                </p>
               </div>
             </div>
             
             {/* Appointment Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <Calendar size={20} className="text-blue-600" />
+              <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-white rounded-2xl border border-blue-100">
+                
                 <div>
-                  <p className="text-xs text-gray-500">Date</p>
-                  <p className="font-medium">{formatDate(appointment.date)}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date</p>
+                  <p className="font-semibold text-gray-900">{formatDate(appointment.date)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <Clock size={20} className="text-blue-600" />
+              
+              <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-white rounded-2xl border border-purple-100">
+                
                 <div>
-                  <p className="text-xs text-gray-500">Time</p>
-                  <p className="font-medium">{appointment.startTime} - {appointment.endTime}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Time</p>
+                  <p className="font-semibold text-gray-900">{appointment.startTime} - {appointment.endTime}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <DollarSign size={20} className="text-green-600" />
+              
+              <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-white rounded-2xl border border-green-100">
+                
                 <div>
-                  <p className="text-xs text-gray-500">Consultation Fee</p>
-                  <p className="font-medium text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Consultation Fee</p>
+                  <p className="font-bold text-green-600 text-lg">LKR {appointment.consultationFee?.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <CreditCard size={20} className="text-blue-600" />
+              
+              <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-orange-50 to-white rounded-2xl border border-orange-100">
+                
                 <div>
-                  <p className="text-xs text-gray-500">Payment Status</p>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${paymentConfig.color}`}>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Payment Status</p>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${paymentConfig.color}`}>
                     {paymentConfig.label}
                   </span>
                 </div>
               </div>
             </div>
             
-            {/* Symptoms */}
+            {/* Symptoms Section */}
             {appointment.symptoms && (
-              <div className="p-4 bg-yellow-50 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity size={18} className="text-yellow-600" />
-                  <h3 className="font-semibold">Symptoms / Reason for Visit</h3>
+              <div className="p-5 bg-gradient-to-r from-yellow-50 to-white rounded-2xl border border-yellow-100">
+                <div className="flex items-center gap-2 mb-3">
+                  
+                  <h3 className="font-semibold text-gray-900">Symptoms / Reason for Visit</h3>
                 </div>
-                <p className="text-gray-700">{appointment.symptoms}</p>
+                <p className="text-gray-700 ml-3">{appointment.symptoms}</p>
               </div>
             )}
             
-            {/* Medical History */}
+            {/* Medical History Section */}
             {appointment.medicalHistory && (
-              <div className="p-4 bg-blue-50 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText size={18} className="text-blue-600" />
-                  <h3 className="font-semibold">Medical History</h3>
+              <div className="p-5 bg-gradient-to-r from-blue-50 to-white rounded-2xl border border-blue-100">
+                <div className="flex items-center gap-2 mb-3">
+                  
+                  <h3 className="font-semibold text-gray-900">Medical History</h3>
                 </div>
-                <p className="text-gray-700">{appointment.medicalHistory}</p>
+                <p className="text-gray-700 ml-3">{appointment.medicalHistory}</p>
               </div>
             )}
             
             {/* Uploaded Reports */}
             {appointment.uploadedReports && appointment.uploadedReports.length > 0 && (
               <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <FileText size={18} className="text-blue-600" />
-                  Uploaded Reports ({appointment.uploadedReports.length})
-                </h3>
-                <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-4">
+                  
+                  <h3 className="font-semibold text-gray-900">
+                    Uploaded Reports ({appointment.uploadedReports.length})
+                  </h3>
+                </div>
+                <div className="space-y-2 ml-10">
                   {appointment.uploadedReports.map((report, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <FileText size={16} className="text-blue-600" />
-                        <span className="text-sm">{report.fileName}</span>
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <FileText size={16} className="text-blue-500" />
+                        <span className="text-sm text-gray-700">{report.fileName || 'Medical Report'}</span>
                       </div>
-                      <a 
-                        href={`http://localhost:5015/${report.filePath}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 text-sm hover:underline flex items-center gap-1"
+                      <button
+                        onClick={() => handleViewReport(report)}
+                        className="text-blue-600 text-sm hover:underline flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
                       >
-                        <Download size={14} /> View
-                      </a>
+                        <Download size={14} /> View Report
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
             
-            {/* Consultation Notes (if completed) */}
+            {/* Consultation Notes */}
             {appointment.consultationNotes && (
-              <div className="p-4 bg-green-50 rounded-xl">
-                <h3 className="font-semibold mb-2">Consultation Notes</h3>
+              <div className="p-5 bg-gradient-to-r from-green-50 to-white rounded-2xl border border-green-100">
+                <h3 className="font-semibold text-gray-900 mb-2">Consultation Notes</h3>
                 <p className="text-gray-700">{appointment.consultationNotes}</p>
                 {appointment.prescription && (
-                  <div className="mt-3 pt-3 border-t border-green-200">
-                    <h3 className="font-semibold mb-2">Prescription</h3>
+                  <div className="mt-4 pt-4 border-t border-green-200">
+                    <h3 className="font-semibold text-gray-900 mb-2">Prescription</h3>
                     <p className="text-gray-700">{appointment.prescription}</p>
                   </div>
                 )}
@@ -391,16 +495,16 @@ const AllAppointments = () => {
             )}
             
             {/* Action Buttons */}
-            <div className="flex flex-col gap-3 pt-4 border-t">
+            <div className="flex flex-col gap-3 pt-4 border-t border-gray-200">
               {appointment.status === 'accepted' && appointment.paymentStatus === 'pending' && (
                 <button
                   onClick={() => {
                     onClose();
                     handlePayment(appointment);
                   }}
-                  className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 group"
                 >
-                  <CreditCard size={20} />
+                  <CreditCard size={20} className="group-hover:scale-110 transition-transform" />
                   Pay LKR {appointment.consultationFee?.toLocaleString()}
                 </button>
               )}
@@ -411,24 +515,26 @@ const AllAppointments = () => {
                     onClose();
                     handleJoinCall(appointment);
                   }}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 group"
                 >
-                  <Video size={20} />
+                  <Video size={20} className="group-hover:scale-110 transition-transform" />
                   Join Telemedicine Session
                 </button>
               )}
               
               {appointment.paymentStatus === 'completed' && appointment.status === 'accepted' && !canJoinCall(appointment) && (
-                <div className="text-center p-4 bg-gray-50 rounded-xl">
-                  <Clock size={24} className="mx-auto text-gray-400 mb-2" />
-                  <p className="text-gray-600">Meeting will be available 20 minutes before the scheduled time</p>
-                  <p className="text-sm text-gray-500 mt-1">Scheduled: {appointment.startTime}</p>
+                <div className="text-center p-5 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Clock size={24} className="text-gray-400" />
+                  </div>
+                  <p className="text-gray-600 font-medium">Meeting will be available 20 minutes before the scheduled time</p>
+                  <p className="text-sm text-gray-500 mt-2">Scheduled: {appointment.startTime}</p>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     );
   };
 
@@ -442,9 +548,31 @@ const AllAppointments = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-gray-600">
-              <Link to="/dashboard" className="hover:text-blue-600 cursor-pointer transition-colors">Sanctuary</Link>
-              <Link to="/doctor/listing" className="hover:text-blue-600 cursor-pointer transition-colors">Specialists</Link>
-              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
+              <Link 
+                to="/patient/dashboard" 
+                className={`${location.pathname === '/patient/dashboard' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                Sanctuary
+              </Link>
+              <Link 
+                to="/doctor/listing" 
+                className={`${location.pathname === '/doctor/listing' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                Specialists
+              </Link>
+              <Link 
+                to="/appointments/all" 
+                className={`${location.pathname === '/appointments/all' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                Appointments
+              </Link>
+              <Link 
+                to="/prescriptions" 
+                className={`${location.pathname === '/prescriptions' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} flex items-center gap-2 hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                <FileText size={16} />
+                Prescriptions
+              </Link>
             </nav>
           </div>
           
@@ -504,8 +632,6 @@ const AllAppointments = () => {
       {/* Main Content */}
       <div className="py-10 px-6">
         <div className="max-w-5xl mx-auto">
-          
-          
           <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">All Appointments</h1>
@@ -530,12 +656,11 @@ const AllAppointments = () => {
           {/* Search and Filter Bar */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex flex-col md:flex-row gap-3">
-              {/* Search Input */}
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search by ..."
+                  placeholder="Search by doctor name, specialty, or symptoms..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -550,29 +675,27 @@ const AllAppointments = () => {
                 )}
               </div>
               
-              {/* Filter Toggle Button */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all ${
                   showFilters || getActiveFiltersCount() > 0
-                    ? 'bg-blue-800 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 <Filter size={18} />
                 Filters
                 {getActiveFiltersCount() > 0 && (
-                  <span className="">
-                    
+                  <span className="bg-white text-blue-600 rounded-full px-2 py-0.5 text-xs font-bold ml-1">
+                    {getActiveFiltersCount()}
                   </span>
                 )}
               </button>
               
-              {/* Clear All Filters Button */}
               {getActiveFiltersCount() > 0 && (
                 <button
                   onClick={clearFilters}
-                  className="px-4 py-2.5 rounded-xl font-medium text-gray-600 bg-purple-100 hover:bg-gray-100 transition-all flex items-center gap-2"
+                  className="px-4 py-2.5 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all flex items-center gap-2"
                 >
                   <X size={18} />
                   Clear All
@@ -580,7 +703,6 @@ const AllAppointments = () => {
               )}
             </div>
             
-            {/* Expanded Filters Panel */}
             <AnimatePresence>
               {showFilters && (
                 <motion.div
@@ -591,7 +713,6 @@ const AllAppointments = () => {
                   className="overflow-hidden"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-200">
-                    {/* Status Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         Appointment Status
@@ -610,7 +731,6 @@ const AllAppointments = () => {
                       </select>
                     </div>
                     
-                    {/* Payment Status Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         Payment Status
@@ -627,7 +747,6 @@ const AllAppointments = () => {
                       </select>
                     </div>
                     
-                    {/* Doctor Name Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         Doctor Name
@@ -641,7 +760,6 @@ const AllAppointments = () => {
                       />
                     </div>
                     
-                    {/* Single Date Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         Specific Date
@@ -705,7 +823,6 @@ const AllAppointments = () => {
                 
                 return (
                   <div key={apt._id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
-                    {/* Status Bar */}
                     <div className={`h-1 ${
                       apt.status === 'pending' ? 'bg-yellow-500' :
                       apt.status === 'accepted' ? 'bg-blue-500' :
@@ -714,7 +831,6 @@ const AllAppointments = () => {
                     }`} />
                     
                     <div className="p-4">
-                      {/* Header */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <div className="p-1.5 bg-blue-50 rounded-lg">
@@ -737,7 +853,6 @@ const AllAppointments = () => {
                         </div>
                       </div>
                       
-                      {/* Appointment Details */}
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <Calendar size={12} className="text-gray-400" />
@@ -748,12 +863,10 @@ const AllAppointments = () => {
                           <span>{apt.startTime} - {apt.endTime}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-gray-600 col-span-2">
-                          <DollarSign size={12} className="text-green-500" />
                           <span className="font-semibold text-green-600">LKR {apt.consultationFee?.toLocaleString()}</span>
                         </div>
                       </div>
                       
-                      {/* Symptoms Preview */}
                       {apt.symptoms && (
                         <div className="mb-3 p-2 bg-gray-50 rounded-lg">
                           <p className="text-xs text-gray-500 mb-0.5">Symptoms:</p>
@@ -761,7 +874,6 @@ const AllAppointments = () => {
                         </div>
                       )}
                       
-                      {/* Reports Indicator */}
                       {apt.uploadedReports && apt.uploadedReports.length > 0 && (
                         <div className="mb-3 flex items-center gap-1.5 text-xs text-blue-600">
                           <FileText size={12} />
@@ -769,7 +881,6 @@ const AllAppointments = () => {
                         </div>
                       )}
                       
-                      {/* Action Buttons */}
                       <div className="flex gap-2 pt-1">
                         <button
                           onClick={() => handleViewDetails(apt)}
@@ -808,13 +919,15 @@ const AllAppointments = () => {
         </div>
       </div>
       
-      {/* Details Modal */}
-      {showDetailsModal && (
-        <AppointmentDetailsModal
-          appointment={selectedAppointment}
-          onClose={() => setShowDetailsModal(false)}
-        />
-      )}
+      {/* Modern Details Modal with Blur Background - No Scrollbar */}
+      <AnimatePresence>
+        {showDetailsModal && (
+          <AppointmentDetailsModal
+            appointment={selectedAppointment}
+            onClose={() => setShowDetailsModal(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

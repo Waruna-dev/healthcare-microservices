@@ -13,7 +13,8 @@ const {
     completeAppointment,
     cancelAppointment,
     getUpcomingAppointment,
-    checkSlotAvailability
+    checkSlotAvailability,
+    webhookPaymentSuccess
 } = require('../controllers/appointmentController');
 const { protect } = require('../middleware/auth');
 
@@ -130,6 +131,7 @@ router.put('/:id/status', protect, updateAppointmentStatus);
 
 // Payment
 router.post('/:id/payment', protect, processPayment);
+router.post('/webhook/payment-success', webhookPaymentSuccess);
 
 // Telemedicine
 router.get('/:id/telemedicine', protect, getTelemedicineInfo);
@@ -182,6 +184,7 @@ router.put('/accept/:id', async (req, res) => {
         });
     }
 });
+
 
 // Public Reject endpoint
 router.put('/reject/:id', async (req, res) => {

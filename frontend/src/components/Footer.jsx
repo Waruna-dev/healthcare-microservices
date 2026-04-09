@@ -16,17 +16,17 @@ const Footer = () => {
           <div>
             <h5 className="font-bold font-headline mb-6 text-sm uppercase tracking-widest text-on-surface">Platform</h5>
             <ul className="space-y-4 text-on-surface-variant text-sm font-medium">
-              <li><a className="hover:text-primary transition-colors" href="#">Features</a></li>
-              <li><a className="hover:text-primary transition-colors" href="#">Security</a></li>
-              <li><a className="hover:text-primary transition-colors" href="#">Integration</a></li>
+              <li><a className="hover:text-primary transition-colors" href="/features">Features</a></li>
+              <li><a className="hover:text-primary transition-colors" href="/security">Security</a></li>
+              <li><a className="hover:text-primary transition-colors" href="/integration">Integration</a></li>
             </ul>
           </div>
           <div>
             <h5 className="font-bold font-headline mb-6 text-sm uppercase tracking-widest text-on-surface">Company</h5>
             <ul className="space-y-4 text-on-surface-variant text-sm font-medium">
-              <li><a className="hover:text-primary transition-colors" href="#">About Us</a></li>
-              <li><a className="hover:text-primary transition-colors" href="#">Contact Support</a></li>
-              <li><a className="hover:text-primary transition-colors" href="#">Privacy Policy</a></li>
+              <li><a className="hover:text-primary transition-colors" href="/about">About Us</a></li>
+              <li><a className="hover:text-primary transition-colors" href="/support">Contact Support</a></li>
+              <li><a className="hover:text-primary transition-colors" href="/privacy-policy">Privacy Policy</a></li>
             </ul>
           </div>
         </div>

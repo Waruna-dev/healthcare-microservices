@@ -1,37 +1,34 @@
-// src/pages/doctor/DoctorLayout.jsx
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
-const DoctorLayout = ({ children }) => {
+const DoctorLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, authKey } = useAuth();
-  
-  const menuItems = [
+  const { user, authKey } = useAuth(); // Add authKey
+  const [menuItems, setMenuItems] = useState([
     { path: '/doctor/dashboard', name: 'Dashboard', icon: '📊' },
     { path: '/doctor/appointments', name: 'Appointments', icon: '📅' },
-    { path: '/doctor/patients', name: 'My Patients', icon: '👥' },
     { path: '/doctor/schedule', name: 'Schedule', icon: '📆' },
-    { path: '/doctor/availability', name: 'Availability', icon: '⏰' },
+    { path: '/doctor/weekly-schedule', name: 'Weekly Schedule', icon: '📅' },
+    { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },
-  ];
+    { path: '/doctor/settings', name: 'Settings', icon: '⚙️' },
+  ]);
+
+  // Reset sidebar state when user changes
+  useEffect(() => {
+    console.log('DoctorLayout - User changed to:', user?.name);
+    // You can add any reset logic here
+  }, [user, authKey]);
 
   const goToHome = () => {
     navigate('/');
   };
 
-  // Determine what to render - either children or Outlet
-  const renderContent = () => {
-    if (children) {
-      return children;
-    }
-    return <Outlet />;
-  };
-
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100" key={authKey}> {/* Add key to force re-render */}
       {/* Sidebar */}
       <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-gradient-to-b from-blue-800 to-indigo-900 text-white transition-all duration-300 flex flex-col`}>
         {/* Logo */}
@@ -61,7 +58,7 @@ const DoctorLayout = ({ children }) => {
               </div>
               <div>
                 <p className="font-semibold text-sm">Dr. {user?.name || 'Doctor'}</p>
-                <p className="text-xs text-blue-200">{user?.specialty || 'Doctor'}</p>
+                <p className="text-xs text-blue-200">{user?.specialty || user?.specialization || 'Doctor'}</p>
               </div>
             </div>
           </div>
@@ -112,16 +109,14 @@ const DoctorLayout = ({ children }) => {
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
                 {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'DD'}
               </div>
-              <span className="text-sm text-gray-700 hidden md:block">
-                Dr. {user?.name?.split(' ')[0] || 'Doctor'}
-              </span>
+              <span className="text-sm text-gray-700 hidden md:block">Dr. {user?.name?.split(' ')[0] || 'Doctor'}</span>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {renderContent()}
+          <Outlet />
         </main>
       </div>
     </div>

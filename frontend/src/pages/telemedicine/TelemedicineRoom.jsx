@@ -1,137 +1,307 @@
+// src/pages/patient/TelemedicineRoom.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { appointmentAPI } from '../../services/api';
-import { Video, Mic, MicOff, VideoOff, PhoneOff, Users, Clock, Calendar } from 'lucide-react';
+import { Loader, AlertCircle, Clock } from 'lucide-react';
 
 const TelemedicineRoom = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [appointment, setAppointment] = useState(null);
-  const [sessionInfo, setSessionInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [canJoin, setCanJoin] = useState(false);
   const [timeUntilJoin, setTimeUntilJoin] = useState(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const jitsiContainerRef = useRef(null);
+  const [jitsiLoaded, setJitsiLoaded] = useState(false);
+  const [jitsiInitializing, setJitsiInitializing] = useState(false);
+  const containerRef = useRef(null);
   const jitsiApiRef = useRef(null);
+  const intervalRef = useRef(null);
 
+  // Fetch telemedicine info on mount
   useEffect(() => {
     fetchTelemedicineInfo();
+    
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (jitsiApiRef.current) {
+        try {
+          jitsiApiRef.current.dispose();
+        } catch (e) {
+          console.log('Error disposing Jitsi:', e);
+        }
+      }
+    };
   }, [id]);
-
-  useEffect(() => {
-    if (canJoin && sessionInfo?.telemedicineLink && !jitsiApiRef.current) {
-      loadJitsiMeet();
-    }
-  }, [canJoin, sessionInfo]);
 
   const fetchTelemedicineInfo = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const response = await appointmentAPI.getTelemedicineInfo(id);
-      if (response.success) {
-        setSessionInfo(response);
-        setAppointment(response.appointment);
+      const token = localStorage.getItem('token');
+      console.log('🔍 Fetching telemedicine info for appointment:', id);
+      
+      const response = await fetch(`http://localhost:5015/api/appointments/${id}/telemedicine`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      console.log('📡 Telemedicine response:', data);
+      
+      if (data.success) {
+        setAppointment(data.appointment);
         
-        if (response.sessionStatus.canJoin) {
+        if (data.sessionStatus?.canJoin) {
+          console.log('✅ Can join immediately');
           setCanJoin(true);
-        } else if (response.sessionStatus.isEarly) {
-          const canJoinTime = new Date(response.sessionStatus.canJoinTime);
-          const now = new Date();
-          const diff = canJoinTime - now;
-          if (diff > 0) {
-            setTimeUntilJoin(diff);
-            startCountdown(canJoinTime);
-          }
-        } else if (response.sessionStatus.isLate) {
+          loadJitsiMeet(data.telemedicineLink, data.telemedicineRoomId, data.appointment);
+        } else if (data.sessionStatus?.isEarly) {
+          console.log('⏰ Session starts later');
+          const canJoinTime = new Date(data.sessionStatus.canJoinTime);
+          startCountdown(canJoinTime, data);
+        } else if (data.sessionStatus?.isLate) {
           setError('This session has ended. Please contact your doctor for follow-up.');
+        } else {
+          setError('Unable to determine session status');
         }
       } else {
-        setError(response.message || 'Unable to load telemedicine session');
+        setError(data.message || 'Unable to load telemedicine session');
       }
     } catch (error) {
       console.error('Error fetching telemedicine info:', error);
-      setError(error.response?.data?.message || 'Failed to load session');
+      setError(error.response?.data?.message || 'Failed to load session. Please check your connection.');
     } finally {
       setLoading(false);
     }
   };
 
-  const startCountdown = (targetTime) => {
-    const interval = setInterval(() => {
+  const startCountdown = (targetTime, sessionData) => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    
+    intervalRef.current = setInterval(() => {
       const now = new Date();
       const diff = targetTime - now;
       if (diff <= 0) {
-        clearInterval(interval);
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
         setCanJoin(true);
         setTimeUntilJoin(null);
+        loadJitsiMeet(sessionData.telemedicineLink, sessionData.telemedicineRoomId, sessionData.appointment);
       } else {
         setTimeUntilJoin(diff);
       }
     }, 1000);
-    return () => clearInterval(interval);
   };
 
-  const loadJitsiMeet = () => {
-    if (!jitsiContainerRef.current || jitsiApiRef.current) return;
+  const loadJitsiMeet = (telemedicineLink, roomId, appointmentData) => {
+    if (jitsiLoaded || jitsiInitializing) {
+      console.log('Jitsi already loading or loaded');
+      return;
+    }
+    
+    if (!containerRef.current) {
+      console.error('Container ref is null, retrying in 500ms');
+      setTimeout(() => loadJitsiMeet(telemedicineLink, roomId, appointmentData), 500);
+      return;
+    }
 
+    setJitsiInitializing(true);
+    console.log('🎥 Loading Jitsi Meet...');
+    
+    // Clear container
+    containerRef.current.innerHTML = '';
+    
     const domain = 'meet.jit.si';
+    const roomName = roomId || `CareSync_Consultation_${id}`;
+    
+    console.log('🔗 Connecting to Room:', roomName);
+
+    // Determine current user display name
+    let displayName = appointmentData?.patientName || 'User';
+    let userRole = 'patient';
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        displayName = userObj.name || userObj.firstName || userObj.username || displayName;
+        userRole = userObj.role || 'patient';
+        if (userRole === 'doctor' && !displayName.toLowerCase().includes('dr')) {
+          displayName = `Dr. ${displayName}`;
+        }
+      }
+    } catch (err) {}
+    
     const options = {
-      roomName: sessionInfo.telemedicineRoomId || sessionInfo.appointment?.id,
+      roomName: roomName,
       width: '100%',
       height: '100%',
-      parentNode: jitsiContainerRef.current,
+      parentNode: containerRef.current,
       userInfo: {
-        displayName: appointment?.patientName || 'Patient'
+        displayName: displayName,
+        email: localStorage.getItem('userEmail') || ''
       },
       configOverwrite: {
-        startWithAudioMuted: isMuted,
-        startWithVideoMuted: isVideoOff,
+        startWithAudioMuted: true,
+        startWithVideoMuted: false,
         disableDeepLinking: true,
         disableInviteFunctions: true,
-        disableProfile: true,
         prejoinPageEnabled: false,
-        enableWelcomePage: false
+        enableWelcomePage: false,
+        toolbarConfig: {
+          initials: ['microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen', 'hangup']
+        }
       },
       interfaceConfigOverwrite: {
         TOOLBAR_BUTTONS: [
           'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
-          'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
-          'livestreaming', 'etherpad', 'sharedvideo', 'settings', 'raisehand',
-          'videoquality', 'filmstrip', 'invite', 'feedback', 'stats', 'shortcuts',
-          'tileview', 'videobackgroundblur', 'download', 'help', 'mute-everyone'
-        ]
+          'fodeviceselection', 'hangup', 'profile', 'chat', 'settings',
+          'raisehand', 'videoquality', 'filmstrip', 'tileview', 'help'
+        ],
+        SHOW_JITSI_WATERMARK: false,
+        SHOW_BRAND_WATERMARK: false
       }
     };
 
-    const script = document.createElement('script');
-    script.src = `https://${domain}/external_api.js`;
-    script.async = true;
-    script.onload = () => {
-      if (window.JitsiMeetExternalAPI) {
+    const setupJitsiEvents = (api) => {
+      api.addListener('videoConferenceJoined', () => {
+        console.log('✅ Successfully joined telemedicine session');
+        setJitsiLoaded(true);
+        setJitsiInitializing(false);
+      });
+      
+      api.addListener('videoConferenceLeft', () => {
+        console.log('👋 Left telemedicine session (user clicked hangup)');
+        handleEndCall();
+      });
+      
+      api.addListener('readyToClose', () => {
+        console.log('🔚 Session ready to close');
+      });
+    };
+
+    // Function to initialize Jitsi
+    const initJitsi = () => {
+      if (!window.JitsiMeetExternalAPI) {
+        console.log('Waiting for Jitsi API...');
+        return false;
+      }
+      
+      try {
+        console.log('Creating Jitsi instance...');
         jitsiApiRef.current = new window.JitsiMeetExternalAPI(domain, options);
+        setupJitsiEvents(jitsiApiRef.current);
         
-        // Listen for events
-        jitsiApiRef.current.addListener('videoConferenceJoined', () => {
-          console.log('Joined telemedicine session');
-        });
+        setJitsiInitializing(false);
+        setJitsiLoaded(true);
         
-        jitsiApiRef.current.addListener('videoConferenceLeft', () => {
-          handleEndCall();
-        });
+        return true;
+      } catch (err) {
+        console.error('Error creating Jitsi instance:', err);
+        return false;
       }
     };
-    document.body.appendChild(script);
+
+    // Check if Jitsi API is already available
+    if (window.JitsiMeetExternalAPI) {
+      initJitsi();
+      return;
+    }
+
+    // Load Jitsi script
+    console.log('Loading Jitsi script...');
+    const scriptId = 'jitsi-external-api-script';
+    let script = document.getElementById(scriptId);
+    
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = `https://${domain}/external_api.js`;
+      script.async = true;
+      script.defer = true;
+      
+      script.onload = () => {
+        console.log('Jitsi script loaded successfully');
+        setTimeout(() => {
+          const success = initJitsi();
+          if (!success) {
+            setError('Failed to initialize video conference. Please refresh the page.');
+            setJitsiInitializing(false);
+          }
+        }, 500);
+      };
+      
+      script.onerror = (err) => {
+        console.error('Failed to load Jitsi script:', err);
+        setError('Failed to load video conference service. Please check your internet connection.');
+        setJitsiInitializing(false);
+      };
+      
+      document.body.appendChild(script);
+    } else if (window.JitsiMeetExternalAPI) {
+      setTimeout(() => {
+        const success = initJitsi();
+        if (!success) {
+          setError('Failed to initialize video conference.');
+          setJitsiInitializing(false);
+        }
+      }, 100);
+    } else {
+      script.onload = () => {
+        setTimeout(() => {
+          const success = initJitsi();
+          if (!success) {
+            setError('Failed to initialize video conference.');
+            setJitsiInitializing(false);
+          }
+        }, 500);
+      };
+    }
   };
 
   const handleEndCall = async () => {
     try {
-      await appointmentAPI.completeAppointment(id, 'Telemedicine session completed');
+      console.log('Sending request to mark appointment as completed...', id);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5015/api/appointments/${id}/complete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ consultationNotes: 'Telemedicine session completed' })
+      });
+      const data = await response.json();
+      console.log('Completion response:', data);
     } catch (error) {
       console.error('Error completing appointment:', error);
     }
+    
+    // Clean up Jitsi
+    if (jitsiApiRef.current) {
+      try {
+        jitsiApiRef.current.dispose();
+      } catch (e) {
+        console.error('Error disposing Jitsi:', e);
+      }
+      jitsiApiRef.current = null;
+    }
+    
+    // Redirect based on user role
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.role === 'doctor') {
+          return navigate('/doctor/appointments');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to parse user', err);
+    }
+    
     navigate('/dashboard');
   };
 
@@ -142,6 +312,7 @@ const TelemedicineRoom = () => {
   };
 
   const formatDateTime = (date) => {
+    if (!date) return 'Date not set';
     return new Date(date).toLocaleString('en-US', {
       weekday: 'short',
       month: 'short',
@@ -155,7 +326,7 @@ const TelemedicineRoom = () => {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+          <Loader className="w-12 h-12 text-white animate-spin mx-auto" />
           <p className="text-white mt-4">Loading telemedicine session...</p>
         </div>
       </div>
@@ -164,10 +335,10 @@ const TelemedicineRoom = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <PhoneOff className="w-8 h-8 text-red-600" />
+            <AlertCircle className="w-8 h-8 text-red-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Unable to Join</h2>
           <p className="text-gray-600 mb-6">{error}</p>
@@ -184,7 +355,7 @@ const TelemedicineRoom = () => {
 
   if (!canJoin && timeUntilJoin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-8 max-w-md text-center">
           <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Clock className="w-10 h-10 text-blue-600" />
@@ -203,7 +374,7 @@ const TelemedicineRoom = () => {
           <div className="mt-6 p-4 bg-gray-50 rounded-xl">
             <p className="text-sm text-gray-600">
               Please ensure your camera and microphone are working properly.
-              The join button will appear automatically when your doctor is ready.
+              The meeting will start automatically.
             </p>
           </div>
         </div>
@@ -213,30 +384,37 @@ const TelemedicineRoom = () => {
 
   return (
     <div className="fixed inset-0 bg-gray-900 flex flex-col">
-      {/* Jitsi Container */}
-      <div ref={jitsiContainerRef} className="flex-1" />
-      
-      {/* Control Bar (optional - Jitsi has its own) */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 backdrop-blur-lg rounded-full px-4 py-2 flex items-center gap-2">
-        <button
-          onClick={() => setIsMuted(!isMuted)}
-          className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-        >
-          {isMuted ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5 text-white" />}
-        </button>
-        <button
-          onClick={() => setIsVideoOff(!isVideoOff)}
-          className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-        >
-          {isVideoOff ? <VideoOff className="w-5 h-5 text-white" /> : <Video className="w-5 h-5 text-white" />}
-        </button>
-        <button
-          onClick={handleEndCall}
-          className="p-3 rounded-full bg-red-600 hover:bg-red-700 transition-colors"
-        >
-          <PhoneOff className="w-5 h-5 text-white" />
-        </button>
+      {/* Simple Header - No custom end call button */}
+      <div className="bg-gray-800 px-4 py-3 flex justify-between items-center z-10">
+        <div>
+          <p className="text-white font-semibold">
+            Telemedicine Consultation
+          </p>
+          <p className="text-xs text-gray-400">
+            Dr. {appointment?.doctorName} • {appointment?.startTime}
+          </p>
+        </div>
+        <div className="text-right text-sm text-gray-400">
+          <p>{appointment && formatDateTime(appointment.date)}</p>
+        </div>
       </div>
+      
+      {/* Jitsi Container - Jitsi has its own end call button */}
+      <div 
+        ref={containerRef} 
+        className="flex-1 w-full relative z-0"
+        style={{ minHeight: 'calc(100vh - 60px)' }}
+      />
+      
+      {/* Loading overlay while Jitsi initializes */}
+      {jitsiInitializing && !jitsiLoaded && (
+        <div className="absolute inset-x-0 bottom-0 top-[60px] flex items-center justify-center bg-gray-900/90 z-10">
+          <div className="text-center">
+            <Loader className="w-10 h-10 text-white animate-spin mx-auto mb-4" />
+            <p className="text-white text-sm">Preparing secure session...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
