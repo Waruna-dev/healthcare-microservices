@@ -115,31 +115,7 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
           </div>
         </div>
 
-        <div className="flex gap-3 mt-auto">
-<button
-  onClick={handleViewDetails}
-  className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
->
-  View Details
-</button>
-          {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
-            <button
-              onClick={() => onPaymentComplete?.(appointment)}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-700 rounded-xl hover:shadow-md transition-all"
-            >
-              Pay Now
-            </button>
-          )}
-          
-          {canJoinCall && (
-            <button
-              onClick={handleJoinCall}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-secondary rounded-xl hover:shadow-md transition-all"
-            >
-              Join Call
-            </button>
-          )}
-        </div>
+        
       </div>
     </div>
   );

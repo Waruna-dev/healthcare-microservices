@@ -14,11 +14,14 @@ const {
     cancelAppointment,
     getUpcomingAppointment,
     checkSlotAvailability,
-    webhookPaymentSuccess
+    webhookPaymentSuccess,
+    updateAppointment,
+    checkAndCancelExpiredAppointments,
+    getCompletionStatus,
+    getAllAppointments
 } = require('../controllers/appointmentController');
 const { protect } = require('../middleware/auth');
 
-// Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'uploads/appointments/');
@@ -42,11 +45,6 @@ const upload = multer({
     }
 });
 
-// ============================================
-// PUBLIC ROUTES (No authentication required)
-// ============================================
-
-// Check slot availability
 router.get('/check-slot', checkSlotAvailability);
 
 // DEBUG ROUTE - Place this FIRST to ensure it works
@@ -54,13 +52,11 @@ router.get('/debug/doctor/:doctorId', async (req, res) => {
     try {
         const { doctorId } = req.params;
         console.log('🔍 DEBUG - Fetching for doctorId:', doctorId);
-        
-        // Try to find appointments with this doctorId as string
+      
         const appointments = await Appointment.find({ 
             doctorId: doctorId.toString() 
         });
         
-        // Get all appointments to see what doctorIds exist
         const allAppointments = await Appointment.find({}, { doctorId: 1, patientName: 1, status: 1 });
         
         res.json({
@@ -82,16 +78,18 @@ router.get('/debug/doctor/:doctorId', async (req, res) => {
     }
 });
 
-// PUBLIC doctor appointments endpoint (NO AUTH) - For testing
+
 router.get('/doctor/public/:doctorId', async (req, res) => {
     try {
         const { doctorId } = req.params;
         console.log('🔍 PUBLIC endpoint - Fetching for doctorId:', doctorId);
         
         const Appointment = require('../models/Appointment');
-        const appointments = await Appointment.find({ 
+        let appointments = await Appointment.find({ 
             doctorId: doctorId.toString() 
         }).sort({ date: -1, createdAt: -1 });
+        
+        appointments = await checkAndCancelExpiredAppointments(appointments);
         
         console.log(`📊 Found ${appointments.length} appointments`);
         
@@ -109,16 +107,14 @@ router.get('/doctor/public/:doctorId', async (req, res) => {
     }
 });
 
-// ============================================
-// PROTECTED ROUTES (Require authentication)
-// ============================================
 
-// Create appointment
 router.post('/', protect, upload.array('reports', 5), createAppointment);
 
 // Patient appointments
 router.get('/patient/:patientId', protect, getPatientAppointments);
 router.get('/patient/:patientId/upcoming', protect, getUpcomingAppointment);
+router.get('/admin/all', protect, getAllAppointments);
+router.get('/:id/completion-status', protect, getCompletionStatus);
 
 // Doctor appointments (protected)
 router.get('/doctor/:doctorId', protect, getDoctorAppointments);
@@ -139,17 +135,12 @@ router.get('/:id/telemedicine', protect, getTelemedicineInfo);
 // Complete appointment
 router.post('/:id/complete', protect, completeAppointment);
 
+// Update appointment (symptoms, history, reports)
+router.put('/:id/update', protect, upload.array('reports', 5), updateAppointment);
+
 // Cancel appointment
 router.put('/:id/cancel', protect, cancelAppointment);
 
-// Public accept endpoint (no auth required) - TEMPORARY
-// Add these to your appointmentRoutes.js (after your other routes)
-
-// ============================================
-// PUBLIC ACTION ENDPOINTS (No Auth Required)
-// ============================================
-
-// Public Accept endpoint
 router.put('/accept/:id', async (req, res) => {
     try {
         const { id } = req.params;
