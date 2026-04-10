@@ -77,6 +77,35 @@ const triggerPaymentSuccessEmail = async (payment) => {
   await payment.save();
 };
 
+const triggerPaymentSuccessSMS = async (payment) => {
+  if (!payment || !payment.customerPhoneNumber || payment.successSMSSentAt) {
+    return;
+  }
+
+  const endpoint = `${NOTIFICATION_SERVICE_URL}/api/notifications/payment-confirmation-sms`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      phoneNumber: payment.customerPhoneNumber,
+      patientName: payment.customerName,
+      orderId: payment.orderId,
+      amount: payment.amount,
+      currency: `${payment.currency || "LKR"}`.toUpperCase(),
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Notification service responded with ${response.status}: ${errorText}`);
+  }
+
+  payment.successSMSSentAt = new Date();
+  await payment.save();
+};
+
 const notifyAppointmentServicePaymentSuccess = async (payment) => {
   if (!payment || !payment.appointmentId) {
     return;
@@ -161,6 +190,7 @@ export const createCheckoutSession = async (req, res) => {
     const patientId = `${req.body.patientId || req.body.userId || ""}`.trim();
     const customerName = getCustomerName(req.body);
     const customerEmail = getCustomerEmail(req.body);
+    const customerPhoneNumber = `${req.body.phoneNumber || req.body.customerPhoneNumber || ""}`.trim();
     const itemName = buildItemName(req.body);
     const amount = toAmount(req.body.amount);
     const currency = `${req.body.currency || "lkr"}`.trim().toLowerCase();
@@ -239,6 +269,7 @@ export const createCheckoutSession = async (req, res) => {
       orderId,
       customerName,
       customerEmail,
+      customerPhoneNumber,
       appointmentId,
       doctorName: `${req.body.doctorName || ""}`.trim(),
       department: `${req.body.department || ""}`.trim(),
@@ -440,6 +471,12 @@ export const handleWebhook = async (req, res) => {
           await triggerPaymentSuccessEmail(payment);
         } catch (error) {
           console.error("Failed to send payment success email:", error.message);
+        }
+        
+        try {
+          await triggerPaymentSuccessSMS(payment);
+        } catch (error) {
+          console.error("Failed to send payment confirmation SMS:", error.message);
         }
         
         try {

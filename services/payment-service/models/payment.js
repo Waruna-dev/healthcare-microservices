@@ -19,6 +19,11 @@ const paymentSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    customerPhoneNumber: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     appointmentId: {
       type: String,
       default: "",
@@ -97,6 +102,10 @@ const paymentSchema = new mongoose.Schema(
       default: null,
     },
     successEmailSentAt: {
+      type: Date,
+      default: null,
+    },
+    successSMSSentAt: {
       type: Date,
       default: null,
     },
