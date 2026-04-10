@@ -1,14 +1,14 @@
 // src/pages/doctor/DoctorAppointments.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Calendar, Clock, User, Stethoscope, CheckCircle, XCircle, 
+import {
+  Calendar, Clock, User, Stethoscope, CheckCircle, XCircle,
   Eye, Filter, Search, AlertCircle, Activity,
-  FileText,  Mail,
+  FileText, Mail,
   TrendingUp, Calendar as CalendarIcon,
   Grid3x3, List, ChevronLeft, ChevronRight,
-  Download, Video, CreditCard
+  Download, Video, CreditCard, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,6 +18,7 @@ const DoctorAppointments = () => {
   const [appointments, setAppointments] = useState([]);
   const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -28,6 +29,7 @@ const DoctorAppointments = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(9);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -38,12 +40,16 @@ const DoctorAppointments = () => {
     patientName: ''
   });
 
+  const isMountedRef = useRef(true);
+
   const statusFilters = [
     { value: 'all', label: 'All', icon: CalendarIcon },
     { value: 'pending', label: 'Pending', icon: AlertCircle },
     { value: 'accepted', label: 'Accepted', icon: CheckCircle },
     { value: 'completed', label: 'Completed', icon: TrendingUp },
     { value: 'rejected', label: 'Rejected', icon: XCircle },
+    { value: 'no_show', label: 'No-Show', icon: AlertCircle },
+    { value: 'doctor_no_show', label: 'Doctor No-Show', icon: AlertCircle },
   ];
 
   const getStatusConfig = (status) => {
@@ -56,6 +62,12 @@ const DoctorAppointments = () => {
         return { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle };
       case 'rejected':
         return { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle };
+      case 'cancelled':
+        return { label: 'Cancelled', color: 'bg-gray-100 text-gray-800', icon: XCircle };
+      case 'no_show':
+        return { label: 'Patient No-Show', color: 'bg-orange-100 text-orange-800', icon: XCircle };
+      case 'doctor_no_show':
+        return { label: 'Doctor No-Show', color: 'bg-purple-100 text-purple-800', icon: XCircle };
       default:
         return { label: status, color: 'bg-gray-100 text-gray-800', icon: AlertCircle };
     }
@@ -97,9 +109,9 @@ const DoctorAppointments = () => {
     const now = new Date();
     const deadline = new Date(paymentDeadline);
     const diff = deadline - now;
-    
+
     if (diff <= 0) return 'Expired';
-    
+
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m remaining`;
@@ -124,76 +136,98 @@ const DoctorAppointments = () => {
   };
 
   // Fetch appointments using PUBLIC endpoint
-  const fetchAppointments = async () => {
+  const fetchAppointments = useCallback(async () => {
     const doctorId = user?._id || user?.id;
-    
+
     if (!doctorId) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
+
     try {
       const url = `http://localhost:5015/api/appointments/doctor/public/${doctorId}`;
       const response = await fetch(url);
       const data = await response.json();
-      
-      if (data.success && data.appointments) {
-        setAppointments(data.appointments);
-        setFilteredAppointments(data.appointments);
-      } else {
-        setAppointments([]);
-        setFilteredAppointments([]);
+
+      if (isMountedRef.current) {
+        if (data.success && data.appointments) {
+          setAppointments(data.appointments);
+          setFilteredAppointments(data.appointments);
+          setLastRefresh(new Date());
+        } else {
+          setAppointments([]);
+          setFilteredAppointments([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching appointments:', error);
-      setAppointments([]);
-      setFilteredAppointments([]);
+      if (isMountedRef.current) {
+        setAppointments([]);
+        setFilteredAppointments([]);
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
+  }, [user]);
+
+  // Manual refresh handler
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await fetchAppointments();
+    setRefreshing(false);
   };
 
+  // Initial fetch
   useEffect(() => {
+    isMountedRef.current = true;
+    
     if (user) {
       fetchAppointments();
     }
-  }, [user]);
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [user, fetchAppointments]);
 
   // Filter appointments
   useEffect(() => {
     let filtered = [...appointments];
-    
+
     if (filter !== 'all') {
       filtered = filtered.filter(apt => apt.status === filter);
     }
-    
+
     if (searchTerm) {
-      filtered = filtered.filter(apt => 
+      filtered = filtered.filter(apt =>
         apt.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.patientEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.symptoms?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     if (advancedFilters.dateRange !== 'all') {
       filtered = filtered.filter(apt => getDateRangeFilter(apt.date, advancedFilters.dateRange));
     }
-    
+
     if (advancedFilters.minFee) {
       filtered = filtered.filter(apt => (apt.consultationFee || 0) >= parseInt(advancedFilters.minFee));
     }
-    
+
     if (advancedFilters.maxFee) {
       filtered = filtered.filter(apt => (apt.consultationFee || 0) <= parseInt(advancedFilters.maxFee));
     }
-    
+
     if (advancedFilters.patientName) {
-      filtered = filtered.filter(apt => 
+      filtered = filtered.filter(apt =>
         apt.patientName?.toLowerCase().includes(advancedFilters.patientName.toLowerCase())
       );
     }
-    
+
     setFilteredAppointments(filtered);
     setCurrentPage(1);
   }, [filter, searchTerm, appointments, advancedFilters]);
@@ -207,12 +241,12 @@ const DoctorAppointments = () => {
   // Accept appointment
   const handleAccept = async (appointment) => {
     setProcessingId(appointment._id);
-    
+
     try {
       const url = `http://localhost:5015/api/appointments/accept/${appointment._id}`;
       const response = await fetch(url, { method: 'PUT' });
       const data = await response.json();
-      
+
       if (data.success) {
         await fetchAppointments();
         alert('✅ Appointment accepted successfully!');
@@ -233,9 +267,9 @@ const DoctorAppointments = () => {
       alert('Please provide a reason for rejection');
       return;
     }
-    
+
     setProcessingId(selectedAppointment._id);
-    
+
     try {
       const url = `http://localhost:5015/api/appointments/reject/${selectedAppointment._id}`;
       const response = await fetch(url, {
@@ -244,7 +278,7 @@ const DoctorAppointments = () => {
         body: JSON.stringify({ rejectionReason: rejectionReason.trim() })
       });
       const data = await response.json();
-      
+
       if (data.success) {
         setShowRejectModal(false);
         setRejectionReason('');
@@ -267,7 +301,7 @@ const DoctorAppointments = () => {
     setSelectedAppointment(null);
   };
 
-  // View Details handler - opens modal instead of navigating
+  // View Details handler
   const handleViewDetails = (appointment) => {
     setSelectedAppointment(appointment);
     setShowDetailsModal(true);
@@ -279,43 +313,43 @@ const DoctorAppointments = () => {
 
   const canJoinCall = (appointment) => {
     if (!appointment) return false;
-    if (appointment.paymentStatus !== 'completed') return false;
+    if (appointment.status === 'no_show' || appointment.status === 'doctor_no_show') return false;
+    if (appointment.status === 'completed') return false;
     if (appointment.status !== 'accepted') return false;
-    
+    if (appointment.paymentStatus !== 'completed') return false;
+
     const now = new Date();
     const meetingDate = new Date(appointment.date);
     const [hour, minute] = appointment.startTime.split(':');
     meetingDate.setHours(parseInt(hour), parseInt(minute), 0);
-    
+
     const joinWindowStart = new Date(meetingDate);
     joinWindowStart.setMinutes(joinWindowStart.getMinutes() - 20);
     const joinWindowEnd = new Date(meetingDate);
     joinWindowEnd.setMinutes(joinWindowEnd.getMinutes() + 60);
-    
+
     return now >= joinWindowStart && now <= joinWindowEnd;
   };
 
   // Appointment Details Modal Component
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
-    
+
     const statusConfig = getStatusConfig(appointment.status);
     const StatusIcon = statusConfig.icon;
     const paymentConfig = getPaymentStatusConfig(appointment.paymentStatus);
-    
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-          {/* Modal Header */}
           <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900">Appointment Details</h2>
             <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
               <XCircle size={24} className="text-gray-500" />
             </button>
           </div>
-          
+
           <div className="p-6 space-y-6">
-            {/* Status Banner */}
             <div className={`p-4 rounded-xl ${statusConfig.color.replace('text', 'bg').replace('800', '50')} border`}>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
@@ -337,8 +371,7 @@ const DoctorAppointments = () => {
                 )}
               </div>
             </div>
-            
-            {/* Patient Info */}
+
             <div className="flex items-start gap-4 pb-4 border-b">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
                 {appointment.patientName?.charAt(0) || 'P'}
@@ -348,8 +381,7 @@ const DoctorAppointments = () => {
                 <p className="text-gray-500">{appointment.patientEmail}</p>
               </div>
             </div>
-            
-            {/* Appointment Info Grid */}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                 <Calendar size={20} className="text-blue-600" />
@@ -366,7 +398,6 @@ const DoctorAppointments = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                
                 <div>
                   <p className="text-xs text-gray-500">Consultation Fee</p>
                   <p className="font-medium text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</p>
@@ -382,8 +413,7 @@ const DoctorAppointments = () => {
                 </div>
               </div>
             </div>
-            
-            {/* Symptoms */}
+
             {appointment.symptoms && (
               <div className="p-4 bg-yellow-50 rounded-xl">
                 <div className="flex items-center gap-2 mb-2">
@@ -393,8 +423,7 @@ const DoctorAppointments = () => {
                 <p className="text-gray-700">{appointment.symptoms}</p>
               </div>
             )}
-            
-            {/* Medical History */}
+
             {appointment.medicalHistory && (
               <div className="p-4 bg-blue-50 rounded-xl">
                 <div className="flex items-center gap-2 mb-2">
@@ -404,8 +433,7 @@ const DoctorAppointments = () => {
                 <p className="text-gray-700">{appointment.medicalHistory}</p>
               </div>
             )}
-            
-            {/* Uploaded Reports */}
+
             {appointment.uploadedReports && appointment.uploadedReports.length > 0 && (
               <div>
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
@@ -419,9 +447,9 @@ const DoctorAppointments = () => {
                         <FileText size={16} className="text-blue-600" />
                         <span className="text-sm">{report.fileName}</span>
                       </div>
-                      <a 
-                        href={`http://localhost:5015/${report.filePath}`} 
-                        target="_blank" 
+                      <a
+                        href={`http://localhost:5015/${report.filePath}`}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 text-sm hover:underline flex items-center gap-1"
                       >
@@ -432,8 +460,7 @@ const DoctorAppointments = () => {
                 </div>
               </div>
             )}
-            
-            {/* Consultation Notes (if completed) */}
+
             {appointment.consultationNotes && (
               <div className="p-4 bg-green-50 rounded-xl">
                 <h3 className="font-semibold mb-2">Consultation Notes</h3>
@@ -446,8 +473,7 @@ const DoctorAppointments = () => {
                 )}
               </div>
             )}
-            
-            {/* Action Buttons for Doctor */}
+
             <div className="flex flex-col gap-3 pt-4 border-t">
               {appointment.status === 'pending' && (
                 <div className="flex gap-3">
@@ -474,7 +500,7 @@ const DoctorAppointments = () => {
                   </button>
                 </div>
               )}
-              
+
               {canJoinCall(appointment) && (
                 <button
                   onClick={() => {
@@ -487,7 +513,7 @@ const DoctorAppointments = () => {
                   Join Telemedicine Session
                 </button>
               )}
-              
+
               {appointment.paymentStatus === 'completed' && appointment.status === 'accepted' && !canJoinCall(appointment) && (
                 <div className="text-center p-4 bg-gray-50 rounded-xl">
                   <Clock size={24} className="mx-auto text-gray-400 mb-2" />
@@ -502,12 +528,12 @@ const DoctorAppointments = () => {
     );
   };
 
-  // Appointment Card Component - WITHOUT colored status bar
+  // Appointment Card Component
   const AppointmentCard = ({ appointment, index }) => {
     const statusConfig = getStatusConfig(appointment.status);
     const StatusIcon = statusConfig.icon;
     const paymentConfig = getPaymentStatusConfig(appointment.paymentStatus);
-    
+
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -515,21 +541,18 @@ const DoctorAppointments = () => {
         transition={{ delay: index * 0.05 }}
         className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300"
       >
-        {/* No colored status bar at the top */}
-        
         <div className="p-4">
-          {/* Header */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-blue-50 rounded-lg">
-                <Stethoscope className="w-4 h-4 text-blue-600" />
+                <User className="w-4 h-4 text-blue-600" />
               </div>
               <div>
                 <h3 className="font-bold text-base text-gray-900">{appointment.patientName}</h3>
                 <p className="text-xs text-gray-500">{appointment.patientEmail?.split('@')[0]}</p>
               </div>
             </div>
-            
+
             <div className="flex gap-1.5">
               <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
                 <StatusIcon size={12} />
@@ -540,8 +563,7 @@ const DoctorAppointments = () => {
               </span>
             </div>
           </div>
-          
-          {/* Appointment Details */}
+
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <Calendar size={12} className="text-gray-400" />
@@ -552,28 +574,31 @@ const DoctorAppointments = () => {
               <span>{appointment.startTime} - {appointment.endTime}</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-600 col-span-2">
-              
               <span className="font-semibold text-green-600">LKR {appointment.consultationFee?.toLocaleString()}</span>
             </div>
           </div>
-          
-          {/* Symptoms Preview */}
+
+          {appointment.rejectionReason && (
+            <div className="mb-3 p-2 bg-red-50 border border-red-100 rounded-lg">
+              <p className="text-xs text-red-600 font-medium mb-0.5">Cancellation Reason:</p>
+              <p className="text-xs text-red-700">{appointment.rejectionReason}</p>
+            </div>
+          )}
+
           {appointment.symptoms && (
             <div className="mb-3 p-2 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500 mb-0.5">Symptoms:</p>
               <p className="text-xs text-gray-700 line-clamp-2">{appointment.symptoms}</p>
             </div>
           )}
-          
-          {/* Reports Indicator */}
+
           {appointment.uploadedReports && appointment.uploadedReports.length > 0 && (
             <div className="mb-3 flex items-center gap-1.5 text-xs text-blue-600">
               <FileText size={12} />
               <span>{appointment.uploadedReports.length} report(s) attached</span>
             </div>
           )}
-          
-          {/* Action Buttons */}
+
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => handleViewDetails(appointment)}
@@ -582,7 +607,7 @@ const DoctorAppointments = () => {
               <Eye size={12} />
               View Full Details
             </button>
-            
+
             {appointment.status === 'pending' && (
               <>
                 <button
@@ -605,7 +630,7 @@ const DoctorAppointments = () => {
                 </button>
               </>
             )}
-            
+
             {canJoinCall(appointment) && (
               <button
                 onClick={() => handleJoinCall(appointment)}
@@ -621,12 +646,12 @@ const DoctorAppointments = () => {
     );
   };
 
-  // List View Item Component - WITHOUT colored status bar
+  // List View Item Component
   const AppointmentListItem = ({ appointment, index }) => {
     const statusConfig = getStatusConfig(appointment.status);
     const StatusIcon = statusConfig.icon;
     const paymentConfig = getPaymentStatusConfig(appointment.paymentStatus);
-    
+
     return (
       <motion.div
         initial={{ opacity: 0, x: -20 }}
@@ -660,7 +685,6 @@ const DoctorAppointments = () => {
                   {appointment.startTime}
                 </span>
                 <span className="flex items-center gap-1 text-green-600 font-semibold">
-                 
                   LKR {appointment.consultationFee?.toLocaleString()}
                 </span>
               </div>
@@ -671,7 +695,7 @@ const DoctorAppointments = () => {
               )}
             </div>
           </div>
-          
+
           <div className="flex gap-2">
             <button
               onClick={() => handleViewDetails(appointment)}
@@ -680,7 +704,7 @@ const DoctorAppointments = () => {
               <Eye size={12} />
               View Details
             </button>
-            
+
             {appointment.status === 'pending' && (
               <>
                 <button
@@ -703,7 +727,7 @@ const DoctorAppointments = () => {
                 </button>
               </>
             )}
-            
+
             {canJoinCall(appointment) && (
               <button
                 onClick={() => handleJoinCall(appointment)}
@@ -721,30 +745,34 @@ const DoctorAppointments = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
-        <p className="text-gray-500 mt-1">Manage your patient appointments</p>
+      {/* Header Section with Refresh Button */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
+          <p className="text-gray-500 mt-1">Manage your patient appointments</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Last updated: {lastRefresh.toLocaleTimeString()}
+          </p>
+        </div>
+        
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
         {statusFilters.map((status) => (
           <button
             key={status.value}
             onClick={() => setFilter(status.value)}
-            className={`p-3 rounded-xl text-center transition-all ${
-              filter === status.value
+            className={`p-3 rounded-xl text-center transition-all ${filter === status.value
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'bg-white border border-gray-200 text-gray-700 hover:border-blue-500/50'
-            }`}
+              }`}
           >
-            <status.icon className={`w-5 h-5 mx-auto mb-1 ${
-              filter === status.value ? 'text-white' : 'text-gray-500'
-            }`} />
+            <status.icon className={`w-5 h-5 mx-auto mb-1 ${filter === status.value ? 'text-white' : 'text-gray-500'
+              }`} />
             <p className="text-xl font-bold">
-              {status.value === 'all' 
-                ? appointments.length 
+              {status.value === 'all'
+                ? appointments.length
                 : appointments.filter(apt => apt.status === status.value).length}
             </p>
             <p className="text-xs">{status.label}</p>
@@ -765,39 +793,36 @@ const DoctorAppointments = () => {
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          
+
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-md transition-all ${
-                viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'
-              }`}
+              className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'
+                }`}
             >
               <Grid3x3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-all ${
-                viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'
-              }`}
+              className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'
+                }`}
             >
               <List className="w-4 h-4" />
             </button>
           </div>
-          
+
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              showAdvancedFilters || Object.values(advancedFilters).some(v => v && v !== 'all')
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${showAdvancedFilters || Object.values(advancedFilters).some(v => v && v !== 'all')
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+              }`}
           >
             <Filter className="w-4 h-4" />
             Filters
           </button>
         </div>
-        
+
         <AnimatePresence>
           {showAdvancedFilters && (
             <motion.div
@@ -824,7 +849,7 @@ const DoctorAppointments = () => {
                     <option value="past">Past Appointments</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">
                     Patient Name
@@ -838,7 +863,7 @@ const DoctorAppointments = () => {
                   />
                 </div>
               </div>
-              
+
               {(searchTerm || advancedFilters.dateRange !== 'all' || advancedFilters.minFee || advancedFilters.maxFee || advancedFilters.patientName) && (
                 <div className="mt-3 text-right">
                   <button

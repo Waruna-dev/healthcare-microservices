@@ -1,13 +1,16 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, Stethoscope, CreditCard, Video, CheckCircle, XCircle, Clock as ClockIcon } from 'lucide-react';
+import { Calendar, Clock, User, Stethoscope, CreditCard, Video, CheckCircle, XCircle, Clock as ClockIcon, AlertCircle } from 'lucide-react';
 
 const statusConfig = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: ClockIcon },
   accepted: { label: 'Accepted', color: 'bg-blue-100 text-blue-800', icon: CheckCircle },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
   cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-800', icon: XCircle },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle }
+  completed: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  no_show: { label: 'Patient No-Show', color: 'bg-orange-100 text-orange-800', icon: XCircle },
+  doctor_no_show: { label: 'Doctor No-Show', color: 'bg-purple-100 text-purple-800', icon: XCircle },
+  partial: { label: 'Partial', color: 'bg-yellow-100 text-yellow-800', icon: ClockIcon }
 };
 
 const paymentStatusConfig = {
@@ -19,7 +22,6 @@ const paymentStatusConfig = {
 const AppointmentCard = ({ appointment, type = 'patient', onStatusUpdate, onPaymentComplete }) => {
   const navigate = useNavigate();
   const StatusIcon = statusConfig[appointment.status]?.icon || ClockIcon;
-  const PaymentIcon = paymentStatusConfig[appointment.paymentStatus]?.icon;
 
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -49,6 +51,9 @@ const AppointmentCard = ({ appointment, type = 'patient', onStatusUpdate, onPaym
         appointment.status === 'pending' ? 'bg-yellow-500' :
         appointment.status === 'accepted' ? 'bg-blue-500' :
         appointment.status === 'completed' ? 'bg-green-500' :
+        appointment.status === 'partial' ? 'bg-yellow-500' :
+        appointment.status === 'no_show' ? 'bg-orange-500' :
+        appointment.status === 'doctor_no_show' ? 'bg-purple-500' :
         'bg-gray-400'
       }`} />
       
@@ -91,6 +96,29 @@ const AppointmentCard = ({ appointment, type = 'patient', onStatusUpdate, onPaym
           </div>
         </div>
 
+        {/* Confirmation Status for Partial Completions */}
+        {appointment.completionStatus === 'partial' && (
+          <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-xs text-yellow-700 font-medium flex items-center gap-1">
+              <AlertCircle size={12} />
+              {appointment.doctorConfirmed && !appointment.patientConfirmed 
+                ? "✓ Doctor confirmed. Waiting for patient confirmation..." 
+                : !appointment.doctorConfirmed && appointment.patientConfirmed 
+                ? "✓ Patient confirmed. Waiting for doctor confirmation..." 
+                : "Awaiting confirmation"}
+            </p>
+          </div>
+        )}
+
+        {appointment.completionStatus === 'completed' && (
+          <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-xs text-green-700 font-medium flex items-center gap-1">
+              <CheckCircle size={12} />
+              Consultation completed and confirmed by both parties ✓
+            </p>
+          </div>
+        )}
+
         {/* Fee and Payment Status */}
         <div className="flex items-center justify-between py-3 border-t border-gray-100 mb-4">
           <div>
@@ -104,6 +132,14 @@ const AppointmentCard = ({ appointment, type = 'patient', onStatusUpdate, onPaym
             </span>
           </div>
         </div>
+
+        {/* Rejection/Cancellation Reason */}
+        {appointment.rejectionReason && (
+          <div className="mb-3 p-2 bg-red-50 border border-red-100 rounded-lg">
+            <p className="text-xs text-red-600 font-medium mb-0.5">Reason:</p>
+            <p className="text-xs text-red-700">{appointment.rejectionReason}</p>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex gap-3">

@@ -386,7 +386,7 @@ const AppointmentBooking = () => {
             const data = await response.json();
             
             if (response.ok && data.success) {
-                navigate('/dashboard', { 
+                navigate('/appointments/all', { 
                     state: { message: 'Appointment booked successfully! Waiting for doctor approval.' }
                 });
             } else {

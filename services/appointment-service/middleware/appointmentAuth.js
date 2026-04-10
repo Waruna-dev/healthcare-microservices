@@ -12,7 +12,7 @@ const protect = async (req, res, next) => {
       // You might want to add a role field in the token
       req.userId = decoded.id;
       req.userRole = decoded.role || 'patient';
-      
+       
       next();
     } catch (error) {
       res.status(401).json({ message: 'Not authorized, token failed' });
