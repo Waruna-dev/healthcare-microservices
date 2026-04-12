@@ -10,6 +10,7 @@ import PlatformOverview from './PlatformOverview';
 import SystemSettings from './SystemSettings';
 import ManageDoctor from './ManageDoctor';
 import ManageMessages from './ManageMessages';
+import AdminAppointments from '../Doctor/AdminShowAppointments'
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -44,6 +45,7 @@ const AdminDashboard = () => {
     // --- NEW: Added Support Inbox to Sidebar ---
     { id: 'messages', label: 'Support Inbox', icon: <Mail size={20} /> }, 
     { id: 'settings', label: 'System Settings', icon: <Settings size={20} /> },
+    { id: 'appointments', label: 'All Appointments', icon: <Activity size={20} /> },
   ];
 
   if (!adminUser) return null; // Prevent flickering before redirect
@@ -151,6 +153,7 @@ const AdminDashboard = () => {
           {activeTab === 'messages' && <ManageMessages />} 
 
           {activeTab === 'settings' && <SystemSettings />}
+          {activeTab === 'appointments' && <AdminAppointments />}
         </div>
       </main>
 

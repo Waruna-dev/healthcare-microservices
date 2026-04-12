@@ -46,6 +46,7 @@ import PaymentDashboard from "./pages/payment/paymentAdminDashboard";
 
 import AppointmentBook from './components/appointment/AppointmentBooking';
 import TelemedicineRoom from "./pages/telemedicine/TelemedicineRoom";
+import AdminShowAppointments from './pages/Doctor/AdminShowAppointments';
 
 function App() {
   return (
@@ -71,6 +72,7 @@ function App() {
         <Route path="/appointments/all" element={<AllAppointments />} />
         <Route path="/appointments/book/:id" element={<AppointmentBook />} />
         <Route path="/prescriptions" element={<PrescriptionShowPatient />} />
+        <Route path="/admin/appointments" element={<AdminShowAppointments />} />
 
 <Route path="/telemedicine/:id" element={<TelemedicineRoom />} />
 

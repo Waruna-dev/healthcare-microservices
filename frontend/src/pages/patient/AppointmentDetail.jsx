@@ -122,7 +122,7 @@ const AppointmentDetail = () => {
     return (
         <div className="min-h-screen bg-background py-8 px-4">
             <div className="max-w-3xl mx-auto">
-                {/* Header */}
+   
                 <div className="flex items-center gap-4 mb-6">
                     <button
                         onClick={() => navigate('/dashboard')}
@@ -133,9 +133,9 @@ const AppointmentDetail = () => {
                     <h1 className="text-2xl font-bold text-on-surface">Appointment Details</h1>
                 </div>
 
-                {/* Main Card */}
+         
                 <div className="bg-white rounded-2xl shadow-elevated overflow-hidden">
-                    {/* Status Header */}
+        
                     <div className={`p-4 ${
                         appointment.status === 'accepted' ? 'bg-green-50 border-b border-green-100' :
                         appointment.status === 'pending' ? 'bg-yellow-50 border-b border-yellow-100' :
@@ -158,7 +158,7 @@ const AppointmentDetail = () => {
                     </div>
 
                     <div className="p-6 space-y-6">
-                        {/* Doctor Info */}
+                  
                         <div className="flex items-start gap-4 pb-4 border-b">
                             <div className="w-16 h-16 bg-gradient-to-r from-primary to-primary/70 rounded-full flex items-center justify-center text-white text-xl font-bold">
                                 {appointment.doctorName?.charAt(0) || 'D'}
@@ -169,7 +169,7 @@ const AppointmentDetail = () => {
                             </div>
                         </div>
 
-                        {/* Appointment Info */}
+                    
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                                 <Calendar size={20} className="text-primary" />
@@ -207,7 +207,7 @@ const AppointmentDetail = () => {
                             </div>
                         </div>
 
-                        {/* Symptoms */}
+                    
                         {appointment.symptoms && (
                             <div className="p-4 bg-yellow-50 rounded-xl">
                                 <div className="flex items-center gap-2 mb-2">
@@ -218,7 +218,7 @@ const AppointmentDetail = () => {
                             </div>
                         )}
 
-                        {/* Medical History */}
+    
                         {appointment.medicalHistory && (
                             <div className="p-4 bg-blue-50 rounded-xl">
                                 <div className="flex items-center gap-2 mb-2">
@@ -229,7 +229,7 @@ const AppointmentDetail = () => {
                             </div>
                         )}
 
-                        {/* Uploaded Reports */}
+             
                         {appointment.uploadedReports && appointment.uploadedReports.length > 0 && (
                             <div>
                                 <h3 className="font-semibold mb-2">Uploaded Reports</h3>
@@ -246,7 +246,7 @@ const AppointmentDetail = () => {
                             </div>
                         )}
 
-                        {/* Rejection Reason */}
+             
                         {appointment.status === 'rejected' && appointment.rejectionReason && (
                             <div className="p-4 bg-red-50 rounded-xl">
                                 <p className="text-red-700 text-sm">
@@ -255,8 +255,18 @@ const AppointmentDetail = () => {
                             </div>
                         )}
 
-                        {/* Action Buttons */}
+                
                         <div className="flex flex-col gap-3 pt-4">
+                            {/* Update Button - Only for pending appointments */}
+                            {appointment.status === 'pending' && (
+                                <button
+                                    onClick={() => navigate(`/appointments/update/${id}`)}
+                                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <FileText size={20} />
+                                    Edit Appointment Details
+                                </button>
+                            )}
                             {/* Payment Button - Show only when accepted and payment pending */}
                             {appointment.status === 'accepted' && appointment.paymentStatus === 'pending' && (
                                 <button

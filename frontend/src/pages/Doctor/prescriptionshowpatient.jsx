@@ -1,55 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { FileText, Calendar, User, ArrowLeft, Search, Filter, Download, Eye, Bell, Settings, LogOut, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FileText, Calendar, User, ArrowLeft, Search, Filter, Download, Eye } from 'lucide-react';
+import Header from '../../components/Header';
 
 const PrescriptionShowPatient = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredPrescriptions, setFilteredPrescriptions] = useState([]);
-  const [user, setUser] = useState({ name: 'John Doe', email: 'patient@example.com' });
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
-  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    fetchPrescriptions();
-    // Get user from localStorage
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        const patient = userData.patient || userData;
-        setUser(patient);
-      } catch (e) {
-        console.error('Error parsing user:', e);
-      }
+      const parsedUser = JSON.parse(storedUser);
+      const patient = parsedUser.patient || parsedUser;
+      setUser(patient);
     }
+    fetchPrescriptions();
   }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('appointments');
-    navigate('/login');
-  };
 
   const fetchPrescriptions = async () => {
     try {
@@ -102,6 +72,13 @@ const PrescriptionShowPatient = () => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('appointments');
+    navigate('/login');
   };
 
   const handleDownloadPDF = (prescription) => {
@@ -230,104 +207,9 @@ const PrescriptionShowPatient = () => {
   }
 
   return (
-    <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
-      
-      {/* Toast Notification */}
-      {toast.show && (
-        <div className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-elevated flex items-center gap-3 font-bold text-sm backdrop-blur-md border ${
-          toast.type === 'success' 
-            ? 'bg-primary/90 text-white border-white/20' 
-            : 'bg-error/90 text-white border-white/20'
-        }`}>
-          {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-          {toast.message}
-          <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-70">
-            <X size={16} />
-          </button>
-        </div>
-      )}
-
-      {/* Header */}
-      <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
-        <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
-          <div className="flex items-center gap-12">
-            <Link to="/" className="text-2xl font-extrabold text-primary font-headline tracking-tighter hover:opacity-80 transition-opacity">
-              CareSync
-            </Link>
-            <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <Link 
-                to="/patient/dashboard" 
-                className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Dashboard
-              </Link>
-              <Link 
-                to="/doctor/listing" 
-                className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Specialists
-              </Link>
-              <Link 
-                to="/appointments/all" 
-                className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Appointments
-              </Link>
-              <Link 
-                to="/prescriptions" 
-                className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
-              >
-                <FileText size={16} />
-                Prescriptions
-              </Link>
-            </nav>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all">
-              <Bell size={20} />
-            </button>
-
-            <div className="relative" ref={dropdownRef}>
-              <button 
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-center bg-primary-container text-primary font-bold shadow-sm hover:shadow-md"
-              >
-                {user.profilePicture ? (
-                  <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  user.name?.charAt(0) || <User size={20} />
-                )}
-              </button>
-
-              {/* Dropdown Menu */}
-              {isDropdownOpen && (
-                <div className="absolute right-0 mt-3 w-56 bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50">
-                  <div className="p-4 border-b border-outline-variant/30 bg-surface-container-low/50">
-                    <p className="font-bold text-on-surface truncate">{user.name}</p>
-                    <p className="text-xs text-on-surface-variant truncate mt-0.5">{user.email || 'Patient Account'}</p>
-                  </div>
-                  <div className="p-2 flex flex-col gap-1">
-                    <Link 
-                      to="/profile" 
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-low text-sm font-bold text-on-surface-variant hover:text-primary transition-colors"
-                    >
-                      <Settings size={18} /> Account Settings
-                    </Link>
-                    <button 
-                      onClick={handleLogout} 
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-error-container/50 text-sm font-bold text-error transition-colors w-full text-left"
-                    >
-                      <LogOut size={18} /> Logout
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50">
+      {/* Reusable Header Component */}
+      <Header user={user} onLogout={handleLogout} />
 
       {/* Main Content */}
       <div className="py-10 px-6">
@@ -383,7 +265,7 @@ const PrescriptionShowPatient = () => {
                         <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                           <div className="flex items-center gap-1">
                             <User size={14} />
-                            {prescription.doctorName}
+                            Dr. {prescription.doctorName}
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar size={14} />
@@ -395,13 +277,10 @@ const PrescriptionShowPatient = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button className="p-2 hover:bg-white rounded-lg transition-colors">
-                          <Eye size={18} className="text-blue-600" />
-                        </button>
                         <button 
                           onClick={() => handleDownloadPDF(prescription)}
                           className="p-2 hover:bg-white rounded-lg transition-colors"
-                          title="Download PDF"
+                          title="Download Prescription"
                         >
                           <Download size={18} className="text-blue-600" />
                         </button>

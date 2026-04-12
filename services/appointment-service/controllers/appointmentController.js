@@ -3,29 +3,67 @@ const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
 
-// Helper to auto-cancel pending appointments that have passed their start time
 const checkAndCancelExpiredAppointments = async (appointments) => {
     const now = new Date();
     let updatedAppointments = [];
 
     for (let appt of appointments) {
-        if (appt.status === 'pending') {
-            const apptDate = new Date(appt.date);
-            if (appt.startTime) {
-                const [hours, minutes] = appt.startTime.split(':').map(Number);
-                apptDate.setHours(hours, minutes, 0, 0);
-                
-                if (now > apptDate) {
-                    appt.status = 'cancelled';
-                    appt.rejectionReason = 'Auto-cancelled: Appointment time passed without doctor acceptance.';
-                    await appt.save();
+        let shouldCancel = false;
+        let cancelReason = '';
+
+        const apptDate = new Date(appt.date);
+        if (appt.startTime) {
+            const [hours, minutes] = appt.startTime.split(':').map(Number);
+            apptDate.setHours(hours, minutes, 0, 0);
+            
+            // Case 1: Pending appointment that has passed its start time
+            if (appt.status === 'pending' && now > apptDate) {
+                shouldCancel = true;
+                cancelReason = 'Auto-cancelled: Appointment time passed without doctor acceptance.';
+            }
+            
+            // Case 2: Accepted appointment but payment not made at least 10 minutes before start
+            if (appt.status === 'accepted' && appt.paymentStatus === 'pending') {
+                const tenMinutesBeforeStart = new Date(apptDate.getTime() - (10 * 60 * 1000));
+                if (now > tenMinutesBeforeStart) {
+                    shouldCancel = true;
+                    cancelReason = 'Auto-cancelled: Patient did not complete payment before the 10-minute deadline.';
                 }
             }
         }
+
+        if (shouldCancel) {
+            appt.status = 'cancelled';
+            appt.rejectionReason = cancelReason;
+            await appt.save();
+            console.log(`🤖 Auto-cancelled appointment ${appt._id}: ${cancelReason}`);
+        }
+        
         updatedAppointments.push(appt);
     }
     return updatedAppointments;
 };
+
+// Global task to find and cancel ALL expired appointments (not just for one user)
+const runAutoCancellationTask = async () => {
+    try {
+        const now = new Date();
+        
+        // Find all pending appointments that have passed their start time
+        // OR accepted appointments with pending payment that are within 1 hour of start time
+        const appointmentsToProcess = await Appointment.find({
+            status: { $in: ['pending', 'accepted'] },
+            paymentStatus: 'pending'
+        });
+
+        if (appointmentsToProcess.length > 0) {
+            await checkAndCancelExpiredAppointments(appointmentsToProcess);
+        }
+    } catch (error) {
+        console.error('❌ Error in auto-cancellation task:', error);
+    }
+};
+
 const { v4: uuidv4 } = require('uuid');
 
 // Ensure uploads directory exists
@@ -299,6 +337,20 @@ const updateAppointmentStatus = async (req, res) => {
         appointment.status = status;
         appointment.updatedAt = new Date();
 
+        // If accepted, set a strict payment deadline (10 minutes before meeting start)
+        if (status === 'accepted') {
+            const apptDate = new Date(appointment.date);
+            if (appointment.startTime) {
+                const [hours, minutes] = appointment.startTime.split(':').map(Number);
+                apptDate.setHours(hours, minutes, 0, 0);
+                
+                // Deadline is 10 minutes before start
+                const deadline = new Date(apptDate.getTime() - (10 * 60 * 1000));
+                appointment.paymentDeadline = deadline;
+                console.log(`📅 Set payment deadline for ${appointment._id}: ${deadline}`);
+            }
+        }
+
         if (status === 'rejected' && rejectionReason) {
             appointment.rejectionReason = rejectionReason;
         }
@@ -352,18 +404,21 @@ const processPayment = async (req, res) => {
             });
         }
 
-        // Check if payment is within 48 hours
-        const acceptedDate = new Date(appointment.updatedAt);
+        // Check if payment is within the deadline (10 minutes before start)
         const now = new Date();
-        const hoursSinceAcceptance = (now - acceptedDate) / (1000 * 60 * 60);
+        const apptDate = new Date(appointment.date);
+        const [hours, minutes] = appointment.startTime.split(':').map(Number);
+        apptDate.setHours(hours, minutes, 0, 0);
+        
+        const tenMinutesBeforeStart = new Date(apptDate.getTime() - (10 * 60 * 1000));
 
-        if (hoursSinceAcceptance > 48) {
+        if (now > tenMinutesBeforeStart) {
             appointment.status = 'cancelled';
-            appointment.rejectionReason = 'Payment not completed within 48 hours';
+            appointment.rejectionReason = 'Auto-cancelled: Payment not completed before the 10-minute deadline.';
             await appointment.save();
             return res.status(400).json({
                 success: false,
-                message: 'Payment window expired (48 hours). Appointment cancelled.'
+                message: 'Payment window expired (10 minutes before start). Appointment cancelled.'
             });
         }
 
@@ -518,11 +573,17 @@ const getTelemedicineInfo = async (req, res) => {
         });
     }
 };
-// @desc    Complete appointment and add prescription
+// Add validation to prevent invalid status changes
+// Add this function to your appointmentController.js
+
+// @desc    Complete appointment with dual confirmation
+// @route   POST /api/appointments/:id/complete
 const completeAppointment = async (req, res) => {
     try {
         const { id } = req.params;
-        const { consultationNotes, prescription, status } = req.body;
+        const { consultationNotes, prescription, status, userType } = req.body;
+
+        console.log('📝 Complete appointment request:', { id, status, userType });
 
         const appointment = await Appointment.findById(id);
 
@@ -533,16 +594,103 @@ const completeAppointment = async (req, res) => {
             });
         }
 
-        appointment.status = status || 'completed';
-        appointment.consultationNotes = consultationNotes || appointment.consultationNotes;
-        appointment.prescription = prescription || null;
-        appointment.updatedAt = new Date();
+        // Handle no-show cases (immediate, no confirmation needed)
+        if (status === 'no_show') {
+            appointment.status = 'no_show';
+            appointment.rejectionReason = consultationNotes || 'Patient did not attend the scheduled consultation';
+            appointment.completionStatus = 'completed';
+            appointment.consultationNotes = consultationNotes;
+            await appointment.save();
+            
+            return res.json({
+                success: true,
+                message: 'Appointment marked as Patient No-Show',
+                appointment
+            });
+        }
+        
+        if (status === 'doctor_no_show') {
+            appointment.status = 'doctor_no_show';
+            appointment.rejectionReason = consultationNotes || 'Doctor did not attend the scheduled consultation';
+            appointment.completionStatus = 'completed';
+            appointment.consultationNotes = consultationNotes;
+            await appointment.save();
+            
+            return res.json({
+                success: true,
+                message: 'Appointment marked as Doctor No-Show',
+                appointment
+            });
+        }
 
-        await appointment.save();
+        // Handle completion confirmation
+        if (status === 'completed') {
+            let updated = false;
+            
+            if (userType === 'doctor') {
+                if (!appointment.doctorConfirmed) {
+                    appointment.doctorConfirmed = true;
+                    appointment.doctorConfirmationTime = new Date();
+                    updated = true;
+                    console.log('✅ Doctor confirmed completion');
+                }
+            } else if (userType === 'patient') {
+                if (!appointment.patientConfirmed) {
+                    appointment.patientConfirmed = true;
+                    appointment.patientConfirmationTime = new Date();
+                    updated = true;
+                    console.log('✅ Patient confirmed completion');
+                }
+            }
+
+            // Check if both have confirmed
+            const bothConfirmed = appointment.doctorConfirmed && appointment.patientConfirmed;
+            
+            if (bothConfirmed) {
+                appointment.status = 'completed';
+                appointment.completionStatus = 'completed';
+                appointment.consultationNotes = consultationNotes || 'Telemedicine consultation completed successfully by both parties.';
+                appointment.prescription = prescription || null;
+                console.log('🎉 Both parties confirmed! Appointment marked as completed.');
+            } else if (updated) {
+                appointment.completionStatus = 'partial';
+                appointment.status = 'partial';
+                console.log('⏳ One party confirmed, waiting for other party...');
+            }
+
+            if (updated || bothConfirmed) {
+                appointment.updatedAt = new Date();
+                await appointment.save();
+            }
+
+            // Prepare response
+            const response = {
+                success: true,
+                appointment: {
+                    ...appointment.toObject(),
+                    doctorConfirmed: appointment.doctorConfirmed,
+                    patientConfirmed: appointment.patientConfirmed,
+                    completionStatus: appointment.completionStatus,
+                    isFullyCompleted: bothConfirmed
+                }
+            };
+
+            if (bothConfirmed) {
+                response.message = 'Appointment completed successfully! Both parties have confirmed.';
+            } else if (userType === 'doctor' && appointment.doctorConfirmed && !appointment.patientConfirmed) {
+                response.message = 'Doctor confirmed. Waiting for patient confirmation to complete the appointment.';
+            } else if (userType === 'patient' && appointment.patientConfirmed && !appointment.doctorConfirmed) {
+                response.message = 'Patient confirmed. Waiting for doctor confirmation to complete the appointment.';
+            } else {
+                response.message = `${userType} confirmation recorded.`;
+            }
+
+            return res.json(response);
+        }
 
         res.json({
             success: true,
-            message: 'Appointment completed successfully',
+            message: 'Appointment updated',
             appointment
         });
     } catch (error) {
@@ -553,6 +701,39 @@ const completeAppointment = async (req, res) => {
         });
     }
 };
+
+// @desc    Get appointment completion status
+// @route   GET /api/appointments/:id/completion-status
+const getCompletionStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const appointment = await Appointment.findById(id);
+        
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            doctorConfirmed: appointment.doctorConfirmed || false,
+            patientConfirmed: appointment.patientConfirmed || false,
+            completionStatus: appointment.completionStatus || 'pending',
+            isFullyCompleted: (appointment.doctorConfirmed && appointment.patientConfirmed) || appointment.completionStatus === 'completed',
+            status: appointment.status
+        });
+    } catch (error) {
+        console.error('Get completion status error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 
 // @desc    Cancel appointment
 const cancelAppointment = async (req, res) => {
@@ -720,7 +901,7 @@ const webhookPaymentSuccess = async (req, res) => {
 const updateAppointment = async (req, res) => {
     try {
         const { id } = req.params;
-        const { symptoms, medicalHistory } = req.body;
+        const { symptoms, medicalHistory, removedReportIds } = req.body;
 
         console.log('📝 Updating appointment:', id);
         console.log('   Symptoms:', symptoms);
@@ -735,8 +916,6 @@ const updateAppointment = async (req, res) => {
                 message: 'Appointment not found'
             });
         }
-
-        // Check if user is the patient who owns this appointment
         const patientId = req.patient?._id || req.body.patientId;
         if (appointment.patientId.toString() !== patientId.toString()) {
             return res.status(403).json({
@@ -744,16 +923,12 @@ const updateAppointment = async (req, res) => {
                 message: 'You are not authorized to update this appointment'
             });
         }
-
-        // Only allow updates for pending appointments
         if (appointment.status !== 'pending') {
             return res.status(400).json({
                 success: false,
                 message: 'Can only update pending appointments. Current status: ' + appointment.status
             });
         }
-
-        // Check if appointment date is in the future
         const appointmentDate = new Date(appointment.date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -764,8 +939,6 @@ const updateAppointment = async (req, res) => {
                 message: 'Cannot update past appointments'
             });
         }
-
-        // Update fields
         if (symptoms && symptoms.trim()) {
             appointment.symptoms = symptoms.trim();
         }
@@ -773,7 +946,20 @@ const updateAppointment = async (req, res) => {
             appointment.medicalHistory = medicalHistory.trim() || '';
         }
 
-        // Handle new file uploads
+        if (removedReportIds) {
+            const idsToRemove = Array.isArray(removedReportIds) 
+                ? removedReportIds.map(id => id.toString()) 
+                : [removedReportIds.toString()];
+                
+            appointment.uploadedReports = appointment.uploadedReports.filter(
+                report => {
+                    const reportIdStr = report._id?.toString() || report.filePath;
+                    return !idsToRemove.includes(reportIdStr);
+                }
+            );
+            console.log(`🗑️ Removed reports requested: ${idsToRemove.length} items`);
+        }
+
         if (req.files && req.files.length > 0) {
             const newReports = req.files.map(file => ({
                 fileName: file.originalname,
@@ -803,6 +989,25 @@ const updateAppointment = async (req, res) => {
     }
 };
 
+// Get all appointments (admin view)
+const getAllAppointments = async (req, res) => {
+    try {
+        const appointments = await Appointment.find({}).sort({ createdAt: -1 });
+        
+        res.json({
+            success: true,
+            count: appointments.length,
+            appointments
+        });
+    } catch (error) {
+        console.error('Get all appointments error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 module.exports = {
     createAppointment,
     getPatientAppointments,
@@ -817,5 +1022,10 @@ module.exports = {
     checkSlotAvailability,
     webhookPaymentSuccess,
     updateAppointment,
-    checkAndCancelExpiredAppointments
+    checkAndCancelExpiredAppointments,
+    runAutoCancellationTask,
+        generateTelemedicineLink,
+            createTelemedicineSession,
+            getCompletionStatus,
+    getAllAppointments
 };

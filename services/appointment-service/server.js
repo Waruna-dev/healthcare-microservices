@@ -54,4 +54,11 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Appointment Service running on port ${PORT}`);
     console.log(`📍 Health check: http://localhost:${PORT}/health`);
+    
+    // Start auto-cancellation background task (runs every 5 minutes)
+    const { runAutoCancellationTask } = require('./controllers/appointmentController');
+    setInterval(runAutoCancellationTask, 5 * 60 * 1000);
+    console.log('⏰ Auto-cancellation background task started (every 5 mins)');
+
+    runAutoCancellationTask();
 });

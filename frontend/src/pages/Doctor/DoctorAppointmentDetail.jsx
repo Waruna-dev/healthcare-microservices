@@ -1,8 +1,8 @@
 // src/pages/doctor/DoctorAppointmentDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Calendar, Clock, User, DollarSign, FileText, 
+import {
+  ArrowLeft, Calendar, Clock, User, DollarSign, FileText,
   Activity, Mail, Phone, CheckCircle, XCircle, Video,
   Download, CreditCard, AlertCircle, Stethoscope
 } from 'lucide-react';
@@ -22,19 +22,32 @@ const DoctorAppointmentDetail = () => {
     fetchAppointmentDetails();
   }, [id]);
 
-  const fetchAppointmentDetails = async () => {
+  // Real-time status tracking (Poll every 10 seconds if active)
+  useEffect(() => {
+    let pollInterval;
+    if (appointment && ['pending', 'accepted'].includes(appointment.status)) {
+      pollInterval = setInterval(() => {
+        fetchAppointmentDetails(true); // silent fetch
+      }, 5000);
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [appointment?.status, id]);
+
+  const fetchAppointmentDetails = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       setError(null);
-      
+
       const url = `http://localhost:5015/api/appointments/${id}`;
       console.log('Fetching from:', url);
-      
+
       const response = await fetch(url);
       const data = await response.json();
-      
+
       console.log('Response:', data);
-      
+
       if (data.success && data.appointment) {
         setAppointment(data.appointment);
       } else {
@@ -53,15 +66,15 @@ const DoctorAppointmentDetail = () => {
     try {
       const url = `http://localhost:5015/api/appointments/accept/${id}`;
       console.log('Accepting appointment:', url);
-      
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       });
       const data = await response.json();
-      
+
       console.log('Accept response:', data);
-      
+
       if (data.success) {
         await fetchAppointmentDetails();
         alert('Appointment accepted successfully! Patient has 48 hours to complete payment.');
@@ -81,21 +94,21 @@ const DoctorAppointmentDetail = () => {
       alert('Please provide a reason for rejection');
       return;
     }
-    
+
     setProcessing(true);
     try {
       const url = `http://localhost:5015/api/appointments/reject/${id}`;
       console.log('Rejecting appointment:', url);
-      
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rejectionReason: rejectionReason })
       });
       const data = await response.json();
-      
+
       console.log('Reject response:', data);
-      
+
       if (data.success) {
         setShowRejectModal(false);
         setRejectionReason('');
@@ -120,17 +133,17 @@ const DoctorAppointmentDetail = () => {
     if (!appointment) return false;
     if (appointment.paymentStatus !== 'completed') return false;
     if (appointment.status !== 'accepted') return false;
-    
+
     const now = new Date();
     const meetingDate = new Date(appointment.date);
     const [hour, minute] = appointment.startTime.split(':');
     meetingDate.setHours(parseInt(hour), parseInt(minute), 0);
-    
+
     const joinWindowStart = new Date(meetingDate);
     joinWindowStart.setMinutes(joinWindowStart.getMinutes() - 20);
     const joinWindowEnd = new Date(meetingDate);
     joinWindowEnd.setMinutes(joinWindowEnd.getMinutes() + 60);
-    
+
     return now >= joinWindowStart && now <= joinWindowEnd;
   };
 
@@ -186,8 +199,8 @@ const DoctorAppointmentDetail = () => {
           <AlertCircle className="w-12 h-12 mx-auto mb-2" />
           <p>{error || 'Appointment not found'}</p>
         </div>
-        <button 
-          onClick={() => navigate('/doctor/appointments')} 
+        <button
+          onClick={() => navigate('/doctor/appointments')}
           className="mt-4 text-blue-600 hover:underline flex items-center gap-2 mx-auto"
         >
           <ArrowLeft size={16} /> Back to Appointments
@@ -221,12 +234,12 @@ const DoctorAppointmentDetail = () => {
           <div className="flex items-center gap-2">
             <StatusIcon size={20} />
             <span className="font-semibold capitalize">
-              {appointment.status === 'no_show' ? 'Patient No-Show' : 
-               appointment.status === 'doctor_no_show' ? 'Doctor No-Show' : 
-               appointment.status}
+              {appointment.status === 'no_show' ? 'Patient No-Show' :
+                appointment.status === 'doctor_no_show' ? 'Doctor No-Show' :
+                  appointment.status}
             </span>
             {appointment.status === 'accepted' && appointment.paymentStatus === 'pending' && (
-              <span className="text-sm text-orange-600 ml-2">⏰ Waiting for payment (48 hours)</span>
+              <span className="text-sm text-orange-600 ml-2">⏰ Waiting for payment (Until 10 mins before start)</span>
             )}
             {appointment.paymentStatus === 'completed' && (
               <span className="text-sm text-green-600 ml-2">✓ Payment received</span>
@@ -253,7 +266,7 @@ const DoctorAppointmentDetail = () => {
             </div>
           )}
         </div>
-        
+
         {/* No-Show Information */}
         {appointment.status === 'no_show' && (
           <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
@@ -369,7 +382,7 @@ const DoctorAppointmentDetail = () => {
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <Stethoscope size={20} className="text-blue-600" /> Medical Information
             </h2>
-            
+
             {appointment.symptoms && (
               <div className="mb-4">
                 <p className="text-sm text-gray-500 mb-2">Symptoms / Reason for Visit</p>
@@ -398,9 +411,9 @@ const DoctorAppointmentDetail = () => {
                         <FileText size={16} className="text-blue-600" />
                         <span className="text-sm text-gray-700">{report.fileName}</span>
                       </div>
-                      <a 
-                        href={`http://localhost:5015/${report.filePath}`} 
-                        target="_blank" 
+                      <a
+                        href={`http://localhost:5015/${report.filePath}`}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 text-sm hover:underline flex items-center gap-1"
                       >
@@ -436,7 +449,7 @@ const DoctorAppointmentDetail = () => {
               <h2 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
                 <Video size={20} className="text-blue-600" /> Telemedicine Session
               </h2>
-              
+
               {canJoinCall() ? (
                 <button
                   onClick={handleJoinCall}
@@ -471,7 +484,7 @@ const DoctorAppointmentDetail = () => {
                 The patient needs to complete the payment before the telemedicine session can begin.
               </p>
               <p className="text-xs text-orange-600 mt-2">
-                Payment deadline: {appointment.paymentDeadline ? new Date(appointment.paymentDeadline).toLocaleString() : '48 hours from acceptance'}
+                Payment deadline: {appointment.paymentDeadline ? new Date(appointment.paymentDeadline).toLocaleString() : '10 minutes before meeting start'}
               </p>
             </div>
           )}

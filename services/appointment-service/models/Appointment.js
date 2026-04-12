@@ -3,37 +3,29 @@ const mongoose = require('mongoose');
 const appointmentSchema = new mongoose.Schema({
     patientId: {
         type: String,
-        required: true,
-        index: true
-    },
-    doctorId: {
-        type: String,
-        required: true,
-        index: true
+        required: true
     },
     patientName: {
         type: String,
-        default: ''
+        required: true
     },
     patientEmail: {
         type: String,
-        default: ''
+        required: true
+    },
+    doctorId: {
+        type: String,
+        required: true
     },
     doctorName: {
         type: String,
-        default: ''
-    },
-    doctorEmail: {
-        type: String,
-        default: ''
+        required: true
     },
     doctorSpecialty: {
-        type: String,
-        default: ''
+        type: String
     },
     slotId: {
-        type: String,
-        required: true
+        type: String
     },
     date: {
         type: Date,
@@ -49,29 +41,8 @@ const appointmentSchema = new mongoose.Schema({
     },
     consultationFee: {
         type: Number,
-        required: true
-    },
-    status: {
-        type: String,
-        enum: ['pending', 'accepted', 'rejected', 'cancelled', 'completed', 'no_show', 'doctor_no_show'],
-        default: 'pending'
-    },
-    paymentStatus: {
-        type: String,
-        enum: ['pending', 'completed', 'failed', 'refunded'],
-        default: 'pending'
-    },
-    paymentDeadline: {
-        type: Date,
-        default: null
-    },
-    paymentId: {
-        type: String,
-        default: null
-    },
-    paymentDetails: {
-        type: mongoose.Schema.Types.Mixed,
-        default: null
+        required: true,
+        min: 0
     },
     symptoms: {
         type: String,
@@ -84,57 +55,101 @@ const appointmentSchema = new mongoose.Schema({
     uploadedReports: [{
         fileName: String,
         filePath: String,
-        uploadDate: { type: Date, default: Date.now }
+        uploadDate: {
+            type: Date,
+            default: Date.now
+        }
     }],
-    telemedicineLink: {
+    status: {
         type: String,
-        default: null
+        enum: ['pending', 'accepted', 'completed', 'rejected', 'cancelled', 'no_show', 'doctor_no_show', 'partial'],
+        default: 'pending'
     },
-    telemedicineRoomId: {
+    paymentStatus: {
         type: String,
-        default: null
+        enum: ['pending', 'completed', 'failed', 'refunded'],
+        default: 'pending'
+    },
+    paymentDeadline: {
+        type: Date
+    },
+    paymentId: {
+        type: String
+    },
+    paymentDetails: {
+        type: Object,
+        default: {}
+    },
+    rejectionReason: {
+        type: String,
+        default: ''
+    },
+    cancellationReason: {
+        type: String,
+        default: ''
+    },
+    cancellationTime: {
+        type: Date
     },
     consultationNotes: {
         type: String,
         default: ''
     },
     prescription: {
-        type: mongoose.Schema.Types.Mixed,
-        default: null
-    },
-    rejectionReason: {
         type: String,
-        default: null
+        default: ''
     },
-    // NEW FIELDS FOR NO-SHOW TRACKING
-    callDuration: {
-        type: Number,
-        default: 0
+    telemedicineLink: {
+        type: String,
+        default: ''
     },
-    hasDoctorJoined: {
+    telemedicineRoomId: {
+        type: String,
+        default: ''
+    },
+    // New fields for dual confirmation
+    doctorConfirmed: {
         type: Boolean,
         default: false
     },
-    hasPatientJoined: {
+    patientConfirmed: {
         type: Boolean,
         default: false
     },
-    callStartTime: {
-        type: Date,
-        default: null
+    doctorConfirmationTime: {
+        type: Date
     },
-    callEndTime: {
+    patientConfirmationTime: {
+        type: Date
+    },
+    completionStatus: {
+        type: String,
+        enum: ['pending', 'partial', 'completed'],
+        default: 'pending'
+    },
+    createdAt: {
         type: Date,
-        default: null
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    },
+    acceptedAt: {
+        type: Date
     }
-}, {
-    timestamps: true
 });
 
-// Indexes for better query performance
-appointmentSchema.index({ patientId: 1, date: -1 });
-appointmentSchema.index({ doctorId: 1, date: -1 });
-appointmentSchema.index({ status: 1 });
-appointmentSchema.index({ paymentStatus: 1 });
 
-module.exports = mongoose.model('Appointment', appointmentSchema);
+appointmentSchema.pre('save', function() {
+    this.updatedAt = new Date();
+});
+
+
+appointmentSchema.pre('findOneAndUpdate', function() {
+    this.set({ updatedAt: new Date() });
+});
+
+const Appointment = mongoose.models.Appointment || mongoose.model('Appointment', appointmentSchema);
+
+module.exports = Appointment;
