@@ -55,6 +55,7 @@ const appointmentSchema = new mongoose.Schema({
     uploadedReports: [{
         fileName: String,
         filePath: String,
+        publicId: String,
         uploadDate: {
             type: Date,
             default: Date.now
@@ -107,7 +108,7 @@ const appointmentSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
-    // New fields for dual confirmation
+    // for dual confirmation
     doctorConfirmed: {
         type: Boolean,
         default: false

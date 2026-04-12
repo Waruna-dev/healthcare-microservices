@@ -1,4 +1,3 @@
-// src/pages/doctor/AdminShowAppointments.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -172,7 +171,7 @@ const AdminShowAppointments = () => {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Filter appointments - FIXED VERSION
+  // Filter appointments
   useEffect(() => {
     let filtered = [...appointments];
 
@@ -221,7 +220,7 @@ const AdminShowAppointments = () => {
       }
     }
 
-    // Date range filters - FIXED
+    // Date range filters 
     if (advancedFilters.startDate && advancedFilters.startDate !== '') {
       const startDate = new Date(advancedFilters.startDate);
       startDate.setHours(0, 0, 0, 0);
@@ -297,7 +296,7 @@ const AdminShowAppointments = () => {
     setCurrentPage(1);
   }, [filter, searchTerm, appointments, advancedFilters]);
 
-  // Pagination
+  // pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredAppointments.slice(indexOfFirstItem, indexOfLastItem);
@@ -401,7 +400,7 @@ const AdminShowAppointments = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Patient Info */}
+      
               <div className="space-y-3">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   <User size={18} className="text-blue-600" />
@@ -413,7 +412,6 @@ const AdminShowAppointments = () => {
                 </div>
               </div>
 
-              {/* Doctor Info */}
               <div className="space-y-3">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   <Stethoscope size={18} className="text-green-600" />
@@ -442,7 +440,7 @@ const AdminShowAppointments = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <DollarSign size={20} className="text-green-600" />
+                
                 <div>
                   <p className="text-xs text-gray-500">Consultation Fee</p>
                   <p className="font-medium text-green-600">{formatCurrency(appointment.consultationFee)}</p>
@@ -607,13 +605,12 @@ const AdminShowAppointments = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="py-8 px-6">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
+     
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">All Appointments</h1>
             <p className="text-gray-500 mt-1">View and manage all appointments across the platform</p>
           </div>
 
-          {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
@@ -660,7 +657,7 @@ const AdminShowAppointments = () => {
             
           </div>
 
-          {/* Search and Filter Section */}
+        
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex flex-col md:flex-row gap-3">
               <div className="flex-1 relative">
@@ -802,7 +799,7 @@ const AdminShowAppointments = () => {
             </AnimatePresence>
           </div>
 
-          {/* Results Summary */}
+        
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-gray-600">
               Showing <span className="font-semibold text-gray-900">{currentItems.length}</span> of{' '}
@@ -817,7 +814,6 @@ const AdminShowAppointments = () => {
             </button>
           </div>
 
-          {/* Appointments Grid/List */}
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -873,7 +869,6 @@ const AdminShowAppointments = () => {
             </div>
           )}
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between gap-4 pt-6">
               <button
@@ -898,7 +893,7 @@ const AdminShowAppointments = () => {
         </div>
       </div>
 
-      {/* Appointment Details Modal */}
+     
       {showDetailsModal && (
         <AppointmentDetailsModal
           appointment={selectedAppointment}
