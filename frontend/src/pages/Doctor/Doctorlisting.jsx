@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Bell, User, Settings, LogOut, FileText } from 'lucide-react';
+import { ArrowLeft, Bell, User, Settings, LogOut, FileText, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
-const API_BASE = '/api/doctors';
-const AVAILABILITY_API = '/api/doctors/availability';
+const API_BASE = 'http://localhost:5025/api/doctors';
+const AVAILABILITY_API = 'http://localhost:5025/api/doctors/availability';
 
 // Specialty color mapping
 const specialtyColors = {
@@ -42,22 +42,72 @@ const DoctorListing = () => {
   const [selectedAvailability, setSelectedAvailability] = useState('');
   const [hoveredDoctor, setHoveredDoctor] = useState(null);
   const [user, setUser] = useState({ name: 'John Doe', email: 'patient@example.com' });
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Fetch doctors from API
   useEffect(() => {
     fetchDoctors();
+    // Get user from localStorage
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        const patient = userData.patient || userData;
+        setUser(patient);
+      } catch (e) {
+        console.error('Error parsing user:', e);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('appointments');
+    navigate('/login');
+  };
 
   const fetchDoctors = async () => {
     try {
       setLoading(true);
+      console.log('Fetching doctors from:', `${API_BASE}?limit=1000`);
+      
       // Fetch all doctors
       const response = await fetch(`${API_BASE}?limit=1000`);
-      const data = await response.json();
+      console.log('Response status:', response.status);
       
-      if (data.success && data.doctors) {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('API Response:', data);
+      
+      if (data.success && data.data) {
+        console.log('Found doctors:', data.data.length);
+        // Filter to show only approved doctors
+        const approvedDoctors = data.data.filter(doctor => doctor.status === 'approved');
+        console.log('Approved doctors:', approvedDoctors.length);
+        
         // Process doctors without individual schedule calls for faster loading
-        const doctorsWithSchedule = data.doctors.map(doctor => ({
+        const doctorsWithSchedule = approvedDoctors.map(doctor => ({
           ...doctor,
           // Map database fields to component fields
           name: doctor.name,
@@ -68,7 +118,7 @@ const DoctorListing = () => {
           rating: doctor.rating || 0,
           reviewCount: doctor.totalRatings || 0,
           isAvailable: doctor.isAvailable,
-          bio: doctor.bio,
+          bio: doctor.bio || doctor.about,
           profileImage: doctor.profilePicture,
           email: doctor.email,
           phone: doctor.phone,
@@ -79,11 +129,12 @@ const DoctorListing = () => {
         setDoctors(doctorsWithSchedule);
         setError(null); // Clear any previous errors
       } else {
+        console.log('Invalid response structure:', data);
         setError('Failed to fetch doctors from database');
       }
     } catch (error) {
       console.error('Error fetching doctors:', error);
-      setError('Unable to connect to server. Please try again later.');
+      setError(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -143,8 +194,24 @@ const DoctorListing = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30">
-      {/* Patient Dashboard Header */}
+    <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
+      
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-elevated flex items-center gap-3 font-bold text-sm backdrop-blur-md border ${
+          toast.type === 'success' 
+            ? 'bg-primary/90 text-white border-white/20' 
+            : 'bg-error/90 text-white border-white/20'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+          {toast.message}
+          <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-70">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
       <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-12">
@@ -156,7 +223,7 @@ const DoctorListing = () => {
                 to="/patient/dashboard" 
                 className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
               >
-                Sanctuary
+                Dashboard
               </Link>
               <Link 
                 to="/doctor/listing" 
@@ -185,12 +252,42 @@ const DoctorListing = () => {
               <Bell size={20} />
             </button>
 
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-center bg-primary-container text-primary font-bold shadow-sm hover:shadow-md"
               >
-                {user && user.name ? user.name.charAt(0) : <User size={20} />}
+                {user.profilePicture ? (
+                  <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  user.name?.charAt(0) || <User size={20} />
+                )}
               </button>
+
+              {/* Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-56 bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50">
+                  <div className="p-4 border-b border-outline-variant/30 bg-surface-container-low/50">
+                    <p className="font-bold text-on-surface truncate">{user.name}</p>
+                    <p className="text-xs text-on-surface-variant truncate mt-0.5">{user.email || 'Patient Account'}</p>
+                  </div>
+                  <div className="p-2 flex flex-col gap-1">
+                    <Link 
+                      to="/profile" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-low text-sm font-bold text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <Settings size={18} /> Account Settings
+                    </Link>
+                    <button 
+                      onClick={handleLogout} 
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-error-container/50 text-sm font-bold text-error transition-colors w-full text-left"
+                    >
+                      <LogOut size={18} /> Logout
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
