@@ -18,23 +18,27 @@ const {
     updateAppointment,
     checkAndCancelExpiredAppointments,
     getCompletionStatus,
-    getAllAppointments
+    getAllAppointments,
+    getReportUrl
 } = require('../controllers/appointmentController');
 const { protect } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/appointments/');
+        const tempDir = path.join(__dirname, '../temp');
+        if (!require('fs').existsSync(tempDir)) {
+            require('fs').mkdirSync(tempDir, { recursive: true });
+        }
+        cb(null, tempDir);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
-
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 },
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
         if (allowedTypes.includes(file.mimetype)) {
@@ -121,6 +125,7 @@ router.get('/doctor/:doctorId', protect, getDoctorAppointments);
 
 // Single appointment
 router.get('/:id', protect, getAppointmentById);
+router.get('/:id/report/:reportId', protect, getReportUrl);
 
 // Update status
 router.put('/:id/status', protect, updateAppointmentStatus);

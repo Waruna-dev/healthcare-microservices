@@ -124,15 +124,17 @@ const TelemedicineRoom = () => {
       if (data.success) {
         setAppointment(data.appointment);
         
-     
+        // Set participant names from appointment data
         setParticipants(prev => ({
           ...prev,
           doctorName: data.appointment.doctorName || 'Doctor',
           patientName: data.appointment.patientName || 'Patient'
         }));
 
+        // Fetch initial completion status
         await fetchCompletionStatus();
-        
+
+        // Check if appointment has already been marked
         if (data.appointment.status === 'no_show') {
           setError('This appointment was marked as "Patient No-Show". Please contact support for rescheduling.');
           setLoading(false);
@@ -637,6 +639,7 @@ const TelemedicineRoom = () => {
         />
       )}
 
+      {/* Loading overlay while Jitsi initializes */}
       {jitsiInitializing && !jitsiLoaded && !showOutcomeModal && !callEnded && (
         <div className="absolute inset-x-0 bottom-0 top-[60px] flex items-center justify-center bg-gray-900/90 z-10">
           <div className="text-center">
@@ -660,6 +663,7 @@ const TelemedicineRoom = () => {
         </div>
       )}
 
+      {/* Outcome Modal with Participant Status */}
       {showOutcomeModal && (
         <div className="absolute inset-0 bg-gray-900/95 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 text-center shadow-2xl transform transition-all">
