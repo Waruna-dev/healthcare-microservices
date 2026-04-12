@@ -973,7 +973,7 @@ const handleUpdateSuccess = (updatedAppointment) => {
                 to="/patient/dashboard" 
                 className={`${location.pathname === '/patient/dashboard' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
               >
-                Sanctuary
+                Dashboard
               </Link>
               <Link 
                 to="/doctor/listing" 
