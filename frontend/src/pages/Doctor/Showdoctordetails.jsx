@@ -113,11 +113,20 @@ const DoctorProfile = () => {
   }, [id]);
 
   const handleBookAppointment = () => {
-    navigate(`/doctor/appointments/book/${doctor._id}`, { state: { doctor, schedule } });
+    console.log('Booking appointment for doctor:', doctor._id);
+    console.log('Doctor data:', doctor);
+    console.log('Schedule data:', schedule);
+    navigate(`/appointments/book/${doctor._id}`, { state: { doctor, schedule } });
   };
 
   const handleSendMessage = () => {
-    alert('Messaging feature coming soon!');
+    if (doctor.email) {
+      const subject = encodeURIComponent(`Inquiry about consultation - ${doctor.name}`);
+      const body = encodeURIComponent(`Dear Dr. ${doctor.name},\n\nI would like to inquire about booking a consultation with you. Please let me know your availability and the process for scheduling an appointment.\n\nThank you.`);
+      window.location.href = `mailto:${doctor.email}?subject=${subject}&body=${body}`;
+    } else {
+      showToast('Doctor email is not available', 'error');
+    }
   };
 
   useEffect(() => {
@@ -383,7 +392,7 @@ const DoctorProfile = () => {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800">About</h3>
               </div>
-              <p className="text-sm text-gray-600 leading-relaxed">{doctor.bio}</p>
+              <p className="text-sm text-gray-600 leading-relaxed">{doctor.about || doctor.bio || 'No information available about this doctor.'}</p>
             </div>
 
             {/* Specializations */}
