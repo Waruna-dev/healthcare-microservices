@@ -53,7 +53,7 @@ const getAllDoctors = async (req, res) => {
             total,
             page: parseInt(page),
             pages: Math.ceil(total / parseInt(limit)),
-            doctors: doctors
+            data: doctors // Matches your React frontend!
         });
     } catch (error) {
         console.error('Error fetching doctors:', error);

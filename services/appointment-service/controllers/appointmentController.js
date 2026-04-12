@@ -79,8 +79,10 @@ const createTelemedicineSession = async (appointmentId, doctorName, patientName,
 };
 
 // Generate Jitsi meeting link (fallback)
-const generateTelemedicineLink = (appointmentId, doctorName, patientName) => {
-    const roomName = `CareSync_${appointmentId}_${Date.now()}`;
+const generateTelemedicineLink = (appointmentId) => {
+    // Make roomName completely deterministic based on appointment ID!
+    // This prevents race-conditions where simultaneous API calls generate two different timestamps.
+    const roomName = `CareSync_Consultation_${appointmentId}`;
     const domain = 'meet.jit.si';
     const jitsiLink = `https://${domain}/${roomName}`;
 

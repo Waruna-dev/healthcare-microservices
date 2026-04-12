@@ -62,7 +62,7 @@ const buildDoctorApprovalEmail = ({ name, tempPassword }) => {
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; color: #374151;">
-      <h1 style="text-align: center; color: #111827; margin-bottom: 30px; font-size: 28px;">CareSync</h1>
+      <h1 style="text-align: center; color: #5454e5; margin-bottom: 30px; font-size: 28px;">CareSync</h1>
       <p style="font-size: 16px; color: #4b5563;">Hello Dr. ${safeName},</p>
       <p style="font-size: 16px; color: #4b5563; line-height: 1.6;">
         We are pleased to inform you that your medical registration has been verified and approved. You are now a certified member of the CareSync network.
@@ -93,7 +93,7 @@ const buildDoctorRejectionEmail = ({ name }) => {
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; color: #374151;">
-      <h1 style="text-align: center; color: #111827; margin-bottom: 30px; font-size: 28px;">CareSync</h1>
+      <h1 style="text-align: center; color: #5454e5; margin-bottom: 30px; font-size: 28px;">CareSync</h1>
       <p style="font-size: 16px; color: #4b5563;">Hello Dr. ${safeName},</p>
       <p style="font-size: 16px; color: #4b5563; line-height: 1.6;">
         Thank you for your interest in joining the CareSync network. After careful review of your application and credentials by our administration team, we regret to inform you that we are unable to approve your registration at this time.
@@ -106,7 +106,7 @@ const buildDoctorRejectionEmail = ({ name }) => {
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5; margin-bottom: 20px;">
           If you have updated credentials, obtained a new medical license, or believe your application was rejected in error, you are welcome to submit a new application.
         </p>
-        <a href="http://localhost:5173/register" style="background-color: #111827; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
+        <a href="http://localhost:5173/doctor/register" style="background-color: #5454e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
       </div>
       <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 40px 0 20px 0;" />
       <div style="text-align: center; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">

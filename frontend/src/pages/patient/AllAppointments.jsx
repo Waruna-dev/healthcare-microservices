@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Calendar, Clock, User, Stethoscope,
@@ -13,6 +13,7 @@ import UpdateAppointmentForm from '../../components/UpdateAppointmentForm';
 
 const AllAppointments = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [filteredAppointments, setFilteredAppointments] = useState([]);
@@ -968,9 +969,31 @@ const handleUpdateSuccess = (updatedAppointment) => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-gray-600">
-              <Link to="/dashboard" className="hover:text-blue-600 cursor-pointer transition-colors">Sanctuary</Link>
-              <Link to="/doctor/listing" className="hover:text-blue-600 cursor-pointer transition-colors">Specialists</Link>
-              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
+              <Link 
+                to="/patient/dashboard" 
+                className={`${location.pathname === '/patient/dashboard' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                Sanctuary
+              </Link>
+              <Link 
+                to="/doctor/listing" 
+                className={`${location.pathname === '/doctor/listing' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                Specialists
+              </Link>
+              <Link 
+                to="/appointments/all" 
+                className={`${location.pathname === '/appointments/all' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                Appointments
+              </Link>
+              <Link 
+                to="/prescriptions" 
+                className={`${location.pathname === '/prescriptions' ? 'text-blue-600 border-b-2 border-blue-600 pb-1' : ''} flex items-center gap-2 hover:text-blue-600 cursor-pointer transition-colors`}
+              >
+                <FileText size={16} />
+                Prescriptions
+              </Link>
             </nav>
           </div>
 

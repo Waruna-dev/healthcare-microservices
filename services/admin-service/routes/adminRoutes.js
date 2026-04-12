@@ -204,7 +204,7 @@ router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
       password: hashedPassword
     });
 
-    // --- 🚨 NEW DEBUG CONSOLE LOGS 🚨 ---
+    // --- NEW DEBUG CONSOLE LOGS ---
     const targetUrl = `${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-approved`;
     
     console.log("\n==========================================");

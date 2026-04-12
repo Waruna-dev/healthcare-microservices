@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Bell, User, Settings, LogOut, FileText } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Bell, User, Settings, LogOut } from 'lucide-react';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
 const API_BASE = '/api/doctors';
@@ -33,7 +33,6 @@ const getImageUrl = (imageUrl) => {
 
 const DoctorListing = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -152,31 +151,9 @@ const DoctorListing = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <Link 
-                to="/patient/dashboard" 
-                className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Sanctuary
-              </Link>
-              <Link 
-                to="/doctor/listing" 
-                className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Specialists
-              </Link>
-              <Link 
-                to="/appointments/all" 
-                className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Appointments
-              </Link>
-              <Link 
-                to="/prescriptions" 
-                className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
-              >
-                <FileText size={16} />
-                Prescriptions
-              </Link>
+              <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
+              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
+              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
             </nav>
           </div>
           

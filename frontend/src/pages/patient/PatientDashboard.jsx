@@ -59,6 +59,10 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
                       appointment.status === 'accepted' &&
                       appointment.telemedicineLink;
 
+  const handleViewDetails = () => {
+    navigate(`/appointments/${appointment._id}`);
+  };
+
   return (
     <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300 h-full flex flex-col">
       <div className={`h-1.5 ${
@@ -112,6 +116,12 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
         </div>
 
         <div className="flex gap-3 mt-auto">
+<button
+  onClick={handleViewDetails}
+  className="flex-1 px-4 py-2 text-sm font-medium text-on-surface-variant bg-surface-container-low/100 rounded-xl hover:bg-surface-container transition-colors"
+>
+  View Details
+</button>
           {appointment.paymentStatus === 'pending' && appointment.status === 'accepted' && (
             <button
               onClick={() => onPaymentComplete?.(appointment)}
@@ -463,31 +473,34 @@ const PatientDashboard = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <Link 
-                to="/patient/dashboard" 
-                className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Sanctuary
-              </Link>
-              <Link 
-                to="/doctor/listing" 
-                className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Specialists
-              </Link>
-              <Link 
-                to="/appointments/all" 
-                className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
-              >
-                Appointments
-              </Link>
-              <Link 
-                to="/prescriptions" 
-                className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
-              >
-                <FileText size={16} />
-                Prescriptions
-              </Link>
+<Link 
+  to="/patient/dashboard" 
+  className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Dashboard
+</Link>
+
+<Link 
+  to="/doctor/listing" 
+  className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Specialists
+</Link>
+
+<Link 
+  to="/appointments/all" 
+  className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Appointments
+</Link>
+
+<Link 
+  to="/prescriptions" 
+  className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
+>
+  <FileText size={16} />
+  Prescriptions
+</Link>
             </nav>
           </div>
           
