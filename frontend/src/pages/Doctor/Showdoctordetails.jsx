@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Bell, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Bell, User, Settings, LogOut, X, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
 const API_BASE = 'http://localhost:5025/api/doctors';
@@ -39,13 +39,29 @@ const SAMPLE_DOCTOR = {
 const DoctorProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [doctor, setDoctor] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState({ name: 'John Doe', email: 'patient@example.com' });
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
+    // Get user from localStorage
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        const patient = userData.patient || userData;
+        setUser(patient);
+      } catch (e) {
+        console.error('Error parsing user:', e);
+      }
+    }
+    
     const fetchDoctorData = async () => {
       try {
         setLoading(true);
@@ -104,6 +120,28 @@ const DoctorProfile = () => {
     alert('Messaging feature coming soon!');
   };
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('appointments');
+    navigate('/login');
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -120,8 +158,24 @@ const DoctorProfile = () => {
   const initials = doctor.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30">
-      {/* Patient Dashboard Header */}
+    <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
+      
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-elevated flex items-center gap-3 font-bold text-sm backdrop-blur-md border ${
+          toast.type === 'success' 
+            ? 'bg-primary/90 text-white border-white/20' 
+            : 'bg-error/90 text-white border-white/20'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+          {toast.message}
+          <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-70">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
       <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-12">
@@ -129,9 +183,31 @@ const DoctorProfile = () => {
               CareSync
             </Link>
             <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
-              <span className="text-primary border-b-2 border-primary pb-1">Sanctuary</span>
-              <Link to="/doctor/listing" className="hover:text-primary cursor-pointer transition-colors">Specialists</Link>
-              <Link to="/appointments/all" className="hover:text-primary cursor-pointer transition-colors">Appointments</Link>
+              <Link 
+                to="/patient/dashboard" 
+                className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+              >
+                Dashboard
+              </Link>
+              <Link 
+                to="/doctor/listing" 
+                className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+              >
+                Specialists
+              </Link>
+              <Link 
+                to="/appointments/all" 
+                className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+              >
+                Appointments
+              </Link>
+              <Link 
+                to="/prescriptions" 
+                className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
+              >
+                <FileText size={16} />
+                Prescriptions
+              </Link>
             </nav>
           </div>
           
@@ -140,12 +216,42 @@ const DoctorProfile = () => {
               <Bell size={20} />
             </button>
 
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-center bg-primary-container text-primary font-bold shadow-sm hover:shadow-md"
               >
-                {user && user.name ? user.name.charAt(0) : <User size={20} />}
+                {user.profilePicture ? (
+                  <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  user.name?.charAt(0) || <User size={20} />
+                )}
               </button>
+
+              {/* Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-56 bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50">
+                  <div className="p-4 border-b border-outline-variant/30 bg-surface-container-low/50">
+                    <p className="font-bold text-on-surface truncate">{user.name}</p>
+                    <p className="text-xs text-on-surface-variant truncate mt-0.5">{user.email || 'Patient Account'}</p>
+                  </div>
+                  <div className="p-2 flex flex-col gap-1">
+                    <Link 
+                      to="/profile" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-low text-sm font-bold text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <Settings size={18} /> Account Settings
+                    </Link>
+                    <button 
+                      onClick={handleLogout} 
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-error-container/50 text-sm font-bold text-error transition-colors w-full text-left"
+                    >
+                      <LogOut size={18} /> Logout
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -179,23 +285,29 @@ const DoctorProfile = () => {
             <div className="flex flex-col md:flex-row gap-6 items-start">
               {/* Avatar */}
               <div className="relative flex-shrink-0">
-                {doctor.profileImage ? (
-                  <img
-                    src={doctor.profileImage}
-                    alt={doctor.name}
-                    className="w-28 h-28 rounded-full object-cover border-4 border-blue-100 shadow-md"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
+                {doctor.profilePicture ? (
+                  <div className="relative group">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-600 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
+                    <img
+                      src={doctor.profilePicture}
+                      alt={doctor.name}
+                      className="w-40 h-40 md:w-48 md:h-48 rounded-2xl object-cover border-4 border-white shadow-xl ring-4 ring-blue-100 ring-opacity-50 transform transition-all duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-transparent via-transparent to-white opacity-10 pointer-events-none"></div>
+                  </div>
                 ) : null}
-                <div className={`w-28 h-28 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white text-3xl font-bold border-4 border-blue-100 shadow-md ${doctor.profileImage ? 'hidden' : 'flex'}`}>
+                <div className={`w-40 h-40 md:w-48 md:h-48 rounded-2xl bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 flex items-center justify-center text-white text-4xl md:text-5xl font-bold border-4 border-white shadow-xl ring-4 ring-blue-100 ring-opacity-50 ${doctor.profilePicture ? 'hidden' : 'flex'} transition-all duration-300`}>
                   {initials}
                 </div>
-                <span className={`absolute bottom-2 right-2 w-4 h-4 rounded-full border-2 border-white ${
-                  doctor.isAvailable ? 'bg-blue-500' : 'bg-gray-400'
-                }`} />
+                <span className={`absolute bottom-3 right-3 w-6 h-6 rounded-full border-3 border-white shadow-lg transform transition-all duration-300 ${
+                  doctor.isAvailable ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'
+                }`}>
+                  <div className={`w-3 h-3 rounded-full ${doctor.isAvailable ? 'bg-white' : 'bg-white'} animate-pulse`}></div>
+                </span>
               </div>
 
               {/* Info */}
