@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, Settings, LogOut, User, Calendar, Clock, Stethoscope,
   DollarSign, FileText, Activity, ChevronRight, ChevronLeft,
-  UploadCloud, X, CheckCircle, AlertCircle, CreditCard
+  UploadCloud, X, CheckCircle, AlertCircle, CreditCard, PartyPopper, Sparkles, Eye, Trash2
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -39,10 +39,16 @@ const AppointmentBooking = () => {
     });
     
     const [reports, setReports] = useState([]);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewFile, setPreviewFile] = useState(null);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [bookingDetails, setBookingDetails] = useState(null);
     
-    // Step 1: Available slots data
+    //Available slots data
     const [availableDates, setAvailableDates] = useState([]);
     const [selectedDate, setSelectedDate] = useState(null);
     const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
@@ -120,13 +126,30 @@ const AppointmentBooking = () => {
 
     // Check if a time slot is in the past
     const isPastTimeSlot = (dateStr, timeStr) => {
+        if (!dateStr || !timeStr) return false;
+        
+        // Create a date object for the slot
+        const [year, month, day] = dateStr.split('-');
+        const [hours, minutes] = timeStr.split(':');
+        
+        const slotDateTime = new Date(year, month - 1, day, parseInt(hours), parseInt(minutes), 0);
         const now = new Date();
-        const slotDateTime = new Date(`${dateStr}T${timeStr}`);
-        const todayStr = now.toISOString().split('T')[0];
-        if (dateStr === todayStr) {
-            return slotDateTime < now;
-        }
-        return false;
+        
+        // Compare the slot date/time with current date/time
+        return slotDateTime < now;
+    };
+
+    // Get today's date YYYY-MM-DD 
+    const getTodayDate = () => {
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+    };
+
+    // Check if a date is in the past
+    const isPastDate = (dateStr) => {
+        if (!dateStr) return false;
+        const today = getTodayDate();
+        return dateStr < today;
     };
 
     const fetchAvailableDates = async () => {
@@ -303,7 +326,40 @@ const AppointmentBooking = () => {
     };
 
     const handleFileChange = (e) => {
-        setReports(Array.from(e.target.files));
+        const files = Array.from(e.target.files);
+        const validFiles = files.filter(file => file.size <= 5 * 1024 * 1024);
+        if (validFiles.length !== files.length) {
+            setError('Some files exceed 5MB limit. Please select smaller files.');
+        }
+        setReports(prev => [...prev, ...validFiles]);
+        setError('');
+    };
+
+    const removeFile = (index) => {
+        setReports(reports.filter((_, i) => i !== index));
+    };
+
+    const handlePreviewFile = (file, index) => {
+        if (file.type.startsWith('image/')) {
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
+            setPreviewFile({ file, index });
+            setShowPreviewModal(true);
+        } else if (file.type === 'application/pdf') {
+            const url = URL.createObjectURL(file);
+            window.open(url, '_blank');
+        } else {
+            alert('Preview not available for this file type');
+        }
+    };
+
+    const closePreviewModal = () => {
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+        }
+        setPreviewUrl(null);
+        setPreviewFile(null);
+        setShowPreviewModal(false);
     };
 
     const handleNextStep = () => {
@@ -324,11 +380,19 @@ const AppointmentBooking = () => {
         setError('');
     };
 
+    const handleSuccessModalClose = () => {
+        setShowSuccessModal(false);
+        navigate('/appointments/all', { 
+            state: { message: 'Appointment booked successfully! Waiting for doctor approval.' }
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         
         const slotKey = `${formData.date}_${formData.startTime}`;
         
+        // Check if time slot is in the past before submitting
         if (isPastTimeSlot(formData.date, formData.startTime)) {
             setError('This time slot has passed. Please select another time.');
             setStep(1);
@@ -337,6 +401,7 @@ const AppointmentBooking = () => {
             return;
         }
         
+        // Check if slot is already booked
         if (bookedSlots.has(slotKey)) {
             setError('This time slot is no longer available. Please select another time.');
             setStep(1);
@@ -352,6 +417,7 @@ const AppointmentBooking = () => {
         
         setLoading(true);
         setError('');
+        setUploadProgress(0);
         
         try {
             const token = localStorage.getItem('token');
@@ -375,7 +441,13 @@ const AppointmentBooking = () => {
             submitData.append('symptoms', formData.symptoms);
             submitData.append('medicalHistory', formData.medicalHistory || '');
             
-            reports.forEach((report) => submitData.append('reports', report));
+            reports.forEach((report) => {
+                submitData.append('reports', report);
+            });
+            
+            const progressInterval = setInterval(() => {
+                setUploadProgress(prev => Math.min(prev + 10, 90));
+            }, 500);
             
             const response = await fetch('http://localhost:5015/api/appointments', {
                 method: 'POST',
@@ -383,12 +455,20 @@ const AppointmentBooking = () => {
                 body: submitData
             });
             
+            clearInterval(progressInterval);
+            setUploadProgress(100);
+            
             const data = await response.json();
             
             if (response.ok && data.success) {
-                navigate('/appointments/all', { 
-                    state: { message: 'Appointment booked successfully! Waiting for doctor approval.' }
+                setBookingDetails({
+                    doctorName: formData.doctorName,
+                    date: formatDate(formData.date),
+                    time: `${formatDisplayTime(formData.startTime)} - ${formatDisplayTime(formData.endTime)}`,
+                    patientName: formData.patientName,
+                    appointmentId: data.appointment?._id
                 });
+                setShowSuccessModal(true);
             } else {
                 if (data.message && (data.message.includes('already booked') || data.message.includes('already taken'))) {
                     setError('This time slot was just booked by someone else. Please select another time.');
@@ -404,10 +484,12 @@ const AppointmentBooking = () => {
             setError('Failed to book appointment. Please try again.');
         } finally {
             setLoading(false);
+            setUploadProgress(0);
         }
     };
 
     const formatDate = (dateStr) => {
+        if (!dateStr) return '';
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-US', { 
             weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
@@ -423,9 +505,173 @@ const AppointmentBooking = () => {
         return `${displayHour}:${minutes} ${ampm}`;
     };
 
+    // Preview Modal Component
+    const PreviewModal = () => {
+        if (!showPreviewModal || !previewUrl) return null;
+        
+        return (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+                style={{ background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)' }}
+                onClick={closePreviewModal}
+            >
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                        <h3 className="text-white font-semibold">File Preview</h3>
+                        <button onClick={closePreviewModal} className="text-white hover:bg-white/20 rounded-lg p-1 transition">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="p-4 flex justify-center items-center min-h-[300px] bg-gray-100">
+                        {previewUrl && (
+                            <img 
+                                src={previewUrl} 
+                                alt="Preview" 
+                                className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                            />
+                        )}
+                    </div>
+                    <div className="bg-gray-50 px-6 py-3 flex justify-between items-center">
+                        <span className="text-sm text-gray-600">{previewFile?.file?.name}</span>
+                        <button
+                            onClick={() => {
+                                if (previewFile) {
+                                    removeFile(previewFile.index);
+                                    closePreviewModal();
+                                }
+                            }}
+                            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center gap-2"
+                        >
+                            <Trash2 size={16} />
+                            Delete File
+                        </button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        );
+    };
+
+    // Success Modal Component
+    const SuccessModal = () => {
+        if (!showSuccessModal) return null;
+        
+        return (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                style={{ background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(8px)' }}
+                onClick={handleSuccessModalClose}
+            >
+                <motion.div
+                    initial={{ scale: 0.8, opacity: 0, y: 50 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.8, opacity: 0, y: 50 }}
+                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                    className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="relative bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-8 text-center">
+                        <motion.h2 
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.3 }}
+                            className="text-2xl font-bold text-white mt-4"
+                        >
+                            Appointment Request sent to the Doctor!
+                        </motion.h2>
+                    </div>
+
+                    <div className="p-6">
+                        <motion.div 
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.5 }}
+                            className="space-y-3 mb-6"
+                        >
+                            <div className="bg-green-50 rounded-xl p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <CheckCircle size={18} className="text-green-600" />
+                                    <span className="font-semibold text-green-800">Booking Confirmation</span>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Doctor:</span>
+                                        <span className="font-medium text-gray-800">Dr. {bookingDetails?.doctorName}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Patient:</span>
+                                        <span className="font-medium text-gray-800">{bookingDetails?.patientName}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Date:</span>
+                                        <span className="font-medium text-gray-800">{bookingDetails?.date}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Time:</span>
+                                        <span className="font-medium text-gray-800">{bookingDetails?.time}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        <motion.div 
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.6 }}
+                            className="bg-blue-50 rounded-xl p-3 mb-6"
+                        >
+                            <p className="text-xs text-blue-800">
+                                <span className="font-semibold">📌 What's Next?</span><br />
+                                • Doctor will review and accept/reject your appointment<br />
+                                • You'll receive an email notification about the decision<br />
+                                • Once accepted, you'll need to complete the payment<br />
+                                • After payment, telemedicine link will be available
+                            </p>
+                        </motion.div>
+
+                        <motion.button
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.7 }}
+                            onClick={handleSuccessModalClose}
+                            className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 group"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                        >
+                            <CheckCircle size={18} className="group-hover:scale-110 transition-transform" />
+                            View My Appointments
+                        </motion.button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        );
+    };
+
+    // Auto-refresh available slots every minute to update past slots
+    useEffect(() => {
+        const refreshInterval = setInterval(() => {
+            if (step === 1 && doctorId) {
+                fetchAvailableDates();
+            }
+        }, 60000); 
+        
+        return () => clearInterval(refreshInterval);
+    }, [step, doctorId]);
+
     return (
         <div className="min-h-screen bg-background font-body">
-            {/* Modern Header */}
+            {/* Header */}
             <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
                 <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
                     <div className="flex items-center gap-12">
@@ -497,48 +743,46 @@ const AppointmentBooking = () => {
                 <div className="max-w-5xl mx-auto">
                     {/* Step Indicator */}
                     <div className="mb-8">
-    <div className="flex items-center justify-center">
-        <div className="flex items-start w-full max-w-md">
-            {/* Step 1 */}
-            <div className="flex-1 flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300 ${
-                    step >= 1 
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-lg ' 
-                        : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
-                }`}>
-                    1
-                </div>
-                <div className="flex items-center w-full mt-3">
-                    <div className={`flex-1 h-1 ${step >= 2 ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gray-200'}`} />
-                </div>
-                <span className={`text-xs font-semibold mt-3 text-center ${
-                    step >= 1 ? 'text-blue-600' : 'text-gray-400'
-                }`}>
-                    Select Date & Time
-                </span>
-            </div>
-            
-            {/* Step 2 */}
-            <div className="flex-1 flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300 ${
-                    step >= 2 
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-lg ' 
-                        : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
-                }`}>
-                    2
-                </div>
-                <div className="flex items-center w-full mt-3">
-                    <div className={`flex-1 h-1 ${step >= 2 ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gray-200'}`} />
-                </div>
-                <span className={`text-xs font-semibold mt-3 text-center ${
-                    step >= 2 ? 'text-blue-600' : 'text-gray-400'
-                }`}>
-                    Appointment Details
-                </span>
-            </div>
-        </div>
-    </div>
-</div>
+                        <div className="flex items-center justify-center">
+                            <div className="flex items-start w-full max-w-md">
+                                <div className="flex-1 flex flex-col items-center">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300 ${
+                                        step >= 1 
+                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-lg' 
+                                            : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
+                                    }`}>
+                                        1
+                                    </div>
+                                    <div className="flex items-center w-full mt-3">
+                                        <div className={`flex-1 h-1 ${step >= 2 ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gray-200'}`} />
+                                    </div>
+                                    <span className={`text-xs font-semibold mt-3 text-center ${
+                                        step >= 1 ? 'text-blue-600' : 'text-gray-400'
+                                    }`}>
+                                        Select Date & Time
+                                    </span>
+                                </div>
+                                
+                                <div className="flex-1 flex flex-col items-center">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300 ${
+                                        step >= 2 
+                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-lg' 
+                                            : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
+                                    }`}>
+                                        2
+                                    </div>
+                                    <div className="flex items-center w-full mt-3">
+                                        <div className={`flex-1 h-1 ${step >= 2 ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gray-200'}`} />
+                                    </div>
+                                    <span className={`text-xs font-semibold mt-3 text-center ${
+                                        step >= 2 ? 'text-blue-600' : 'text-gray-400'
+                                    }`}>
+                                        Appointment Details
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="bg-surface-container-lowest rounded-3xl shadow-elevated overflow-hidden">
                         {/* Header */}
@@ -563,13 +807,26 @@ const AppointmentBooking = () => {
                             )}
                         </AnimatePresence>
 
+                        {/* Upload Progress */}
+                        {loading && uploadProgress > 0 && uploadProgress < 100 && (
+                            <div className="mx-6 mt-4">
+                                <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+                                    <div 
+                                        className="bg-primary h-2 rounded-full transition-all duration-300"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-on-surface-variant mt-1 text-center">
+                                    Uploading files... {uploadProgress}%
+                                </p>
+                            </div>
+                        )}
+
                         {/* Step 1: Date & Time Selection */}
                         {step === 1 && (
                             <div className="p-6">
-                                {/* Doctor Info Card */}
                                 {doctor && (
                                     <div className="bg-surface-container-low rounded-2xl p-4 mb-6 flex items-center gap-4 border border-outline-variant/30">
-                                        
                                         <div>
                                             <h3 className="font-semibold text-on-surface font-headline">Dr. {doctor.name}</h3>
                                             <p className="text-sm font-bold text-blue-600">{doctor.specialty}</p>
@@ -578,7 +835,6 @@ const AppointmentBooking = () => {
                                     </div>
                                 )}
 
-                                {/* Date Selection */}
                                 <div className="mb-8">
                                     <label className="block text-sm font-semibold text-on-surface mb-3">
                                         Select Date *
@@ -619,7 +875,6 @@ const AppointmentBooking = () => {
                                     )}
                                 </div>
 
-                                {/* Time Slot Selection */}
                                 {selectedDate && (
                                     <div className="mb-8">
                                         <div className="flex items-center justify-between mb-3">
@@ -635,39 +890,35 @@ const AppointmentBooking = () => {
                                                 <p className="text-on-surface-variant">No time slots available for this date</p>
                                             </div>
                                         ) : (
-                                            <>
-                                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                                    {availableTimeSlots.map((slot, index) => (
-                                                        <button
-                                                            key={index}
-                                                            type="button"
-                                                            onClick={() => handleTimeSlotSelect(slot)}
-                                                            disabled={!slot.isAvailable}
-                                                            className={`p-3 rounded-xl border-2 text-center transition-all ${
-                                                                selectedTimeSlot?.startTime === slot.startTime
-                                                                    ? 'border-primary bg-primary/10 text-primary shadow-md'
-                                                                    : slot.isAvailable
-                                                                    ? 'border-green-200 bg-green-50 hover:border-primary hover:bg-primary/5 cursor-pointer'
-                                                                    : 'border-outline-variant/30 bg-surface-container-low text-on-surface-variant/50 cursor-not-allowed'
-                                                            }`}
-                                                        >
-                                                            <div className="font-semibold text-sm">{formatDisplayTime(slot.startTime)}</div>
-                                                            <div className="text-xs">{slot.duration} min</div>
-                                                            {!slot.isAvailable && (
-                                                                <div className="text-xs mt-1">
-                                                                    {slot.isPast ? 'Passed' : 'Booked'}
-                                                                </div>
-                                                            )}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                                
-                                            </>
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                                {availableTimeSlots.map((slot, index) => (
+                                                    <button
+                                                        key={index}
+                                                        type="button"
+                                                        onClick={() => handleTimeSlotSelect(slot)}
+                                                        disabled={!slot.isAvailable}
+                                                        className={`p-3 rounded-xl border-2 text-center transition-all ${
+                                                            selectedTimeSlot?.startTime === slot.startTime
+                                                                ? 'border-primary bg-primary/10 text-primary shadow-md'
+                                                                : slot.isAvailable
+                                                                ? 'border-green-200 bg-green-50 hover:border-primary hover:bg-primary/5 cursor-pointer'
+                                                                : 'border-outline-variant/30 bg-surface-container-low text-on-surface-variant/50 cursor-not-allowed'
+                                                        }`}
+                                                    >
+                                                        <div className="font-semibold text-sm">{formatDisplayTime(slot.startTime)}</div>
+                                                        <div className="text-xs">{slot.duration} min</div>
+                                                        {!slot.isAvailable && (
+                                                            <div className="text-xs mt-1">
+                                                                {slot.isPast ? 'Passed' : 'Booked'}
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         )}
                                     </div>
                                 )}
 
-                                {/* Fee Display */}
                                 {selectedDate && selectedDate.consultationFee > 0 && (
                                     <div className="bg-surface-container-low p-4 rounded-2xl mb-6 border border-outline-variant/30">
                                         <div className="flex justify-between items-center">
@@ -679,7 +930,6 @@ const AppointmentBooking = () => {
                                     </div>
                                 )}
 
-                                {/* Navigation Buttons */}
                                 <div className="flex justify-end pt-4">
                                     <button
                                         type="button"
@@ -697,7 +947,6 @@ const AppointmentBooking = () => {
                         {/* Step 2: Appointment Details Form */}
                         {step === 2 && (
                             <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                                {/* Selected Appointment Summary */}
                                 <div className="bg-primary/5 rounded-2xl p-4 mb-4 border border-primary/20">
                                     <h3 className="font-semibold text-primary underline mb-2">Selected Appointment</h3>
                                     <div className="grid grid-cols-2 gap-3 text-sm">
@@ -711,7 +960,7 @@ const AppointmentBooking = () => {
                                         </div>
                                         <div>
                                             <span className="text-on-surface-variant">Doctor:</span>
-                                            <span className="ml-2 font-medium bg-green-200 rounded-lg  text-green-900">Dr. {formData.doctorName}</span>
+                                            <span className="ml-2 font-medium bg-green-200 rounded-lg text-green-900">Dr. {formData.doctorName}</span>
                                         </div>
                                         <div>
                                             <span className="text-on-surface-variant">Fee:</span>
@@ -727,7 +976,6 @@ const AppointmentBooking = () => {
                                     </button>
                                 </div>
 
-                                {/* Patient Info */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-semibold text-on-surface mb-2">
@@ -757,7 +1005,6 @@ const AppointmentBooking = () => {
                                     </div>
                                 </div>
 
-                                {/* Symptoms */}
                                 <div>
                                     <label className="block text-sm font-semibold text-on-surface mb-2">
                                         Symptoms / Reason for Visit *
@@ -773,7 +1020,6 @@ const AppointmentBooking = () => {
                                     />
                                 </div>
 
-                                {/* Medical History */}
                                 <div>
                                     <label className="block text-sm font-semibold text-on-surface mb-2">
                                         Medical History (Optional)
@@ -788,10 +1034,10 @@ const AppointmentBooking = () => {
                                     />
                                 </div>
 
-                                {/* File Upload */}
                                 <div>
                                     <label className="block text-sm font-semibold text-on-surface mb-2">
                                         Upload Medical Reports (PDF, JPEG, PNG)
+                                        <span className="text-xs text-on-surface-variant ml-2">(Max 5MB each)</span>
                                     </label>
                                     <div className="border-2 border-dashed border-outline-variant rounded-2xl p-6 text-center hover:border-primary transition bg-surface-container-low">
                                         <input
@@ -799,24 +1045,68 @@ const AppointmentBooking = () => {
                                             multiple
                                             accept=".pdf,.jpg,.jpeg,.png"
                                             onChange={handleFileChange}
-                                            className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                                            className="hidden"
+                                            id="file-upload"
                                         />
-                                        {reports.length > 0 && (
-                                            <div className="mt-3">
-                                                <p className="text-sm text-on-surface-variant">
-                                                    {reports.length} file(s) selected
-                                                </p>
-                                                <ul className="text-xs text-on-surface-variant mt-2">
-                                                    {reports.map((file, idx) => (
-                                                        <li key={idx}>{file.name}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
+                                        <label 
+                                            htmlFor="file-upload" 
+                                            className="cursor-pointer flex flex-col items-center gap-2"
+                                        >
+                                            <UploadCloud size={48} className="text-primary/60" />
+                                            <span className="text-sm font-medium text-primary">Click to upload files</span>
+                                            <span className="text-xs text-on-surface-variant">or drag and drop</span>
+                                        </label>
                                     </div>
+                                    
+                                    {reports.length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-sm font-medium text-on-surface">{reports.length} file(s) selected:</p>
+                                            <div className="max-h-48 overflow-y-auto space-y-2">
+                                                {reports.map((file, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition group">
+                                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                            {file.type.startsWith('image/') ? (
+                                                                <img 
+                                                                    src={URL.createObjectURL(file)} 
+                                                                    alt="preview" 
+                                                                    className="w-10 h-10 rounded-lg object-cover border border-gray-200"
+                                                                    onLoad={(e) => URL.revokeObjectURL(e.target.src)}
+                                                                />
+                                                            ) : (
+                                                                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                                                                    <FileText size={20} className="text-red-500" />
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-medium text-gray-800 truncate">{file.name}</p>
+                                                                <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePreviewFile(file, idx)}
+                                                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition"
+                                                                title="Preview"
+                                                            >
+                                                                <Eye size={16} />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeFile(idx)}
+                                                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition"
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Submit Buttons */}
                                 <div className="flex gap-3 pt-4">
                                     <button
                                         type="button"
@@ -841,7 +1131,6 @@ const AppointmentBooking = () => {
                                     </button>
                                 </div>
 
-
                                 <div className="bg-blue-50/80 backdrop-blur-sm rounded-xl p-4 border border-blue-100">
                                     <div className="flex items-start gap-3">
                                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -852,7 +1141,6 @@ const AppointmentBooking = () => {
                                             <ul className="space-y-1 list-disc list-inside">
                                                 <li>Appointment confirmation is subject to doctor's approval</li>
                                                 <li>Payment is required after doctor accepts the appointment</li>
-                                                
                                                 <li>Cancellation policy applies as per clinic terms</li>
                                             </ul>
                                         </div>
@@ -863,6 +1151,16 @@ const AppointmentBooking = () => {
                     </div>
                 </div>
             </div>
+
+    
+            <AnimatePresence>
+                {showPreviewModal && <PreviewModal />}
+            </AnimatePresence>
+
+     
+            <AnimatePresence>
+                {showSuccessModal && <SuccessModal />}
+            </AnimatePresence>
         </div>
     );
 };

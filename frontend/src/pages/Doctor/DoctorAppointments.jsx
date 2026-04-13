@@ -1,4 +1,4 @@
-// src/pages/doctor/DoctorAppointments.jsx
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,7 +8,7 @@ import {
   FileText, Mail,
   TrendingUp, Calendar as CalendarIcon,
   Grid3x3, List, ChevronLeft, ChevronRight,
-  Download, Video, CreditCard, RefreshCw
+  Download, Video, CreditCard, RefreshCw, PartyPopper, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -25,6 +25,8 @@ const DoctorAppointments = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showAcceptModal, setShowAcceptModal] = useState(false);
+  const [acceptAppointmentData, setAcceptAppointmentData] = useState(null);
   const [processingId, setProcessingId] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
   const [currentPage, setCurrentPage] = useState(1);
@@ -132,6 +134,20 @@ const DoctorAppointments = () => {
       case 'month': return diffDays >= 0 && diffDays <= 30;
       case 'past': return diffDays < 0;
       default: return true;
+    }
+  };
+
+  // Handle viewing report from Cloudinary
+  const handleViewReport = (report) => {
+    try {
+      if (report.filePath) {
+        window.open(report.filePath, '_blank');
+      } else {
+        alert('Unable to view report: Invalid file path');
+      }
+    } catch (error) {
+      console.error('Error opening report:', error);
+      alert('Unable to view report. Please try again later.');
     }
   };
 
@@ -249,9 +265,16 @@ const DoctorAppointments = () => {
 
       if (data.success) {
         await fetchAppointments();
-        alert('✅ Appointment accepted successfully!');
+        setAcceptAppointmentData({
+          patientName: appointment.patientName,
+          doctorName: appointment.doctorName,
+          date: formatDate(appointment.date),
+          time: `${appointment.startTime} - ${appointment.endTime}`,
+          consultationFee: appointment.consultationFee
+        });
+        setShowAcceptModal(true);
       } else {
-        alert('❌ Failed: ' + (data.message || 'Unknown error'));
+        alert(' Failed: ' + (data.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error:', error);
@@ -283,9 +306,9 @@ const DoctorAppointments = () => {
         setShowRejectModal(false);
         setRejectionReason('');
         await fetchAppointments();
-        alert('✅ Appointment rejected successfully');
+        alert(' Appointment rejected successfully');
       } else {
-        alert('❌ Failed: ' + (data.message || 'Unknown error'));
+        alert(' Failed: ' + (data.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error:', error);
@@ -299,6 +322,11 @@ const DoctorAppointments = () => {
     setShowRejectModal(false);
     setRejectionReason('');
     setSelectedAppointment(null);
+  };
+
+  const closeAcceptModal = () => {
+    setShowAcceptModal(false);
+    setAcceptAppointmentData(null);
   };
 
   // View Details handler
@@ -329,6 +357,120 @@ const DoctorAppointments = () => {
     joinWindowEnd.setMinutes(joinWindowEnd.getMinutes() + 60);
 
     return now >= joinWindowStart && now <= joinWindowEnd;
+  };
+
+  // Accept Success Modal Component
+  const AcceptSuccessModal = () => {
+    if (!showAcceptModal || !acceptAppointmentData) return null;
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+        style={{ background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(8px)' }}
+        onClick={closeAcceptModal}
+      >
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0, y: 50 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.8, opacity: 0, y: 50 }}
+          transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+          className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Animated Header */}
+          <div className="relative bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-8 text-center">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+              className="absolute -top-10 left-1/2 transform -translate-x-1/2"
+            >
+              
+            </motion.div>
+            <motion.h2 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-2xl font-bold text-white mt-4"
+            >
+              Appointment Accepted!
+            </motion.h2>
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-green-100 mt-1"
+            >
+              Patient has been notified
+            </motion.p>
+          </div>
+          <div className="p-6">
+            
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="space-y-3 mb-6"
+            >
+              <div className="bg-green-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle size={18} className="text-green-600" />
+                  <span className="font-semibold text-green-800">Appointment Confirmed</span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Patient:</span>
+                    <span className="font-medium text-gray-800">{acceptAppointmentData?.patientName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Date:</span>
+                    <span className="font-medium text-gray-800">{acceptAppointmentData?.date}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Time:</span>
+                    <span className="font-medium text-gray-800">{acceptAppointmentData?.time}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Consultation Fee:</span>
+                    <span className="font-medium text-green-600">LKR {acceptAppointmentData?.consultationFee?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="bg-blue-50 rounded-xl p-3 mb-6"
+            >
+              <p className="text-xs text-blue-800">
+                <span className="font-semibold"> Payment Information:</span><br />
+                • Patient has 10 minutes before appointment start to complete payment<br />
+                • Telemedicine link will be available after payment is completed<br />
+                • Link available 20 minutes before the scheduled time
+              </p>
+            </motion.div>
+
+            <motion.button
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              onClick={closeAcceptModal}
+              className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 group"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <CheckCircle size={18} className="group-hover:scale-110 transition-transform" />
+              Got it
+            </motion.button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
   };
 
   // Appointment Details Modal Component
@@ -442,19 +584,17 @@ const DoctorAppointments = () => {
                 </h3>
                 <div className="space-y-2">
                   {appointment.uploadedReports.map((report, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                       <div className="flex items-center gap-2">
                         <FileText size={16} className="text-blue-600" />
                         <span className="text-sm">{report.fileName}</span>
                       </div>
-                      <a
-                        href={`http://localhost:5015/${report.filePath}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => handleViewReport(report)}
                         className="text-blue-600 text-sm hover:underline flex items-center gap-1"
                       >
-                        <Download size={14} /> View
-                      </a>
+                        <Download size={14} /> View Report
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -745,7 +885,7 @@ const DoctorAppointments = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Section with Refresh Button */}
+     
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
@@ -754,10 +894,8 @@ const DoctorAppointments = () => {
             Last updated: {lastRefresh.toLocaleTimeString()}
           </p>
         </div>
-        
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
         {statusFilters.map((status) => (
           <button
@@ -780,7 +918,6 @@ const DoctorAppointments = () => {
         ))}
       </div>
 
-      {/* Search and Filter Section */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
@@ -887,7 +1024,6 @@ const DoctorAppointments = () => {
         </AnimatePresence>
       </div>
 
-      {/* Results Summary */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
           Showing <span className="font-semibold text-gray-900">{currentItems.length}</span> of{' '}
@@ -895,7 +1031,6 @@ const DoctorAppointments = () => {
         </p>
       </div>
 
-      {/* Appointments Grid/List */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -920,7 +1055,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* Pagination */}
+      
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-4 pt-4">
           <button
@@ -943,7 +1078,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* Appointment Details Modal */}
+
       {showDetailsModal && (
         <AppointmentDetailsModal
           appointment={selectedAppointment}
@@ -1002,6 +1137,10 @@ const DoctorAppointments = () => {
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAcceptModal && <AcceptSuccessModal />}
       </AnimatePresence>
     </div>
   );

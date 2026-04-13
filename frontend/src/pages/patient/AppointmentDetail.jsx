@@ -1,4 +1,3 @@
-// src/pages/patient/AppointmentDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, User, DollarSign, FileText, Activity, CreditCard, Video, Clock as ClockIcon, CheckCircle, XCircle } from 'lucide-react';
@@ -11,23 +10,6 @@ const AppointmentDetail = () => {
     const [loading, setLoading] = useState(true);
     const [processingPayment, setProcessingPayment] = useState(false);
     const [paymentDeadline, setPaymentDeadline] = useState(null);
-
-    useEffect(() => {
-        fetchAppointmentDetails();
-    }, [id]);
-
-    useEffect(() => {
-        if (appointment?.paymentDeadline) {
-            const timer = setInterval(() => {
-                const now = new Date();
-                const deadline = new Date(appointment.paymentDeadline);
-                if (now > deadline && appointment.paymentStatus === 'pending') {
-                    fetchAppointmentDetails();
-                }
-            }, 60000);
-            return () => clearInterval(timer);
-        }
-    }, [appointment]);
 
     const fetchAppointmentDetails = async () => {
         try {
@@ -45,16 +27,20 @@ const AppointmentDetail = () => {
         }
     };
 
+    // Only load once when component mounts
+    useEffect(() => {
+        fetchAppointmentDetails();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]);
+
     const handlePayment = async () => {
         setProcessingPayment(true);
         try {
-            // This will call your friend's payment service
             const response = await api.post(`/appointments/${id}/payment`, {
                 paymentMethod: 'card'
             });
             
             if (response.data.success) {
-                // Refresh appointment details
                 await fetchAppointmentDetails();
                 alert('Payment successful! Telemedicine link has been generated.');
             }
@@ -285,7 +271,7 @@ const AppointmentDetail = () => {
                                 </button>
                             )}
 
-                            {/* Join Meeting Button - Show only when payment completed and meeting time is within window */}
+                            {/* Show only when payment completed and meeting time is within window */}
                             {appointment.paymentStatus === 'completed' && appointment.telemedicineLink && canJoinMeeting() && (
                                 <button
                                     onClick={() => navigate(`/telemedicine/${appointment._id}`)}
@@ -296,7 +282,6 @@ const AppointmentDetail = () => {
                                 </button>
                             )}
 
-                            {/* Waiting for Meeting */}
                             {appointment.paymentStatus === 'completed' && appointment.status === 'accepted' && !canJoinMeeting() && (
                                 <div className="text-center p-4 bg-gray-50 rounded-xl">
                                     <ClockIcon size={24} className="mx-auto text-gray-400 mb-2" />
