@@ -22,9 +22,15 @@ spec:
         - name: PORT
           value: "5018"
         - name: MONGO_URI
-          value: "mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/telemedicine_db?appName=HealthcareCluster"
+          valueFrom:
+            secretKeyRef:
+              name: telemedicine-secrets
+              key: MONGO_URI
         - name: JWT_SECRET
-          value: "care_sync_patient_super_secret_key_2026"
+          valueFrom:
+            secretKeyRef:
+              name: telemedicine-secrets
+              key: JWT_SECRET
         - name: APPOINTMENT_SERVICE_URL
           value: "http://appointment-service:5015"
         - name: JITSI_DOMAIN

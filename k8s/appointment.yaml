@@ -22,15 +22,30 @@ spec:
         - name: PORT
           value: "5015"
         - name: MONGO_URI
-          value: "mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/appointment_db?appName=HealthcareCluster"
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: MONGO_URI
         - name: JWT_SECRET
-          value: "care_sync_patient_super_secret_key_2026"
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: JWT_SECRET
         - name: CLOUDINARY_CLOUD_NAME
-          value: "ddaiulr6c"
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: CLOUDINARY_CLOUD_NAME
         - name: CLOUDINARY_API_KEY
-          value: "285191149631397"
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: CLOUDINARY_API_KEY
         - name: CLOUDINARY_API_SECRET
-          value: "mnYIZRu2uDpLWe1sNXAakzQ-mfE"
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: CLOUDINARY_API_SECRET
         - name: TELEMEDICINE_SERVICE_URL
           value: "http://telemedicine-service:5018"
 ---
