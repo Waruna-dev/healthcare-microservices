@@ -14,9 +14,12 @@ const TelemedicineRoom = () => {
   const [jitsiLoaded, setJitsiLoaded] = useState(false);
   const [jitsiInitializing, setJitsiInitializing] = useState(false);
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showNoShowModal, setShowNoShowModal] = useState(false); 
   const [userRole, setUserRole] = useState('patient');
   const [callEnded, setCallEnded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [hasShownCompletionModal, setHasShownCompletionModal] = useState(false);
   
   // Track participants who joined the meeting
   const [participants, setParticipants] = useState({
@@ -38,16 +41,17 @@ const TelemedicineRoom = () => {
   const jitsiApiRef = useRef(null);
   const intervalRef = useRef(null);
   const statusCheckIntervalRef = useRef(null);
+  const redirectTimeoutRef = useRef(null);
 
   // Fetch telemedicine info on mount
   useEffect(() => {
     fetchTelemedicineInfo();
-    // Start polling for status changes
     startStatusPolling();
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (statusCheckIntervalRef.current) clearInterval(statusCheckIntervalRef.current);
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
       if (jitsiApiRef.current) {
         try {
           jitsiApiRef.current.dispose();
@@ -59,9 +63,8 @@ const TelemedicineRoom = () => {
   }, [id]);
 
   const startStatusPolling = () => {
-    // Poll every 3 seconds to check if other party confirmed
     statusCheckIntervalRef.current = setInterval(async () => {
-      if (!showOutcomeModal && !callEnded) {
+      if (!showOutcomeModal && !callEnded && !showSuccessModal && !showNoShowModal) {
         await fetchCompletionStatus();
       }
     }, 3000);
@@ -86,20 +89,39 @@ const TelemedicineRoom = () => {
           completionStatus: data.completionStatus
         });
         
-        // If fully completed, show message and redirect
-        if (data.isFullyCompleted && !confirmationStatus.isFullyCompleted) {
-          alert('✅ Appointment completed successfully! Both doctor and patient have confirmed.');
-          setTimeout(() => {
-            if (isUserDoctor()) {
-              navigate('/doctor/appointments');
-            } else {
-              navigate('/appointments/all');
-            }
-          }, 1500);
+        // ONLY show success modal when BOTH have confirmed AND appointment is completed (not no-show)
+        if (data.isFullyCompleted && 
+            data.completionStatus === 'completed' && 
+            !confirmationStatus.isFullyCompleted && 
+            !hasShownCompletionModal) {
+          setHasShownCompletionModal(true);
+          setShowSuccessModal(true);
+          
+          if (redirectTimeoutRef.current) {
+            clearTimeout(redirectTimeoutRef.current);
+          }
         }
       }
     } catch (error) {
       console.error('Error fetching completion status:', error);
+    }
+  };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    if (userRole === 'doctor') {
+      navigate('/doctor/appointments');
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleNoShowModalClose = () => {
+    setShowNoShowModal(false);
+    if (userRole === 'doctor') {
+      navigate('/doctor/appointments');
+    } else {
+      navigate('/dashboard');
     }
   };
 
@@ -124,17 +146,14 @@ const TelemedicineRoom = () => {
       if (data.success) {
         setAppointment(data.appointment);
         
-        // Set participant names from appointment data
         setParticipants(prev => ({
           ...prev,
           doctorName: data.appointment.doctorName || 'Doctor',
           patientName: data.appointment.patientName || 'Patient'
         }));
 
-        // Fetch initial completion status
         await fetchCompletionStatus();
 
-        // Check if appointment has already been marked
         if (data.appointment.status === 'no_show') {
           setError('This appointment was marked as "Patient No-Show". Please contact support for rescheduling.');
           setLoading(false);
@@ -438,12 +457,12 @@ const TelemedicineRoom = () => {
       let appointmentStatus = '';
       let userType = userRole === 'doctor' ? 'doctor' : 'patient';
       
-      // VALIDATION: Prevent false claims
       if (userRole === 'doctor') {
         if (finalStatus === 'no_show') {
           if (participants.patient) {
-            alert('❌ Cannot mark as "Patient No-Show" because the patient was in the meeting!');
+            setError('Cannot mark as "Patient No-Show" because the patient was in the meeting!');
             setSubmitting(false);
+            setTimeout(() => setError(null), 3000);
             return;
           }
           appointmentStatus = 'no_show';
@@ -455,8 +474,9 @@ const TelemedicineRoom = () => {
       } else {
         if (finalStatus === 'doctor_no_show') {
           if (participants.doctor) {
-            alert('❌ Cannot mark as "Doctor No-Show" because the doctor was in the meeting!');
+            setError('Cannot mark as "Doctor No-Show" because the doctor was in the meeting!');
             setSubmitting(false);
+            setTimeout(() => setError(null), 3000);
             return;
           }
           appointmentStatus = 'doctor_no_show';
@@ -487,7 +507,6 @@ const TelemedicineRoom = () => {
       console.log('Outcome submission response:', data);
       
       if (data.success) {
-        // Update confirmation status from response
         if (data.appointment) {
           setConfirmationStatus({
             doctorConfirmed: data.appointment.doctorConfirmed,
@@ -497,42 +516,49 @@ const TelemedicineRoom = () => {
           });
         }
         
-        if (data.appointment?.isFullyCompleted) {
-          alert('✅ Appointment completed successfully! Both doctor and patient have confirmed.');
-          if (isUserDoctor()) {
-            navigate('/doctor/appointments');
+        // Handle different scenarios
+        if (appointmentStatus === 'completed') {
+          if (data.appointment?.isFullyCompleted) {
+            // Both confirmed - show success modal
+            setHasShownCompletionModal(true);
+            setShowSuccessModal(true);
+            setShowOutcomeModal(false);
+            setCallEnded(false);
           } else {
-            navigate('/dashboard');
+            // Only one confirmed - show waiting message
+            const waitingFor = userRole === 'doctor' ? 'patient' : 'doctor';
+            setError(`✓ Your confirmation has been recorded. Waiting for ${waitingFor} to confirm completion.`);
+            setShowOutcomeModal(false);
+            setCallEnded(false);
+            setSubmitting(false);
+            setTimeout(() => setError(null), 3000);
           }
-        } else if (appointmentStatus === 'completed') {
-          const waitingFor = userRole === 'doctor' ? 'patient' : 'doctor';
-          alert(`📋 Your confirmation has been recorded. Waiting for ${waitingFor} to confirm completion.`);
+        } else if (appointmentStatus === 'no_show' || appointmentStatus === 'doctor_no_show') {
+          // Show no-show modal instead of error
+          setShowNoShowModal(true);
           setShowOutcomeModal(false);
           setCallEnded(false);
           setSubmitting(false);
-        } else if (appointmentStatus === 'no_show' || appointmentStatus === 'doctor_no_show') {
-          alert(finalStatus === 'no_show' ? 'Patient no-show recorded' : 'Doctor no-show recorded');
-          if (isUserDoctor()) {
-            navigate('/doctor/appointments');
-          } else {
-            navigate('/dashboard');
-          }
         } else {
-          alert(data.message);
-          if (isUserDoctor()) {
-            navigate('/doctor/appointments');
-          } else {
-            navigate('/dashboard');
-          }
+          setError(data.message || 'Appointment status updated');
+          setTimeout(() => {
+            if (userRole === 'doctor') {
+              navigate('/doctor/appointments');
+            } else {
+              navigate('/dashboard');
+            }
+          }, 1500);
         }
       } else {
-        alert('Error: ' + (data.message || 'Failed to update appointment status'));
+        setError(data.message || 'Failed to update appointment status');
         setSubmitting(false);
+        setTimeout(() => setError(null), 3000);
       }
     } catch (error) {
       console.error('Error recording outcome:', error);
-      alert('Error recording outcome. Please contact support.');
+      setError('Error recording outcome. Please contact support.');
       setSubmitting(false);
+      setTimeout(() => setError(null), 3000);
     }
   };
 
@@ -564,7 +590,7 @@ const TelemedicineRoom = () => {
     );
   }
 
-  if (error && !showOutcomeModal) {
+  if (error && !showOutcomeModal && !showSuccessModal && !showNoShowModal) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-8 max-w-md text-center">
@@ -625,13 +651,10 @@ const TelemedicineRoom = () => {
             Dr. {appointment?.doctorName} • {appointment?.startTime}
           </p>
         </div>
-        <div className="text-right text-sm text-gray-400">
-          <p>{appointment && formatDateTime(appointment.date)}</p>
-        </div>
       </div>
 
       {/* Jitsi Container */}
-      {!showOutcomeModal && !callEnded && (
+      {!showOutcomeModal && !callEnded && !showSuccessModal && !showNoShowModal && (
         <div
           ref={containerRef}
           className="flex-1 w-full relative z-0"
@@ -640,7 +663,7 @@ const TelemedicineRoom = () => {
       )}
 
       {/* Loading overlay while Jitsi initializes */}
-      {jitsiInitializing && !jitsiLoaded && !showOutcomeModal && !callEnded && (
+      {jitsiInitializing && !jitsiLoaded && !showOutcomeModal && !callEnded && !showSuccessModal && !showNoShowModal && (
         <div className="absolute inset-x-0 bottom-0 top-[60px] flex items-center justify-center bg-gray-900/90 z-10">
           <div className="text-center">
             <Loader className="w-10 h-10 text-white animate-spin mx-auto mb-4" />
@@ -649,8 +672,8 @@ const TelemedicineRoom = () => {
         </div>
       )}
 
-      {/* Confirmation Status Banner - Show when one party has confirmed */}
-      {!showOutcomeModal && !callEnded && (confirmationStatus.doctorConfirmed || confirmationStatus.patientConfirmed) && !confirmationStatus.isFullyCompleted && (
+      {/* Confirmation Status Banner */}
+      {!showOutcomeModal && !callEnded && !showSuccessModal && !showNoShowModal && (confirmationStatus.doctorConfirmed || confirmationStatus.patientConfirmed) && !confirmationStatus.isFullyCompleted && (
         <div className="absolute top-[60px] left-0 right-0 z-20 bg-yellow-500/90 backdrop-blur-sm p-2 text-center">
           <p className="text-white text-sm font-medium">
             {confirmationStatus.doctorConfirmed && !confirmationStatus.patientConfirmed && (
@@ -663,8 +686,76 @@ const TelemedicineRoom = () => {
         </div>
       )}
 
-      {/* Outcome Modal with Participant Status */}
-      {showOutcomeModal && (
+      {/* Error Toast Message */}
+      {error && !showOutcomeModal && !showSuccessModal && !showNoShowModal && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-5">
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Success Modal - When both doctor and patient confirm consultation successful */}
+      {showSuccessModal && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 text-center shadow-2xl transform transition-all animate-in fade-in zoom-in duration-300">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Appointment Completed!</h2>
+              <p className="text-gray-600 mb-4">
+                Both doctor and patient have confirmed the consultation was successful.
+              </p>
+              <div className="bg-green-50 rounded-xl p-3 mb-6">
+                <p className="text-green-700 text-sm">
+                  ✓ Consultation successfully completed
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={handleSuccessModalClose}
+              className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition duration-200 shadow-lg shadow-green-200"
+            >
+              Go to {userRole === 'doctor' ? 'Doctor Dashboard' : 'Patient Dashboard'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* No-Show Modal - When doctor or patient doesn't show up */}
+      {showNoShowModal && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 text-center shadow-2xl transform transition-all animate-in fade-in zoom-in duration-300">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <XCircle className="w-10 h-10 text-orange-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {userRole === 'doctor' ? 'Patient No-Show' : 'Doctor No-Show'}
+              </h2>
+              <p className="text-gray-600 mb-4">
+                {userRole === 'doctor' 
+                  ? 'The patient did not attend the scheduled consultation.' 
+                  : 'The doctor did not attend the scheduled consultation.'}
+              </p>
+              <div className="bg-orange-50 rounded-xl p-3 mb-6">
+                <p className="text-orange-700 text-sm">
+                  ⚠️ This appointment has been marked as no-show
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={handleNoShowModalClose}
+              className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold transition duration-200 shadow-lg shadow-orange-200"
+            >
+              Go to {userRole === 'doctor' ? 'Doctor Dashboard' : 'Patient Dashboard'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showOutcomeModal && !showSuccessModal && !showNoShowModal && (
         <div className="absolute inset-0 bg-gray-900/95 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 text-center shadow-2xl transform transition-all">
             <div className="mb-6">
@@ -675,7 +766,7 @@ const TelemedicineRoom = () => {
               <p className="text-gray-600">How did the consultation go?</p>
             </div>
 
-            {/* Show current confirmation status */}
+       
             {(confirmationStatus.doctorConfirmed || confirmationStatus.patientConfirmed) && !confirmationStatus.isFullyCompleted && (
               <div className="mb-4 p-3 bg-yellow-100 rounded-xl">
                 <p className="text-sm text-yellow-800">
@@ -689,7 +780,7 @@ const TelemedicineRoom = () => {
               </div>
             )}
 
-            {/* Participant Status Display */}
+    
             <div className="mb-6 p-4 bg-gray-50 rounded-xl">
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">

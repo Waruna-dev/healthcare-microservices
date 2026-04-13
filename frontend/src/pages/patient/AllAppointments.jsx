@@ -5,7 +5,7 @@ import {
   ArrowLeft, Calendar, Clock, User, Stethoscope,
   FileText, Activity, AlertCircle,
   CheckCircle, XCircle, Download, Eye, CreditCard, Video,
-  Filter, Search, X, Edit, Trash2, Upload
+  Filter, Search, X, Edit, Trash2, Upload, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 import Header from '../../components/Header';
@@ -22,6 +22,11 @@ const AllAppointments = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(6);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
@@ -71,10 +76,25 @@ const AllAppointments = () => {
     fetchAppointments();
   }, []);
 
-  // Apply filters
+  // Apply filters (without resetting page)
   useEffect(() => {
     applyFilters();
   }, [appointments, filters, searchTerm]);
+
+  // Reset to page 1 ONLY when filters or search term change (not when appointments update)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, searchTerm]);
+
+  // Update total pages when filtered appointments change
+  useEffect(() => {
+    const pages = Math.ceil(filteredAppointments.length / itemsPerPage);
+    setTotalPages(pages > 0 ? pages : 1);
+    // Ensure current page is valid
+    if (currentPage > pages && pages > 0) {
+      setCurrentPage(pages);
+    }
+  }, [filteredAppointments.length, itemsPerPage, currentPage]);
 
   // Poll for updates - but don't close modals
   useEffect(() => {
@@ -101,14 +121,24 @@ const AllAppointments = () => {
         });
         const data = await response.json();
         if (data.success) {
-          setAppointments(data.appointments || []);
+          const newAppointments = data.appointments || [];
+          setAppointments(newAppointments);
           
           // If we have a selected appointment, update it with fresh data
           if (selectedAppointment && showDetailsModal) {
-            const updatedAppointment = data.appointments?.find(apt => apt._id === selectedAppointment._id);
+            const updatedAppointment = newAppointments.find(apt => apt._id === selectedAppointment._id);
             if (updatedAppointment) {
               setSelectedAppointment(updatedAppointment);
             }
+          }
+          
+          // Validate current page after data update
+          const newFilteredCount = getFilteredCount(newAppointments);
+          const newTotalPages = Math.ceil(newFilteredCount / itemsPerPage);
+          if (currentPage > newTotalPages && newTotalPages > 0) {
+            setCurrentPage(newTotalPages);
+          } else if (newTotalPages === 0) {
+            setCurrentPage(1);
           }
         }
       } catch (error) {
@@ -116,6 +146,45 @@ const AllAppointments = () => {
       }
     }
     setLoading(false);
+  };
+
+  // Helper function to get filtered count without updating state
+  const getFilteredCount = (appointmentsList) => {
+    let filtered = [...appointmentsList];
+
+    if (searchTerm) {
+      filtered = filtered.filter(apt =>
+        apt.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        apt.symptoms?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        apt.doctorSpecialty?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (filters.status) {
+      filtered = filtered.filter(apt => apt.status === filters.status);
+    }
+
+    if (filters.paymentStatus) {
+      filtered = filtered.filter(apt => apt.paymentStatus === filters.paymentStatus);
+    }
+
+    if (filters.doctorName) {
+      filtered = filtered.filter(apt =>
+        apt.doctorName?.toLowerCase().includes(filters.doctorName.toLowerCase())
+      );
+    }
+
+    if (filters.date) {
+      const selectedDate = new Date(filters.date);
+      selectedDate.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(apt => {
+        const aptDate = new Date(apt.date);
+        aptDate.setHours(0, 0, 0, 0);
+        return aptDate.getTime() === selectedDate.getTime();
+      });
+    }
+
+    return filtered.length;
   };
 
   const applyFilters = () => {
@@ -154,6 +223,74 @@ const AllAppointments = () => {
     }
 
     setFilteredAppointments(filtered);
+  };
+
+  // Get current page appointments
+  const getCurrentPageAppointments = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAppointments.slice(startIndex, endIndex);
+  };
+
+  // Pagination handlers
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const goToPage = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(value);
+    setCurrentPage(1);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pageNumbers.push(i);
+        }
+        pageNumbers.push('...');
+        pageNumbers.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pageNumbers.push(1);
+        pageNumbers.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pageNumbers.push(i);
+        }
+      } else {
+        pageNumbers.push(1);
+        pageNumbers.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pageNumbers.push(i);
+        }
+        pageNumbers.push('...');
+        pageNumbers.push(totalPages);
+      }
+    }
+    
+    return pageNumbers;
   };
 
   const handleFilterChange = (key, value) => {
@@ -323,6 +460,80 @@ const AllAppointments = () => {
 
   const handleViewReport = (report) => {
     window.open(report.filePath, '_blank');
+  };
+
+  // Pagination Component
+  const Pagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pageNumbers = getPageNumbers();
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t border-gray-200">
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <span>Show:</span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+            className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value={6}>6</option>
+            <option value={12}>12</option>
+            <option value={24}>24</option>
+            <option value={48}>48</option>
+          </select>
+          <span>per page</span>
+          <span className="ml-4">
+            Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
+            {Math.min(currentPage * itemsPerPage, filteredAppointments.length)} of{' '}
+            {filteredAppointments.length} appointments
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goToPreviousPage}
+            disabled={currentPage === 1}
+            className={`p-2 rounded-lg transition-all ${
+              currentPage === 1
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
+            }`}
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          {pageNumbers.map((page, index) => (
+            <button
+              key={index}
+              onClick={() => typeof page === 'number' && goToPage(page)}
+              className={`min-w-[36px] h-9 px-3 rounded-lg font-medium transition-all ${
+                currentPage === page
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : page === '...'
+                  ? 'bg-transparent text-gray-500 cursor-default'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+              disabled={page === '...'}
+            >
+              {page}
+            </button>
+          ))}
+
+          <button
+            onClick={goToNextPage}
+            disabled={currentPage === totalPages}
+            className={`p-2 rounded-lg transition-all ${
+              currentPage === totalPages
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
+            }`}
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Cancel Modal Component
@@ -782,127 +993,132 @@ const AllAppointments = () => {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredAppointments.map((apt) => {
-                const statusConfig = getStatusConfig(apt.status);
-                const StatusIcon = statusConfig.icon;
-                const paymentConfig = getPaymentStatusConfig(apt.paymentStatus);
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {getCurrentPageAppointments().map((apt) => {
+                  const statusConfig = getStatusConfig(apt.status);
+                  const StatusIcon = statusConfig.icon;
+                  const paymentConfig = getPaymentStatusConfig(apt.paymentStatus);
 
-                return (
-                  <div key={apt._id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
-                    <div className={`h-1 ${apt.status === 'pending' ? 'bg-yellow-500' :
-                        apt.status === 'accepted' ? 'bg-blue-500' :
-                          apt.status === 'completed' ? 'bg-green-500' :
-                            apt.status === 'rejected' ? 'bg-red-500' : 'bg-gray-400'
-                      }`} />
-                    <div className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 bg-blue-50 rounded-lg">
-                            <Stethoscope className="w-4 h-4 text-blue-600" />
+                  return (
+                    <div key={apt._id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+                      <div className={`h-1 ${apt.status === 'pending' ? 'bg-yellow-500' :
+                          apt.status === 'accepted' ? 'bg-blue-500' :
+                            apt.status === 'completed' ? 'bg-green-500' :
+                              apt.status === 'rejected' ? 'bg-red-500' : 'bg-gray-400'
+                        }`} />
+                      <div className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-blue-50 rounded-lg">
+                              <Stethoscope className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-base text-gray-900">Dr. {apt.doctorName}</h3>
+                              <p className="text-xs text-gray-500">{apt.doctorSpecialty}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-bold text-base text-gray-900">Dr. {apt.doctorName}</h3>
-                            <p className="text-xs text-gray-500">{apt.doctorSpecialty}</p>
+                          <div className="flex gap-1.5">
+                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                              <StatusIcon size={12} />
+                              {statusConfig.label}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentConfig.color}`}>
+                              {paymentConfig.label}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex gap-1.5">
-                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
-                            <StatusIcon size={12} />
-                            {statusConfig.label}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentConfig.color}`}>
-                            {paymentConfig.label}
-                          </span>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                            <Calendar size={12} className="text-gray-400" />
+                            <span>{formatDate(apt.date)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                            <Clock size={12} className="text-gray-400" />
+                            <span>{apt.startTime} - {apt.endTime}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-600 col-span-2">
+                            <span className="font-semibold text-green-600">LKR {apt.consultationFee?.toLocaleString()}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                          <Calendar size={12} className="text-gray-400" />
-                          <span>{formatDate(apt.date)}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                          <Clock size={12} className="text-gray-400" />
-                          <span>{apt.startTime} - {apt.endTime}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-600 col-span-2">
-                          <span className="font-semibold text-green-600">LKR {apt.consultationFee?.toLocaleString()}</span>
-                        </div>
-                      </div>
-                      {apt.rejectionReason && (
-                        <div className="mb-3 p-2 bg-red-50 border border-red-100 rounded-lg">
-                          <p className="text-xs text-red-600 font-medium mb-0.5">Cancellation Reason:</p>
-                          <p className="text-xs text-red-700">{apt.rejectionReason}</p>
-                        </div>
-                      )}
-                      {apt.symptoms && (
-                        <div className="mb-3 p-2 bg-gray-50 rounded-lg">
-                          <p className="text-xs text-gray-500 mb-0.5">Symptoms:</p>
-                          <p className="text-xs text-gray-700 line-clamp-2">{apt.symptoms}</p>
-                        </div>
-                      )}
-                      {apt.uploadedReports && apt.uploadedReports.length > 0 && (
-                        <div className="mb-3 flex items-center gap-1.5 text-xs text-blue-600">
-                          <FileText size={12} />
-                          <span>{apt.uploadedReports.length} report(s) attached</span>
-                        </div>
-                      )}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => handleViewDetails(apt)}
-                          className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-1"
-                        >
-                          <Eye size={12} />
-                          View Full Details
-                        </button>
-                        {canUpdateAppointment(apt) && (
-                          <button
-                            onClick={() => {
-                              setSelectedAppointment(apt);
-                              setShowUpdateModal(true);
-                            }}
-                            className="flex-1 px-2 py-1.5 text-xs font-medium text-yellow-600 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors flex items-center justify-center gap-1"
-                          >
-                            <Edit size={12} />
-                            Update
-                          </button>
+                        {apt.rejectionReason && (
+                          <div className="mb-3 p-2 bg-red-50 border border-red-100 rounded-lg">
+                            <p className="text-xs text-red-600 font-medium mb-0.5">Cancellation Reason:</p>
+                            <p className="text-xs text-red-700">{apt.rejectionReason}</p>
+                          </div>
                         )}
-                        {apt.status === 'accepted' && apt.paymentStatus === 'pending' && (
-                          <button
-                            onClick={() => handlePayment(apt)}
-                            className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:shadow-md transition-all flex items-center justify-center gap-1"
-                          >
-                            <CreditCard size={12} />
-                            Pay Now
-                          </button>
+                        {apt.symptoms && (
+                          <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 mb-0.5">Symptoms:</p>
+                            <p className="text-xs text-gray-700 line-clamp-2">{apt.symptoms}</p>
+                          </div>
                         )}
-                        {canJoinCall(apt) && (
-                          <button
-                            onClick={() => handleJoinCall(apt)}
-                            className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:shadow-md transition-all flex items-center justify-center gap-1"
-                          >
-                            <Video size={12} />
-                            Join Call
-                          </button>
+                        {apt.uploadedReports && apt.uploadedReports.length > 0 && (
+                          <div className="mb-3 flex items-center gap-1.5 text-xs text-blue-600">
+                            <FileText size={12} />
+                            <span>{apt.uploadedReports.length} report(s) attached</span>
+                          </div>
                         )}
-                        {canCancelAppointment(apt) && (
+                        <div className="flex gap-2 pt-1">
                           <button
-                            onClick={() => {
-                              setSelectedAppointment(apt);
-                              setShowCancelModal(true);
-                            }}
-                            className="flex-1 px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-1"
+                            onClick={() => handleViewDetails(apt)}
+                            className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-1"
                           >
-                            <Trash2 size={12} />
-                            Cancel
+                            <Eye size={12} />
+                            View Full Details
                           </button>
-                        )}
+                          {canUpdateAppointment(apt) && (
+                            <button
+                              onClick={() => {
+                                setSelectedAppointment(apt);
+                                setShowUpdateModal(true);
+                              }}
+                              className="flex-1 px-2 py-1.5 text-xs font-medium text-yellow-600 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors flex items-center justify-center gap-1"
+                            >
+                              <Edit size={12} />
+                              Update
+                            </button>
+                          )}
+                          {apt.status === 'accepted' && apt.paymentStatus === 'pending' && (
+                            <button
+                              onClick={() => handlePayment(apt)}
+                              className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:shadow-md transition-all flex items-center justify-center gap-1"
+                            >
+                              <CreditCard size={12} />
+                              Pay Now
+                            </button>
+                          )}
+                          {canJoinCall(apt) && (
+                            <button
+                              onClick={() => handleJoinCall(apt)}
+                              className="flex-1 px-2 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:shadow-md transition-all flex items-center justify-center gap-1"
+                            >
+                              <Video size={12} />
+                              Join Call
+                            </button>
+                          )}
+                          {canCancelAppointment(apt) && (
+                            <button
+                              onClick={() => {
+                                setSelectedAppointment(apt);
+                                setShowCancelModal(true);
+                              }}
+                              className="flex-1 px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-1"
+                            >
+                              <Trash2 size={12} />
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+              
+              {/* Pagination Component */}
+              <Pagination />
+            </>
           )}
         </div>
       </div>
