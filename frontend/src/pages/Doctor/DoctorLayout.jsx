@@ -14,7 +14,7 @@ const DoctorLayout = () => {
     { path: '/doctor/weekly-schedule', name: 'Weekly Schedule', icon: '📅' },
     { path: '/doctor/prescriptions', name: 'Prescriptions', icon: '📋' },
     { path: '/doctor/profile', name: 'My Profile', icon: '👤' },
-    { path: '/doctor/settings', name: 'Settings', icon: '⚙️' },
+    { path: '/', name: 'Back to Home', icon: '🏠' },
   ]);
 
   // Reset sidebar state when user changes
@@ -23,8 +23,12 @@ const DoctorLayout = () => {
     // You can add any reset logic here
   }, [user, authKey]);
 
-  const goToHome = () => {
-    navigate('/');
+  const handleLogout = () => {
+    // Clear authentication data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    // Navigate to login or home page
+    navigate('/login');
   };
 
   return (
@@ -82,16 +86,16 @@ const DoctorLayout = () => {
           ))}
         </nav>
 
-        {/* Home/Exit Button */}
+        {/* Logout Button */}
         <div className="p-4 border-t border-blue-700">
           <button
-            onClick={goToHome}
-            className={`w-full flex items-center px-4 py-2 rounded hover:bg-green-600/20 transition-colors ${
+            onClick={handleLogout}
+            className={`w-full flex items-center px-4 py-2 rounded hover:bg-red-600/20 transition-colors ${
               !isSidebarOpen && 'justify-center'
             }`}
           >
-            <span className="text-xl">🏠</span>
-            {isSidebarOpen && <span className="ml-3 text-sm">Back to Home</span>}
+            <span className="text-xl">🚫</span>
+            {isSidebarOpen && <span className="ml-3 text-sm">Logout</span>}
           </button>
         </div>
       </div>
