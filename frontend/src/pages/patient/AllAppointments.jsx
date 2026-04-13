@@ -16,6 +16,7 @@ const AllAppointments = () => {
   const [appointments, setAppointments] = useState([]);
   const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -93,25 +94,65 @@ const AllAppointments = () => {
     return () => clearInterval(pollInterval);
   }, []);
 
+  const getPatientIdFromToken = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    try {
+      const payloadBase64 = token.split('.')[1];
+      if (!payloadBase64) return null;
+      const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
+      const payload = JSON.parse(payloadJson);
+      return payload?.id || null;
+    } catch (err) {
+      console.warn('Failed to decode token payload:', err);
+      return null;
+    }
+  };
+
   const fetchAppointments = async () => {
+    setFetchError('');
+
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       const userData = JSON.parse(storedUser);
       const patient = userData.patient || userData;
-      const patientId = patient._id || patient.id;
+      const tokenPatientId = getPatientIdFromToken();
+      const patientId = tokenPatientId || patient?._id || patient?.id;
 
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:5015/api/appointments/patient/${patientId}`, {
+        if (!token) {
+          setFetchError('Session expired. Please log in again.');
+          setAppointments([]);
+          return;
+        }
+
+        if (!patientId) {
+          setFetchError('Patient identity not found. Please log in again.');
+          setAppointments([]);
+          return;
+        }
+
+        const response = await fetch(`/api/appointments/patient/${patientId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        if (data.success) {
-          setAppointments(data.appointments || []);
+        if (!response.ok || !data?.success) {
+          setFetchError(data?.message || 'Failed to load appointments');
+          setAppointments([]);
+          return;
         }
+
+        setAppointments(data.appointments || []);
       } catch (error) {
         console.error('Error:', error);
+        setFetchError('Unable to fetch appointments right now. Please try again.');
+        setAppointments([]);
       }
+    } else {
+      setFetchError('Please log in to view your appointments.');
+      setAppointments([]);
     }
     setLoading(false);
   };
@@ -864,6 +905,11 @@ const AllAppointments = () => {
 
           {/* Search and Filter Bar */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            {fetchError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {fetchError}
+              </div>
+            )}
             <div className="flex flex-col md:flex-row gap-3">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />

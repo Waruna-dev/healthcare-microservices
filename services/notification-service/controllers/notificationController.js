@@ -103,6 +103,10 @@ const sendPaymentConfirmationSMSController = async (req, res) => {
       orderId,
       amount,
       currency = "LKR",
+      doctorName,
+      appointmentDate,
+      appointmentTime,
+      referenceId,
     } = req.body;
 
     if (!phoneNumber || !orderId || amount === undefined) {
@@ -118,6 +122,10 @@ const sendPaymentConfirmationSMSController = async (req, res) => {
       orderId,
       amount,
       currency,
+      doctorName,
+      appointmentDate,
+      appointmentTime,
+      referenceId,
     });
 
     if (result.success) {

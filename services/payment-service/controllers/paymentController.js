@@ -94,6 +94,10 @@ const triggerPaymentSuccessSMS = async (payment) => {
       orderId: payment.orderId,
       amount: payment.amount,
       currency: `${payment.currency || "LKR"}`.toUpperCase(),
+      doctorName: payment.doctorName,
+      appointmentDate: payment.appointmentDate,
+      appointmentTime: payment.appointmentTime,
+      referenceId: payment.orderId,
     }),
   });
 
@@ -140,6 +144,34 @@ const notifyAppointmentServicePaymentSuccess = async (payment) => {
   }
 };
 
+const triggerPostPaymentSuccessNotifications = async (payment) => {
+  if (!payment || normalizeStatus(payment.status) !== "SUCCESS") {
+    return;
+  }
+
+  if (!payment.successEmailSentAt) {
+    try {
+      await triggerPaymentSuccessEmail(payment);
+    } catch (error) {
+      console.error("Failed to send payment success email:", error.message);
+    }
+  }
+
+  if (!payment.successSMSSentAt) {
+    try {
+      await triggerPaymentSuccessSMS(payment);
+    } catch (error) {
+      console.error("Failed to send payment confirmation SMS:", error.message);
+    }
+  }
+
+  try {
+    await notifyAppointmentServicePaymentSuccess(payment);
+  } catch (error) {
+    console.error("Failed to notify appointment service:", error.message);
+  }
+};
+
 const syncPaymentStatusFromSession = async (payment) => {
   if (!payment?.gatewaySessionId || normalizeStatus(payment.status) !== "PENDING") {
     return payment;
@@ -158,17 +190,7 @@ const syncPaymentStatusFromSession = async (payment) => {
     payment.lastWebhookEvent = "checkout.session.sync";
     await payment.save();
 
-    try {
-      await triggerPaymentSuccessEmail(payment);
-    } catch (error) {
-      console.error("Failed to send payment success email:", error.message);
-    }
-    
-    try {
-      await notifyAppointmentServicePaymentSuccess(payment);
-    } catch (error) {
-      console.error("Failed to notify appointment service:", error.message);
-    }
+    await triggerPostPaymentSuccessNotifications(payment);
 
     return payment;
   }
@@ -190,7 +212,13 @@ export const createCheckoutSession = async (req, res) => {
     const patientId = `${req.body.patientId || req.body.userId || ""}`.trim();
     const customerName = getCustomerName(req.body);
     const customerEmail = getCustomerEmail(req.body);
-    const customerPhoneNumber = `${req.body.phoneNumber || req.body.customerPhoneNumber || ""}`.trim();
+    const customerPhoneNumber = `${
+      req.body.phoneNumber ||
+      req.body.customerPhoneNumber ||
+      req.body.patientPhoneNumber ||
+      req.body.contactNumber ||
+      ""
+    }`.trim();
     const itemName = buildItemName(req.body);
     const amount = toAmount(req.body.amount);
     const currency = `${req.body.currency || "lkr"}`.trim().toLowerCase();
@@ -467,23 +495,7 @@ export const handleWebhook = async (req, res) => {
       );
 
       if (payment) {
-        try {
-          await triggerPaymentSuccessEmail(payment);
-        } catch (error) {
-          console.error("Failed to send payment success email:", error.message);
-        }
-        
-        try {
-          await triggerPaymentSuccessSMS(payment);
-        } catch (error) {
-          console.error("Failed to send payment confirmation SMS:", error.message);
-        }
-        
-        try {
-          await notifyAppointmentServicePaymentSuccess(payment);
-        } catch (error) {
-          console.error("Failed to notify appointment service:", error.message);
-        }
+        await triggerPostPaymentSuccessNotifications(payment);
       }
     }
 
@@ -573,6 +585,7 @@ export const getPaymentByOrderId = async (req, res) => {
     }
 
     payment = await syncPaymentStatusFromSession(payment);
+    await triggerPostPaymentSuccessNotifications(payment);
 
     return res.status(200).json({
       success: true,

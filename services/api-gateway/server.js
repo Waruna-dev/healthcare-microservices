@@ -121,6 +121,7 @@ app.use(
 app.use('/api/appointments', createProxyMiddleware({
   target: 'http://localhost:5015',
   changeOrigin: true,
+  pathRewrite: (path) => `/api/appointments${path}`,
   onError: (err, req, res) => {
     res.status(503).json({ error: 'Appointment service unavailable' });
   }

@@ -54,10 +54,17 @@ const DoctorListing = () => {
       // Fetch all doctors
       const response = await fetch(`${API_BASE}?limit=1000`);
       const data = await response.json();
-      
-      if (data.success && data.doctors) {
+
+      // Support both legacy `{ doctors: [...] }` and current `{ data: [...] }` API shapes
+      const doctorsList = Array.isArray(data?.doctors)
+        ? data.doctors
+        : Array.isArray(data?.data)
+          ? data.data
+          : [];
+
+      if (data?.success && Array.isArray(doctorsList)) {
         // Process doctors without individual schedule calls for faster loading
-        const doctorsWithSchedule = data.doctors.map(doctor => ({
+        const doctorsWithSchedule = doctorsList.map(doctor => ({
           ...doctor,
           // Map database fields to component fields
           name: doctor.name,
@@ -79,7 +86,7 @@ const DoctorListing = () => {
         setDoctors(doctorsWithSchedule);
         setError(null); // Clear any previous errors
       } else {
-        setError('Failed to fetch doctors from database');
+        setError(data?.message || 'Failed to fetch doctors from database');
       }
     } catch (error) {
       console.error('Error fetching doctors:', error);

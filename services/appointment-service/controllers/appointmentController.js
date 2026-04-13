@@ -242,17 +242,29 @@ const createAppointment = async (req, res) => {
 const getPatientAppointments = async (req, res) => {
     try {
         const { patientId } = req.params;
+        const authenticatedPatientId = req.patient?._id || req.patient?.id;
+        const effectivePatientId = authenticatedPatientId || patientId;
 
-        console.log('🔍 Fetching appointments for patient:', patientId);
+        if (!effectivePatientId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Patient ID is required'
+            });
+        }
+
+        if (authenticatedPatientId && patientId && authenticatedPatientId.toString() !== patientId.toString()) {
+            console.warn(`Patient ID mismatch. Using authenticated ID ${authenticatedPatientId} instead of param ${patientId}`);
+        }
+
+        console.log('Fetching appointments for patient:', effectivePatientId);
 
         let appointments = await Appointment.find({
-            patientId: patientId
+            patientId: effectivePatientId.toString()
         }).sort({ date: -1, createdAt: -1 });
-        
+
         appointments = await checkAndCancelExpiredAppointments(appointments);
 
-        console.log(`📊 Found ${appointments.length} appointments for patient ${patientId}`);
-        console.log('📋 Appointments:', JSON.stringify(appointments, null, 2));
+        console.log(`Found ${appointments.length} appointments for patient ${effectivePatientId}`);
 
         res.json({
             success: true,
@@ -781,16 +793,25 @@ const cancelAppointment = async (req, res) => {
 const getUpcomingAppointment = async (req, res) => {
     try {
         const { patientId } = req.params;
+        const authenticatedPatientId = req.patient?._id || req.patient?.id;
+        const effectivePatientId = authenticatedPatientId || patientId;
 
-        console.log('🔍 Fetching upcoming appointment for patient:', patientId);
+        if (!effectivePatientId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Patient ID is required'
+            });
+        }
+
+        console.log('Fetching upcoming appointment for patient:', effectivePatientId);
 
         const appointment = await Appointment.findOne({
-            patientId: patientId,
+            patientId: effectivePatientId.toString(),
             status: { $in: ['pending', 'accepted'] },
             paymentStatus: { $ne: 'failed' }
         }).sort({ createdAt: -1 });
 
-        console.log('📊 Upcoming appointment found:', appointment ? appointment._id : 'None');
+        console.log('Upcoming appointment found:', appointment ? appointment._id : 'None');
 
         res.json({
             success: true,

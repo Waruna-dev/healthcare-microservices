@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -78,6 +78,12 @@ const buildPaymentPayload = (appointment, patient) => {
     patient?.name || appointment?.patientName || "CareSync Patient";
   const patientEmail =
     patient?.email || appointment?.patientEmail || appointment?.email || "";
+  const patientPhoneNumber =
+    patient?.contactNumber ||
+    patient?.phoneNumber ||
+    appointment?.patientPhoneNumber ||
+    appointment?.phoneNumber ||
+    "";
 
   return {
     orderId: `PAY-${appointmentId}-${Date.now()}`,
@@ -85,6 +91,7 @@ const buildPaymentPayload = (appointment, patient) => {
     patientId,
     customerName: patientName,
     customerEmail: patientEmail,
+    customerPhoneNumber: patientPhoneNumber,
     patientName,
     doctorName: appointment?.doctorName || "",
     department:
@@ -166,6 +173,7 @@ const getUserFriendlyErrorMessage = (
 function PaymentPage() {
   const { appointmentId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const apiBaseUrl = import.meta.env.VITE_PAYMENT_API_URL ?? "/api/payments";
 
   const [appointment, setAppointment] = useState(
@@ -293,6 +301,11 @@ function PaymentPage() {
             const successText = "Payment completed successfully.";
             setSuccessMessage(successText);
             showToast(successText, "success");
+            setTimeout(() => {
+              navigate("/appointments/all", {
+                state: { message: "Payment completed successfully." },
+              });
+            }, 1200);
             return;
           }
 
@@ -338,7 +351,7 @@ function PaymentPage() {
     return () => {
       isCancelled = true;
     };
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, navigate]);
 
   const handleCheckout = async () => {
     if (!appointment) {
@@ -419,7 +432,16 @@ function PaymentPage() {
     appointment?.doctorSpecialty || appointment?.department || "Consultation";
   const appointmentDate = appointment?.date || new Date().toISOString();
   const appointmentTime = formatDisplayTime(appointment?.startTime);
-  const payableAmount = Number(appointment?.consultationFee || 0);
+  const consultationFee = Number(appointment?.consultationFee || 0);
+  const serviceFee = Number(appointment?.serviceFee || 0);
+  const taxAmount = Number(appointment?.taxAmount || 0);
+  const discountAmount = Number(
+    appointment?.discountAmount || appointment?.discount || 0,
+  );
+  const payableAmount = Math.max(
+    0,
+    consultationFee + serviceFee + taxAmount - discountAmount,
+  );
   const canCheckout =
     Boolean(appointment) &&
     appointment?.status === "accepted" &&
@@ -593,7 +615,10 @@ function PaymentPage() {
                   Patient
                 </div>
                 <p className="font-headline text-lg font-bold">{patientName}</p>
-                <p className="mt-1 text-sm text-on-surface-variant">
+                <p
+                  className="mt-1 text-sm leading-5 text-on-surface-variant break-all"
+                  title={patientEmail}
+                >
                   {patientEmail}
                 </p>
               </div>
@@ -643,20 +668,53 @@ function PaymentPage() {
                 </div>
               </div>
 
-              <div className="flex items-end justify-between gap-4 pt-4">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-on-surface-variant">
-                    Total amount
-                  </p>
-                  <p className="mt-2 font-headline text-3xl font-extrabold text-on-surface">
-                    {formatCurrency(payableAmount)}
-                  </p>
+              <div className="pt-4">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-on-surface-variant">
+                  Payment breakdown
+                </p>
+
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm text-on-surface-variant">
+                    <span>Consultation fee</span>
+                    <span className="font-semibold text-on-surface">
+                      {formatCurrency(consultationFee)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-on-surface-variant">
+                    <span>Service fee</span>
+                    <span className="font-semibold text-on-surface">
+                      {formatCurrency(serviceFee)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-on-surface-variant">
+                    <span>Tax</span>
+                    <span className="font-semibold text-on-surface">
+                      {formatCurrency(taxAmount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-on-surface-variant">
+                    <span>Discount</span>
+                    <span className="font-semibold text-emerald-700">
+                      - {formatCurrency(discountAmount)}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <CreditCard className="h-5 w-5" />
-                    <span className="text-sm font-bold">Stripe Checkout</span>
+                <div className="mt-4 flex items-end justify-between gap-4 border-t border-outline-variant/30 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-on-surface-variant">
+                      Total amount
+                    </p>
+                    <p className="mt-2 font-headline text-3xl font-extrabold text-on-surface">
+                      {formatCurrency(payableAmount)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <CreditCard className="h-5 w-5" />
+                      <span className="text-sm font-bold">Stripe Checkout</span>
+                    </div>
                   </div>
                 </div>
               </div>
