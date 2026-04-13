@@ -119,11 +119,21 @@ app.use(
   }),
 );
 app.use('/api/appointments', createProxyMiddleware({
-  target: 'http://localhost:5015',
-  changeOrigin: true,
-  onError: (err, req, res) => {
-    res.status(503).json({ error: 'Appointment service unavailable' });
-  }
+    target: 'http://appointment-service:5015',
+    changeOrigin: true,
+    onError: (err, req, res) => {
+        console.error('Appointment Service Error:', err.message);
+        res.status(503).json({ error: 'Appointment service unavailable' });
+    }
+}));
+
+app.use('/api/telemedicine', createProxyMiddleware({
+    target: 'http://telemedicine-service:5018',
+    changeOrigin: true,
+    onError: (err, req, res) => {
+        console.error('Telemedicine Service Error:', err.message);
+        res.status(503).json({ error: 'Telemedicine service unavailable' });
+    }
 }));
 
 // 5. Notification Service Proxy

@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemedicine-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telemedicine-service
+  template:
+    metadata:
+      labels:
+        app: telemedicine-service
+    spec:
+      containers:
+      - name: telemedicine-service
+        image: telemedicine-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5018
+        env:
+        - name: PORT
+          value: "5018"
+        - name: MONGO_URI
+          value: "mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/telemedicine_db?appName=HealthcareCluster"
+        - name: JWT_SECRET
+          value: "care_sync_patient_super_secret_key_2026"
+        - name: APPOINTMENT_SERVICE_URL
+          value: "http://appointment-service:5015"
+        - name: JITSI_DOMAIN
+          value: "meet.jit.si"
+        - name: JITSI_ROOM_PREFIX
+          value: "care-sync"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telemedicine-service
+spec:
+  selector:
+    app: telemedicine-service
+  ports:
+  - port: 5018
+    targetPort: 5018
+  type: ClusterIP

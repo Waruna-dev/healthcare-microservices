@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appointment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appointment-service
+  template:
+    metadata:
+      labels:
+        app: appointment-service
+    spec:
+      containers:
+      - name: appointment-service
+        image: appointment-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5015
+        env:
+        - name: PORT
+          value: "5015"
+        - name: MONGO_URI
+          value: "mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/appointment_db?appName=HealthcareCluster"
+        - name: JWT_SECRET
+          value: "care_sync_patient_super_secret_key_2026"
+        - name: CLOUDINARY_CLOUD_NAME
+          value: "ddaiulr6c"
+        - name: CLOUDINARY_API_KEY
+          value: "285191149631397"
+        - name: CLOUDINARY_API_SECRET
+          value: "mnYIZRu2uDpLWe1sNXAakzQ-mfE"
+        - name: TELEMEDICINE_SERVICE_URL
+          value: "http://telemedicine-service:5018"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appointment-service
+spec:
+  selector:
+    app: appointment-service
+  ports:
+  - port: 5015
+    targetPort: 5015
+  type: ClusterIP
