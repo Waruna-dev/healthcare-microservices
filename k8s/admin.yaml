@@ -1,0 +1,54 @@
+# 1. THE DEPLOYMENT (Runs your Docker Image)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin
+  template:
+    metadata:
+      labels:
+        app: admin
+    spec:
+      containers:
+      - name: admin-container
+        image: warunadev/caresync-admin:v5
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5002
+        env:
+        - name: PORT
+          value: "5002"
+        # --- SECRETS FETCHED FROM KUBERNETES VAULT ---
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: MONGO_URI
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: JWT_SECRET
+        - name: RESEND_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: RESEND_API_KEY
+
+---
+# 2. THE SERVICE (Gives it an internal network IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+spec:
+  type: ClusterIP # Means it is only accessible inside the K8s cluster
+  selector:
+    app: admin
+  ports:
+    - port: 5002
+      targetPort: 5002
