@@ -310,7 +310,7 @@ const AllAppointments = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5015/api/appointments/${selectedAppointment._id}/cancel`, {
+      const response = await fetch(`/api/appointments/${selectedAppointment._id}/cancel`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

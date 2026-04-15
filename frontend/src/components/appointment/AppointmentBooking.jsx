@@ -103,7 +103,7 @@ const AppointmentBooking = () => {
     // Fetch already booked appointments for this doctor
     const fetchBookedAppointments = async () => {
         try {
-            const response = await fetch(`http://localhost:5015/api/appointments/doctor/public/${doctorId}`);
+            const response = await fetch(`/api/appointments/doctor/public/${doctorId}`);
             const data = await response.json();
             
             if (data.success && data.appointments) {
@@ -157,7 +157,7 @@ const AppointmentBooking = () => {
         try {
             const booked = await fetchBookedAppointments();
             
-            const response = await axios.get(`http://localhost:5025/api/doctors/availability/doctor/${doctorId}?includeInactive=true`);
+            const response = await axios.get(`/api/doctors/availability/doctor/${doctorId}?includeInactive=true`);
             
             if (response.data.success && response.data.availability) {
                 const dates = [];
@@ -449,7 +449,7 @@ const AppointmentBooking = () => {
                 setUploadProgress(prev => Math.min(prev + 10, 90));
             }, 500);
             
-            const response = await fetch('http://localhost:5015/api/appointments', {
+            const response = await fetch('/api/appointments', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: submitData

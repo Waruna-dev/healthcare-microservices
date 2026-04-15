@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: warunadev/caresync-frontend:v1
+        image: healthcare-microservices-frontend:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
 

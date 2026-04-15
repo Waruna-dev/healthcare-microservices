@@ -20,7 +20,7 @@ export async function fetchValidDoctors() {
             return doctorsCache;
         }
 
-        const response = await fetch('http://localhost:5025/api/doctors', {
+        const response = await fetch('/api/doctors', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'

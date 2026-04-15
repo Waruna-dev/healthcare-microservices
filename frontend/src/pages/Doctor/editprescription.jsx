@@ -71,7 +71,7 @@ const EditPrescription = () => {
     setLoading(true);
     try {
       const doctorId = user?._id || user?.id;
-      const url = `http://localhost:5015/api/appointments/doctor/public/${doctorId}`;
+      const url = `/api/appointments/doctor/public/${doctorId}`;
       const response = await fetch(url);
       const data = await response.json();
       
@@ -91,7 +91,7 @@ const EditPrescription = () => {
   // Fetch existing prescription
   const fetchExistingPrescription = async () => {
     try {
-      const response = await fetch(`http://localhost:5025/api/prescriptions/appointment/${appointmentId}`);
+      const response = await fetch(`/api/prescriptions/appointment/${appointmentId}`);
       const data = await response.json();
       
       if (data.success && data.prescription) {
@@ -256,7 +256,7 @@ const EditPrescription = () => {
         }))
       };
 
-      const response = await fetch(`http://localhost:5025/api/prescriptions/${existingPrescription._id}`, {
+      const response = await fetch(`/api/prescriptions/${existingPrescription._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prescriptionData)

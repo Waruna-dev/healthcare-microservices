@@ -16,22 +16,34 @@ spec:
     spec:
       containers:
       - name: admin-container
-        image: warunadev/caresync-admin:v2
-        imagePullPolicy: Always
+        image: healthcare-microservices-admin-service:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5002
         env:
         - name: PORT
-          value: "5002"
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: PORT
           
         # --- MICROSERVICE URLS (Internal Kubernetes DNS) ---
         # These allow the Admin pod to talk to the other pods directly!
         - name: DOCTOR_SERVICE_URL
-          value: "http://doctor-service:5025" # Adjust port if doctor-service uses a different one
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: DOCTOR_SERVICE_URL
         - name: PATIENT_SERVICE_URL
-          value: "http://patient-service:5005"
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: PATIENT_SERVICE_URL
         - name: NOTIFICATION_SERVICE_URL
-          value: "http://notification-service:5035"
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: NOTIFICATION_SERVICE_URL
 
         # --- SECRETS FETCHED FROM KUBERNETES VAULT ---
         - name: MONGO_URI

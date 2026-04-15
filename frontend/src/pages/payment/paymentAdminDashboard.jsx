@@ -5,8 +5,8 @@ const apiBaseUrl = import.meta.env.VITE_PAYMENT_API_URL ?? "/api/payments";
 const fallbackPaymentApiBases = [
   apiBaseUrl,
   "/api/payments",
-  "http://localhost:5040/api/payments",
-  "http://localhost:5004/api/payments",
+  "/api/payments",
+  "/api/payments",
 ];
 
 const statusToneMap = {

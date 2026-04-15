@@ -57,7 +57,7 @@ const DoctorAppointmentDetail = () => {
       if (!isSilent) setLoading(true);
       setError(null);
 
-      const url = `http://localhost:5015/api/appointments/${id}`;
+      const url = `/api/appointments/${id}`;
       const response = await fetch(url);
       const data = await response.json();
 
@@ -77,7 +77,7 @@ const DoctorAppointmentDetail = () => {
   const handleAccept = async () => {
     setProcessing(true);
     try {
-      const url = `http://localhost:5015/api/appointments/accept/${id}`;
+      const url = `/api/appointments/accept/${id}`;
       const response = await fetch(url, { method: 'PUT' });
       const data = await response.json();
 
@@ -109,7 +109,7 @@ const DoctorAppointmentDetail = () => {
 
     setProcessing(true);
     try {
-      const url = `http://localhost:5015/api/appointments/reject/${id}`;
+      const url = `/api/appointments/reject/${id}`;
       const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

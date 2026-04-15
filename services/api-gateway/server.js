@@ -103,6 +103,10 @@ app.use(
   createProxyMiddleware({
     target: APPOINTMENT_SERVICE_URL,
     changeOrigin: true,
+    pathRewrite: (path) => `/api/appointments${path}`,
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying Appointment]: ${req.method} ${req.originalUrl} -> ${APPOINTMENT_SERVICE_URL}/api/appointments${req.url}`);
+    },
     onError: (err, req, res) => {
       console.error("Appointment Service Error:", err.message);
       res.status(503).json({ error: 'Appointment service unavailable' });
@@ -127,6 +131,40 @@ app.use(
   }),
 );
 
+// 7. Prescription routes (served by doctor service)
+app.use(
+  "/api/prescriptions",
+  createProxyMiddleware({
+    target: DOCTOR_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/prescriptions${path}`,
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying Prescription]: ${req.method} ${req.originalUrl} -> ${DOCTOR_SERVICE_URL}/api/prescriptions${req.url}`);
+    },
+    onError: (err, req, res) => {
+      console.error("Prescription Service Error:", err.message);
+      res.status(503).json({ success: false, message: "Prescription service temporarily unavailable" });
+    },
+  }),
+);
+
+// 8. Appointment uploaded files
+app.use(
+  "/uploads",
+  createProxyMiddleware({
+    target: APPOINTMENT_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/uploads${path}`,
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[Proxying Upload]: ${req.method} ${req.originalUrl} -> ${APPOINTMENT_SERVICE_URL}/uploads${req.url}`);
+    },
+    onError: (err, req, res) => {
+      console.error("Upload Proxy Error:", err.message);
+      res.status(503).json({ success: false, message: "Upload files unavailable" });
+    },
+  }),
+);
+
 // Root route
 app.get("/", (req, res) => {
   res.send("CareSync API Gateway is running!");
@@ -134,6 +172,15 @@ app.get("/", (req, res) => {
 
 // Health check route
 app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API Gateway is running",
+  });
+});
+
+// Ingress commonly forwards /api/* to this service.
+// Expose an API-prefixed health endpoint to avoid 404s on /api/health.
+app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
     message: "API Gateway is running",

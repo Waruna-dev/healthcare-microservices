@@ -74,7 +74,7 @@ const ViewPrescription = () => {
 
     setLoading(true);
     try {
-      const url = `http://localhost:5015/api/appointments/${appointmentId}`;
+      const url = `/api/appointments/${appointmentId}`;
       console.log('Fetching appointment from:', url);
       
       const response = await fetch(url);
@@ -106,7 +106,7 @@ const ViewPrescription = () => {
       const doctorId = user?._id || user?.id;
       if (!doctorId) return;
       
-      const url = `http://localhost:5015/api/appointments/doctor/public/${doctorId}`;
+      const url = `/api/appointments/doctor/public/${doctorId}`;
       console.log('Fallback: fetching from doctor appointments:', url);
       
       const response = await fetch(url);
@@ -130,7 +130,7 @@ const ViewPrescription = () => {
   // Fetch prescription details
   const fetchPrescription = async (aptId) => {
     try {
-      const response = await fetch(`http://localhost:5025/api/prescriptions/appointment/${aptId}`);
+      const response = await fetch(`/api/prescriptions/appointment/${aptId}`);
       const data = await response.json();
       
       if (data.success && data.prescription) {
@@ -354,7 +354,7 @@ const ViewPrescription = () => {
                         </div>
                       </div>
                       <a
-                        href={`http://localhost:5015/${report.filePath}`}
+                        href={`/uploads/${report.filePath}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"

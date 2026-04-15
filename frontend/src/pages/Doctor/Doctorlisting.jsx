@@ -3,8 +3,8 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, Bell, User, Settings, LogOut, FileText, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
-const API_BASE = 'http://localhost:5025/api/doctors';
-const AVAILABILITY_API = 'http://localhost:5025/api/doctors/availability';
+const API_BASE = '/api/doctors';
+const AVAILABILITY_API = '/api/doctors/availability';
 
 // Specialty color mapping
 const specialtyColors = {

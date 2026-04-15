@@ -1,0 +1,61 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doctor-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: doctor
+  template:
+    metadata:
+      labels:
+        app: doctor
+    spec:
+      containers:
+      - name: doctor-container
+        image: healthcare-microservices-doctor-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5025
+        env:
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: PORT
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: MONGODB_URI
+        - name: CLOUDINARY_CLOUD_NAME
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: CLOUDINARY_CLOUD_NAME
+        - name: CLOUDINARY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: CLOUDINARY_API_KEY
+        - name: CLOUDINARY_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: CLOUDINARY_API_SECRET
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: doctor-service
+spec:
+  type: ClusterIP
+  selector:
+    app: doctor
+  ports:
+  - protocol: TCP
+    port: 5025
+    targetPort: 5025

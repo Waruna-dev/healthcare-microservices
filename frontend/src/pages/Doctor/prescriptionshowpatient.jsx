@@ -38,7 +38,7 @@ const PrescriptionShowPatient = () => {
       const patientEmail = patient.email;
 
       // Fetch prescriptions from backend
-      const response = await fetch(`http://localhost:5025/api/prescriptions/patient/${patientEmail}`);
+      const response = await fetch(`/api/prescriptions/patient/${patientEmail}`);
       const data = await response.json();
 
       if (data.success && data.prescriptions) {

@@ -13,6 +13,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    service: 'admin-service',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ==========================================
 // ADMIN DATABASE SCHEMA (No models folder needed)
 // ==========================================

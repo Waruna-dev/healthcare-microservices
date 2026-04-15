@@ -1,0 +1,81 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appointment-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appointment
+  template:
+    metadata:
+      labels:
+        app: appointment
+    spec:
+      containers:
+      - name: appointment-container
+        image: healthcare-microservices-appointment-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5015
+        env:
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: PORT
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: MONGO_URI
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: JWT_SECRET
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: GEMINI_API_KEY
+        - name: PAYMENT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: PAYMENT_SERVICE_URL
+        - name: TELEMEDICINE_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: TELEMEDICINE_SERVICE_URL
+        - name: DOCTOR_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: DOCTOR_SERVICE_URL
+        - name: PATIENT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: PATIENT_SERVICE_URL
+        - name: NOTIFICATION_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: appointment-secrets
+              key: NOTIFICATION_SERVICE_URL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appointment-service
+spec:
+  type: ClusterIP
+  selector:
+    app: appointment
+  ports:
+  - protocol: TCP
+    port: 5015
+    targetPort: 5015

@@ -119,7 +119,7 @@ const DoctorPrescriptions = () => {
 
     setLoading(true);
     try {
-      const url = `http://localhost:5015/api/appointments/doctor/public/${doctorId}`;
+      const url = `/api/appointments/doctor/public/${doctorId}`;
       const response = await fetch(url);
       const data = await response.json();
       
@@ -146,7 +146,7 @@ const DoctorPrescriptions = () => {
   const fetchPrescriptions = async () => {
     try {
       const doctorId = user?._id || user?.id;
-      const response = await fetch(`http://localhost:5025/api/prescriptions/doctor/${doctorId}`);
+      const response = await fetch(`/api/prescriptions/doctor/${doctorId}`);
       const data = await response.json();
       
       if (data.success) {
@@ -295,7 +295,7 @@ const DoctorPrescriptions = () => {
 
   const handleSavePrescription = async () => {
     try {
-      const response = await fetch('http://localhost:5015/api/prescriptions/create', {
+      const response = await fetch('/api/prescriptions/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +335,7 @@ const DoctorPrescriptions = () => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`http://localhost:5015/api/prescriptions/${prescription._id}`, {
+      const response = await fetch(`/api/prescriptions/${prescription._id}`, {
         method: 'DELETE'
       });
       

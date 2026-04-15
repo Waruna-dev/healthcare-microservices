@@ -45,3 +45,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 coverage/
+
+# Local temporary kubeconfig copy used for context troubleshooting
+.kubeconfig-temp

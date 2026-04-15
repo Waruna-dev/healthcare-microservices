@@ -16,28 +16,49 @@ spec:
     spec:
       containers:
       - name: api-gateway-container
-        image: warunadev/caresync-api-gateway:v1
-        imagePullPolicy: Always
+        image: healthcare-microservices-api-gateway:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5000
         env:
         - name: PORT
-          value: "5000"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: PORT
         
         # --- MICROSERVICE INTERNAL URLS ---
         # These tell the Gateway exactly where to find the other pods
         - name: PATIENT_SERVICE_URL
-          value: "http://patient-service:5005"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: PATIENT_SERVICE_URL
         - name: DOCTOR_SERVICE_URL
-          value: "http://doctor-service:5025"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: DOCTOR_SERVICE_URL
         - name: ADMIN_SERVICE_URL
-          value: "http://admin-service:5002"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: ADMIN_SERVICE_URL
         - name: PAYMENT_SERVICE_URL
-          value: "http://payment-service:5040"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: PAYMENT_SERVICE_URL
         - name: APPOINTMENT_SERVICE_URL
-          value: "http://appointment-service:5015"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: APPOINTMENT_SERVICE_URL
         - name: NOTIFICATION_SERVICE_URL
-          value: "http://notification-service:5035"
+          valueFrom:
+            secretKeyRef:
+              name: api-gateway-secrets
+              key: NOTIFICATION_SERVICE_URL
 
 ---
 # 2. THE SERVICE (Networking)

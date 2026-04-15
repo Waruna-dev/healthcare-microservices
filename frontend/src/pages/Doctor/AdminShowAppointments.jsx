@@ -123,7 +123,7 @@ const AdminShowAppointments = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5015/api/appointments/admin/all`, {
+      const response = await fetch(`/api/appointments/admin/all`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -342,7 +342,7 @@ const AdminShowAppointments = () => {
   const handleViewReport = (report) => {
     try {
       let fileUrl;
-      const baseUrl = 'http://localhost:5015';
+      const baseUrl = '/uploads';
       if (report.filePath) {
         if (report.filePath.startsWith('http')) {
           fileUrl = report.filePath;

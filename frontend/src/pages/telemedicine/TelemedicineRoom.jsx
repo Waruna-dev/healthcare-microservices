@@ -70,7 +70,7 @@ const TelemedicineRoom = () => {
   const fetchCompletionStatus = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5015/api/appointments/${id}/completion-status`, {
+      const response = await fetch(`/api/appointments/${id}/completion-status`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -111,7 +111,7 @@ const TelemedicineRoom = () => {
       const token = localStorage.getItem('token');
       console.log('🔍 Fetching telemedicine info for appointment:', id);
 
-      const response = await fetch(`http://localhost:5015/api/appointments/${id}/telemedicine`, {
+      const response = await fetch(`/api/appointments/${id}/telemedicine`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -469,7 +469,7 @@ const TelemedicineRoom = () => {
 
       console.log(`📝 ${userType} marking appointment as ${appointmentStatus}...`, id);
       
-      const response = await fetch(`http://localhost:5015/api/appointments/${id}/complete`, {
+      const response = await fetch(`/api/appointments/${id}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

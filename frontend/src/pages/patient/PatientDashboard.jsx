@@ -177,7 +177,7 @@ const PatientDashboard = () => {
       setLoadingAppointments(true);
       const token = localStorage.getItem('token');
       
-      const response = await fetch(`http://localhost:5015/api/appointments/patient/${patientInfo.patientId}`, {
+      const response = await fetch(`/api/appointments/patient/${patientInfo.patientId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -3,8 +3,8 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Bell, User, Settings, LogOut, X, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
 import { resolveDoctorIdForApi } from '../../utils/doctorId';
 
-const API_BASE = 'http://localhost:5025/api/doctors';
-const AVAILABILITY_API = 'http://localhost:5025/api/doctors/availability';
+const API_BASE = '/api/doctors';
+const AVAILABILITY_API = '/api/doctors/availability';
 
 // Sample fallback data
 const SAMPLE_DOCTOR = {

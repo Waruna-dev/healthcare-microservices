@@ -16,6 +16,14 @@ app.use(express.json()); // Allows us to accept JSON data in the body
 // Make the 'uploads' folder accessible via URL
 app.use('/uploads', express.static('uploads'));
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    service: 'patient-service',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Connect our real patient routes (Registration & Login)
 //app.use('/api/patients', require('./routes/patientRoutes'));
 app.use('/', require('./routes/patientRoutes'));

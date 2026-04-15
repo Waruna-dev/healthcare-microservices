@@ -16,13 +16,16 @@ spec:
     spec:
       containers:
       - name: patient-container
-        image: warunadev/caresync-patient:v3
-        imagePullPolicy: Always
+        image: healthcare-microservices-patient-service:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5005  
         env:
         - name: PORT
-          value: "5005"
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: PORT
         # --- SECRETS FETCHED FROM KUBERNETES VAULT ---
         - name: MONGO_URI
           valueFrom:

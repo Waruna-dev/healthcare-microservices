@@ -4,7 +4,7 @@ import axios from 'axios';
 // 1. Create a configured Axios instance
 // Updated to point to the Kubernetes Ingress (Port 80)
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost/api', 
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },

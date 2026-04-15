@@ -69,7 +69,7 @@ const CreatePrescription = () => {
     setLoading(true);
     try {
       const doctorId = user?._id || user?.id;
-      const url = `http://localhost:5015/api/appointments/doctor/public/${doctorId}`;
+      const url = `/api/appointments/doctor/public/${doctorId}`;
       const response = await fetch(url);
       const data = await response.json();
       
@@ -226,7 +226,7 @@ const CreatePrescription = () => {
         }))
       };
 
-      const response = await fetch('http://localhost:5025/api/prescriptions/create', {
+      const response = await fetch('/api/prescriptions/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prescriptionData)
