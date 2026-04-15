@@ -1,0 +1,54 @@
+---
+# 1. THE DEPLOYMENT (Runs your Docker Image)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - name: api-gateway-container
+        image: warunadev/caresync-api-gateway:v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        
+        # --- MICROSERVICE INTERNAL URLS ---
+        # These tell the Gateway exactly where to find the other pods
+        - name: PATIENT_SERVICE_URL
+          value: "http://patient-service:5005"
+        - name: DOCTOR_SERVICE_URL
+          value: "http://doctor-service:5025"
+        - name: ADMIN_SERVICE_URL
+          value: "http://admin-service:5002"
+        - name: PAYMENT_SERVICE_URL
+          value: "http://payment-service:5040"
+        - name: APPOINTMENT_SERVICE_URL
+          value: "http://appointment-service:5015"
+        - name: NOTIFICATION_SERVICE_URL
+          value: "http://notification-service:5035"
+
+---
+# 2. THE SERVICE (Networking)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-service
+spec:
+  type: ClusterIP # Keeps the Gateway secure inside the cluster until Ingress exposes it
+  selector:
+    app: api-gateway
+  ports:
+    - port: 5000
+      targetPort: 5000

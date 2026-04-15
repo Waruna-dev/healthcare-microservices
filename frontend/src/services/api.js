@@ -2,8 +2,9 @@
 import axios from 'axios';
 
 // 1. Create a configured Axios instance
+// Updated to point to the Kubernetes Ingress (Port 80)
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api', 
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost/api', 
   headers: {
     'Content-Type': 'application/json',
   },
@@ -35,7 +36,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-     
+      
       if (window.location.pathname.includes('/admin')) {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminUser');
@@ -43,7 +44,7 @@ api.interceptors.response.use(
           window.location.href = '/admin/login';
         }
       } 
-     
+      
       else {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -126,15 +127,12 @@ export const appointmentAPI = {
 
 
 export const telemedicineAPI = {
+  // UPDATED: Now uses the custom axios instance instead of raw fetch
+  // It automatically gets the correct Kubernetes URL and injects the token!
   getSessionInfo: async (appointmentId) => {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`http://localhost:5015/api/appointments/${appointmentId}/telemedicine`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    return response.json();
+    console.log('📡 Fetching telemedicine session info for:', appointmentId);
+    const response = await api.get(`/appointments/${appointmentId}/telemedicine`);
+    return response.data;
   }
 };
 
