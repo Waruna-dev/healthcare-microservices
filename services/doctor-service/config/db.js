@@ -54,9 +54,17 @@ const connectDB = async () => {
         });
 
     } catch (error) {
-        console.error(`❌ MongoDB Connection Failed: ${error.message}`);
-        console.log(`⚠️ Please check your MongoDB connection string and network access`);
-        process.exit(1);
+        console.error(`\u274c MongoDB Connection Failed: ${error.message}`);
+        console.log(`\u26a0\ufe0f Please check your MongoDB connection string and network access`);
+        
+        // Don't exit in containerized environments - allow service to run without DB
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('Continuing without database connection for development...');
+            return;
+        }
+        
+        // In production, you might want to exit or implement retry logic
+        console.log('Service will continue running but database operations will fail');
     }
 };
 
