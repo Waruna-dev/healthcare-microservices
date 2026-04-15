@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  doctor-service:
+    build: ./services/doctor-service
+    container_name: doctor-container
+    ports:
+      - "5025:5025"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      - PORT=5025
+      - MONGODB_URI=mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/doctor_db?appName=HealthcareCluster
+      - JWT_SECRET=care_sync_patient_super_secret_key_2026
+      - GEMINI_API_KEY=AIzaSyCOcwBo0PaCIvuQX0Wt3nRVGr2SLTQcp-A
+      - CLOUDINARY_CLOUD_NAME=dsvrla6zk
+      - CLOUDINARY_API_KEY=172273143945346
+      - CLOUDINARY_API_SECRET=-o7EQ2sk4awv61uDcdBBHyYukMvs
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5035
+      - PAYMENT_SERVICE_URL=http://payment-service:5040
+      - PATIENT_SERVICE_URL=http://patient-service:5005
+      - APPOINTMENT_SERVICE_URL=http://appointment-service:5015
+      - JITSI_DOMAIN=meet.jit.si
+      - JITSI_ROOM_PREFIX=care-sync
+    restart: unless-stopped
+    networks:
+      - healthcare-network
+
+  patient-service:
+    build: ./services/patient-service
+    container_name: patient-container
+    ports:
+      - "5005:5005"
+    environment:
+      - PORT=5005
+      - MONGODB_URI=mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/patient_db?appName=HealthcareCluster
+    restart: unless-stopped
+    networks:
+      - healthcare-network
+
+  appointment-service:
+    build: ./services/appointment-service
+    container_name: appointment-container
+    ports:
+      - "5015:5015"
+    environment:
+      - PORT=5015
+      - MONGODB_URI=mongodb+srv://admin_db_user:orXvIMG0yRmyMfVc@healthcarecluster.pvbkhea.mongodb.net/appointment_db?appName=HealthcareCluster
+    restart: unless-stopped
+    networks:
+      - healthcare-network
+
+networks:
+  healthcare-network:
+    driver: bridge
