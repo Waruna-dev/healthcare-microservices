@@ -55,7 +55,7 @@ const PatientLogin = () => {
         if (role === 'doctor') {
           navigate('/doctor/dashboard');
         } else {
-          navigate('/dashboard');
+          navigate('/patient/dashboard');
         }
       }, 1000);
 

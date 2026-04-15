@@ -5,10 +5,14 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
 
-const PAYMENT_SERVICE_URL =
-  process.env.PAYMENT_SERVICE_URL || "http://localhost:5040";
-const NOTIFICATION_SERVICE_URL =
-  process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5035";
+// --- 🚨 UPDATED: Environment Variables for ALL targets 🚨 ---
+const PATIENT_SERVICE_URL = process.env.PATIENT_SERVICE_URL || "http://localhost:5005";
+const DOCTOR_SERVICE_URL = process.env.DOCTOR_SERVICE_URL || "http://localhost:5025";
+const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL || "http://localhost:5002";
+const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || "http://localhost:5040";
+const APPOINTMENT_SERVICE_URL = process.env.APPOINTMENT_SERVICE_URL || "http://localhost:5015";
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5035";
+
 const PORT = process.env.PORT || 5000;
 
 // Enable CORS
@@ -18,25 +22,17 @@ app.use(cors());
 app.use(
   "/api/patients",
   createProxyMiddleware({
-    target: "http://localhost:5005",
+    target: PATIENT_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: {
       "^/api/patients": "",
     },
     onProxyReq: (proxyReq, req, res) => {
-      console.log(
-        `[Proxying Patient]: ${req.method} ${req.url} -> http://localhost:5005${req.url.replace(
-          "/api/patients",
-          "",
-        )}`,
-      );
+      console.log(`[Proxying Patient]: ${req.method} ${req.url} -> ${PATIENT_SERVICE_URL}${req.url.replace("/api/patients", "")}`);
     },
     onError: (err, req, res) => {
       console.error("Patient Service Error:", err.message);
-      res.status(503).json({
-        success: false,
-        message: "Patient service temporarily unavailable",
-      });
+      res.status(503).json({ success: false, message: "Patient service temporarily unavailable" });
     },
   }),
 );
@@ -50,22 +46,17 @@ app.use(
     next();
   },
   createProxyMiddleware({
-    target: "http://localhost:5025",
+    target: DOCTOR_SERVICE_URL,
     changeOrigin: true,
     secure: false,
     pathRewrite: (path) => `/api/doctors${path}`,
     logLevel: "debug",
     onProxyReq: (proxyReq, req, res) => {
-      console.log(
-        `[Proxying Doctor]: ${req.method} ${req.url} -> http://localhost:5025/api/doctors${req.url}`,
-      );
+      console.log(`[Proxying Doctor]: ${req.method} ${req.url} -> ${DOCTOR_SERVICE_URL}/api/doctors${req.url}`);
     },
     onError: (err, req, res) => {
       console.error("Doctor Service Error:", err.message);
-      res.status(503).json({
-        success: false,
-        message: "Doctor service temporarily unavailable",
-      });
+      res.status(503).json({ success: false, message: "Doctor service temporarily unavailable" });
     },
   }),
 );
@@ -74,25 +65,17 @@ app.use(
 app.use(
   "/api/admin",
   createProxyMiddleware({
-    target: "http://localhost:5002",
+    target: ADMIN_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: {
       "^/api/admin": "",
     },
     onProxyReq: (proxyReq, req, res) => {
-      console.log(
-        `[Proxying Admin]: ${req.method} ${req.url} -> http://localhost:5002${req.url.replace(
-          "/api/admin",
-          "",
-        )}`,
-      );
+      console.log(`[Proxying Admin]: ${req.method} ${req.url} -> ${ADMIN_SERVICE_URL}${req.url.replace("/api/admin", "")}`);
     },
     onError: (err, req, res) => {
       console.error("Admin Service Error:", err.message);
-      res.status(503).json({
-        success: false,
-        message: "Admin service temporarily unavailable",
-      });
+      res.status(503).json({ success: false, message: "Admin service temporarily unavailable" });
     },
   }),
 );
@@ -105,29 +88,29 @@ app.use(
     changeOrigin: true,
     pathRewrite: (path) => `/api/payments${path}`,
     onProxyReq: (proxyReq, req, res) => {
-      console.log(
-        `[Proxying Payment]: ${req.method} ${req.originalUrl} -> ${PAYMENT_SERVICE_URL}/api/payments${req.url}`,
-      );
+      console.log(`[Proxying Payment]: ${req.method} ${req.originalUrl} -> ${PAYMENT_SERVICE_URL}/api/payments${req.url}`);
     },
     onError: (err, req, res) => {
       console.error("Payment Service Error:", err.message);
-      res.status(503).json({
-        success: false,
-        message: "Payment service temporarily unavailable",
-      });
+      res.status(503).json({ success: false, message: "Payment service temporarily unavailable" });
     },
   }),
 );
-app.use('/api/appointments', createProxyMiddleware({
-  target: 'http://localhost:5015',
-  changeOrigin: true,
-  pathRewrite: (path) => `/api/appointments${path}`,
-  onError: (err, req, res) => {
-    res.status(503).json({ error: 'Appointment service unavailable' });
-  }
-}));
 
-// 5. Notification Service Proxy
+// 5. Appointment Service Proxy
+app.use(
+  '/api/appointments', 
+  createProxyMiddleware({
+    target: APPOINTMENT_SERVICE_URL,
+    changeOrigin: true,
+    onError: (err, req, res) => {
+      console.error("Appointment Service Error:", err.message);
+      res.status(503).json({ error: 'Appointment service unavailable' });
+    }
+  })
+);
+
+// 6. Notification Service Proxy
 app.use(
   "/api/notifications",
   createProxyMiddleware({
@@ -135,25 +118,14 @@ app.use(
     changeOrigin: true,
     pathRewrite: (path) => `/api/notifications${path}`,
     onProxyReq: (proxyReq, req, res) => {
-      console.log(
-        `[Proxying Notification]: ${req.method} ${req.originalUrl} -> ${NOTIFICATION_SERVICE_URL}/api/notifications${req.url}`,
-      );
+      console.log(`[Proxying Notification]: ${req.method} ${req.originalUrl} -> ${NOTIFICATION_SERVICE_URL}/api/notifications${req.url}`);
     },
     onError: (err, req, res) => {
       console.error("Notification Service Error:", err.message);
-      res.status(503).json({
-        success: false,
-        message: "Notification service temporarily unavailable",
-      });
+      res.status(503).json({ success: false, message: "Notification service temporarily unavailable" });
     },
   }),
 );
-
-// Placeholders for future services
-/*
-app.use('/api/appointments', createProxyMiddleware({ target: 'http://localhost:5003', changeOrigin: true }));
-app.use('/api/payments',     createProxyMiddleware({ target: 'http://localhost:5004', changeOrigin: true }));
-*/
 
 // Root route
 app.get("/", (req, res) => {
@@ -170,14 +142,11 @@ app.get("/health", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`✅ API Gateway running on port ${PORT}`);
-  console.log(`📍 Patient Service : http://localhost:5005 (via /api/patients)`);
-  console.log(`📍 Doctor Service  : http://localhost:5025 (via /api/doctors)`);
-  console.log(`📍 Admin Service   : http://localhost:5002 (via /api/admin)`);
-  console.log(
-    `📍 Payment Service : ${PAYMENT_SERVICE_URL} (via /api/payments)`,
-  );
-  console.log(
-    `📍 Notification Service : ${NOTIFICATION_SERVICE_URL} (via /api/notifications)`,
-  );
+  console.log(`📍 Patient Target : ${PATIENT_SERVICE_URL}`);
+  console.log(`📍 Doctor Target  : ${DOCTOR_SERVICE_URL}`);
+  console.log(`📍 Admin Target   : ${ADMIN_SERVICE_URL}`);
+  console.log(`📍 Payment Target : ${PAYMENT_SERVICE_URL}`);
+  console.log(`📍 Appt Target    : ${APPOINTMENT_SERVICE_URL}`);
+  console.log(`📍 Notif Target   : ${NOTIFICATION_SERVICE_URL}`);
   console.log(`🌐 Frontend should use: http://localhost:${PORT}/api/...`);
 });
