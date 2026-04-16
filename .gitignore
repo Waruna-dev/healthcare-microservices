@@ -48,3 +48,6 @@ coverage/
 
 # Local temporary kubeconfig copy used for context troubleshooting
 .kubeconfig-temp
+# Local secret template (never commit)
+k8s/secrets-template.yaml
+.secrets-template.yaml
