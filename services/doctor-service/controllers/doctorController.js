@@ -1,3 +1,4 @@
+// controllers/doctorController.js
 const Doctor = require('../models/Doctor');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -109,9 +110,9 @@ const registerDoctor = async (req, res) => {
 
         let profilePicture = profileImageUrl || '';
         
+        // Save the local file path instead of a massive Base64 string to prevent MongoDB crash
         if (req.file) {
-            const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-            profilePicture = base64Image;
+            profilePicture = req.file.path.replace(/\\/g, '/');
         }
 
         const existingDoctor = await Doctor.findOne({
@@ -161,7 +162,6 @@ const registerDoctor = async (req, res) => {
 
         await doctor.save();
 
-        // CLEAR CACHE WHEN NEW DOCTOR REGISTERS 
         clearCache('doctors');
 
         const doctorResponse = doctor.toJSON();
@@ -207,14 +207,12 @@ const loginDoctor = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Please provide email and password' });
         }
 
-        // 1. Find the doctor
         const doctor = await Doctor.findOne({ email }).select('+password');
         
         if (!doctor) {
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
         
-        // 2. Check Approval Status
         if (doctor.status === 'pending') {
             return res.status(403).json({ success: false, message: 'Your account is still pending admin approval.' });
         }
@@ -226,14 +224,12 @@ const loginDoctor = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Account missing password. Please contact an administrator.' });
         }
 
-        // 3. Check password
         const isMatch = await bcrypt.compare(password, doctor.password);
 
         if (!isMatch) {
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
 
-        // 4. Generate Token
         const token = jwt.sign(
             { id: doctor._id, role: doctor.role }, 
             process.env.JWT_SECRET || 'your_fallback_secret_key', 
@@ -271,7 +267,6 @@ const updateDoctor = async (req, res) => {
             });
         }
 
-        // Handle profileImageUrl to profilePicture mapping
         if (updates.profileImageUrl) {
             updates.profilePicture = updates.profileImageUrl;
             delete updates.profileImageUrl;
@@ -293,7 +288,6 @@ const updateDoctor = async (req, res) => {
             });
         }
 
-        // CLEAR CACHE WHEN DOCTOR PROFILE IS UPDATED 
         clearCache('doctors');
 
         res.status(200).json({
@@ -331,7 +325,6 @@ const deleteDoctor = async (req, res) => {
             });
         }
 
-        //  CLEAR CACHE WHEN DOCTOR IS DELETED 
         clearCache('doctors');
 
         res.status(200).json({
@@ -400,7 +393,6 @@ const toggleDoctorAvailability = async (req, res) => {
         doctor.updatedAt = Date.now();
         await doctor.save();
 
-        //  CLEAR CACHE WHEN AVAILABILITY CHANGES 
         clearCache('doctors');
 
         res.status(200).json({
@@ -422,19 +414,26 @@ const toggleDoctorAvailability = async (req, res) => {
 // ==========================================
 const adminUpdateDoctor = async (req, res) => {
     try {
+        const updates = { ...req.body };
+
+        // 🚨 CRITICAL SECURITY FIX: Doctor Service safely hashes the plain text password here
+        if (updates.password && updates.password.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            updates.password = await bcrypt.hash(updates.password, salt);
+        } else {
+            delete updates.password; 
+        }
+
         const updatedDoctor = await Doctor.findByIdAndUpdate(
             req.params.id,
-            {
-                $set: req.body 
-            },
+            { $set: updates },
             { new: true }
-        );
+        ).select('-password'); 
 
         if (!updatedDoctor) {
             return res.status(404).json({ success: false, message: 'Doctor not found' });
         }
 
-        //  CLEAR CACHE WHEN ADMIN APPROVES/REJECTS 
         clearCache('doctors');
 
         res.status(200).json({ success: true, data: updatedDoctor });

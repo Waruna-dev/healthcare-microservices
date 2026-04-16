@@ -3,10 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { Search, Edit, Trash2, X, User, Mail, Phone, AlertTriangle, CheckCircle, Lock, Stethoscope, FileText } from 'lucide-react';
 import axios from 'axios';
 
+// 🚨 KUBERNETES FIX: Use a relative path to hit your Ingress -> API Gateway -> Admin Service
+// If your gateway maps admin to just /api/doctors, change this to '/api/doctors'
+const API_BASE_URL = '/api/admin/doctors';
+
 const ManageDoctor = () => {
   const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false); // NEW: Tracks button loading states
+  const [isProcessing, setIsProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Modal States
@@ -35,7 +39,8 @@ const ManageDoctor = () => {
       setIsLoading(true);
       const token = localStorage.getItem('adminToken');
       
-      const response = await axios.get('http://localhost:5002/doctors', {
+      // 🚨 FIX: Using the relative API Gateway path
+      const response = await axios.get(API_BASE_URL, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -57,7 +62,6 @@ const ManageDoctor = () => {
     }, 3000); 
   };
 
-  // FIX: Added optional chaining (?.) to prevent crashes if a field is undefined
   const filteredDoctors = doctors.filter(doc => 
     doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     doc.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -76,13 +80,14 @@ const ManageDoctor = () => {
   const handleUpdateDoctor = async (e) => {
     e.preventDefault();
     try {
-      setIsProcessing(true); // Disable button
+      setIsProcessing(true);
       const token = localStorage.getItem('adminToken');
-      await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}`, selectedDoctor, {
+      
+      // 🚨 FIX: Using the relative API Gateway path
+      await axios.put(`${API_BASE_URL}/${selectedDoctor._id}`, selectedDoctor, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // FIX: Fetch fresh data instead of guessing the array state
       await fetchDoctors(); 
       
       setIsEditModalOpen(false);
@@ -102,13 +107,14 @@ const ManageDoctor = () => {
     if (!doctorToDelete) return;
 
     try {
-      setIsProcessing(true); // Disable button
+      setIsProcessing(true);
       const token = localStorage.getItem('adminToken');
-      await axios.delete(`http://localhost:5002/doctors/${doctorToDelete._id}`, {
+      
+      // 🚨 FIX: Using the relative API Gateway path
+      await axios.delete(`${API_BASE_URL}/${doctorToDelete._id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // FIX: Fetch fresh data to guarantee the UI matches the database perfectly
       await fetchDoctors();
       
       setDoctorToDelete(null); 

@@ -5,11 +5,10 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
+// We don't need bcrypt here anymore because the Doctor Service handles its own hashing!
 
 const { protectAdmin } = require('../middleware/authAdmin');
 
-// --- NEW: Import Message Controllers ---
 const { 
   submitMessage, 
   getAllMessages, 
@@ -17,10 +16,8 @@ const {
   deleteMessage 
 } = require('../controllers/messageController');
 
-// Fetch the Admin model we defined in server.js
 const Admin = mongoose.model('Admin');
 
-// Helper to generate token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
@@ -56,11 +53,9 @@ router.post('/login', async (req, res) => {
 // ==========================================
 router.get('/patients', protectAdmin, async (req, res) => {
   try {
-    // 1. Hit the root route because Patient Service strips the path!
     const targetUrl = `${process.env.PATIENT_SERVICE_URL}/`;
     const response = await axios.get(targetUrl);
 
-    // 2. Bulletproof Array Extraction (Fixes the empty frontend table)
     let patientsArray = [];
     if (Array.isArray(response.data)) patientsArray = response.data;
     else if (Array.isArray(response.data.data)) patientsArray = response.data.data;
@@ -108,10 +103,7 @@ router.get('/demographics', protectAdmin, async (req, res) => {
 
     let patientsCount = 0;
     try {
-      // Hit the root route for patients
       const patientRes = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
-      
-      // Robustly extract the count
       if (Array.isArray(patientRes.data)) patientsCount = patientRes.data.length;
       else if (Array.isArray(patientRes.data.data)) patientsCount = patientRes.data.data.length;
       else if (Array.isArray(patientRes.data.patients)) patientsCount = patientRes.data.patients.length;
@@ -124,8 +116,8 @@ router.get('/demographics', protectAdmin, async (req, res) => {
     
     try {
       if (process.env.DOCTOR_SERVICE_URL) {
-        // Hit the full /api/doctors route because Doctor Service keeps the path
-        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/?limit=1000`);
+        // Correct path to fetch doctors
+        const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors?limit=1000`);
         
         let allDoctors = [];
         if (Array.isArray(doctorRes.data)) allDoctors = doctorRes.data;
@@ -198,26 +190,17 @@ router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
 
     if (!email || !name) return res.status(400).json({ message: "Doctor email and name are required." });
 
+    // 🚨 FIX: Generate plain text password. Do NOT hash it here!
     const tempPassword = crypto.randomBytes(4).toString('hex');
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-    // 1. Update Database via Doctor Service
+    // 1. Update Database via Doctor Service (The Doctor Service will hash this securely)
     await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${doctorId}`, {
       status: 'approved',
-      password: hashedPassword
+      password: tempPassword 
     });
 
-    // --- NEW DEBUG CONSOLE LOGS ---
     const targetUrl = `${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-approved`;
     
-    console.log("\n==========================================");
-    console.log("🚀 DEBUG: CALLING NOTIFICATION SERVICE");
-    console.log("🔗 EXACT URL: ", targetUrl);
-    console.log("📦 PAYLOAD: ", { email, name, tempPassword });
-    console.log("==========================================\n");
-    // ------------------------------------
-
     // 2. Trigger Email via Notification Service
     try {
       await axios.post(targetUrl, {
@@ -232,6 +215,7 @@ router.put('/doctors/:id/approve', protectAdmin, async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Doctor approved and email sent successfully!' });
   } catch (error) {
+    console.error("Failed to approve doctor:", error.message);
     res.status(500).json({ message: 'Failed to approve doctor.' });
   }
 });
@@ -246,10 +230,8 @@ router.put('/doctors/:id/reject', protectAdmin, async (req, res) => {
 
     if (!email || !name) return res.status(400).json({ message: "Doctor email and name are required." });
     
-    // 1. Delete Database via Doctor Service
     await axios.delete(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/${doctorId}`);
 
-    // 2. Trigger Email via Notification Service
     try {
       await axios.post(`${process.env.NOTIFICATION_SERVICE_URL}/api/notifications/doctor-rejected`, {
         email,
@@ -345,7 +327,7 @@ router.delete('/profile', protectAdmin, async (req, res) => {
 // ==========================================
 router.get('/doctors', protectAdmin, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/?limit=1000`);
+    const response = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors?limit=1000`);
     
     let allDoctors = [];
     if (response.data.doctors && Array.isArray(response.data.doctors)) {
@@ -368,13 +350,7 @@ router.get('/doctors', protectAdmin, async (req, res) => {
 // ==========================================
 router.put('/doctors/:id', protectAdmin, async (req, res) => {
   try {
-    if (req.body.password) {
-      const salt = await bcrypt.genSalt(10);
-      req.body.password = await bcrypt.hash(req.body.password, salt);
-    } else {
-      delete req.body.password; 
-    }
-
+    // 🚨 FIX: Removed bcrypt logic here. Just forward the body, let Doctor Service hash it!
     const response = await axios.put(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/admin/${req.params.id}`, req.body);
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
@@ -397,13 +373,9 @@ router.delete('/doctors/:id', protectAdmin, async (req, res) => {
 });
 
 // ==========================================
-// SUPPORT INBOX ROUTES (NEW)
+// SUPPORT INBOX ROUTES
 // ==========================================
-
-// PUBLIC: Submit a message from the Contact Us page
 router.post('/contact', submitMessage);
-
-// PRIVATE: Admin message management
 router.get('/messages', protectAdmin, getAllMessages);
 router.put('/messages/:id', protectAdmin, updateMessageStatus);
 router.delete('/messages/:id', protectAdmin, deleteMessage);

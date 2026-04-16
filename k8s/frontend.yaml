@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: warunadev/caresync-frontend:v1
+        image: warunadev/caresync-frontend:v2
         ports:
         - containerPort: 80
 

@@ -1,0 +1,85 @@
+---
+# 1. THE DEPLOYMENT (Manages the Doctor Pods)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doctor-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: doctor
+  template:
+    metadata:
+      labels:
+        app: doctor
+    spec:
+      containers:
+      - name: doctor-container
+        # Update this to match your actual Docker Hub image name!
+        image: warunadev/caresync-doctor:v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5025  
+        env:
+        # --- STANDARD ENVIRONMENT VARIABLES ---
+        - name: PORT
+          value: "5025"
+        
+        # 🚨 KUBERNETES INTERNAL DNS FIX 🚨
+        # Replaced 'localhost' with the actual K8s Service names
+        - name: NOTIFICATION_SERVICE_URL
+          value: "http://notification-service:5035"
+        - name: PAYMENT_SERVICE_URL
+          value: "http://payment-service:5040"
+        - name: PATIENT_SERVICE_URL
+          value: "http://patient-service:5005"
+        - name: APPOINTMENT_SERVICE_URL
+          value: "http://appointment-service:5015"
+
+        # --- SECRETS FETCHED FROM KUBERNETES VAULT ---
+        - name: MONGODB_URI  # Matching your .env exactly
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: MONGO_URI
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: JWT_SECRET
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: GEMINI_API_KEY
+        - name: CLOUDINARY_CLOUD_NAME
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: CLOUDINARY_CLOUD_NAME
+        - name: CLOUDINARY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: CLOUDINARY_API_KEY
+        - name: CLOUDINARY_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: doctor-secrets
+              key: CLOUDINARY_API_SECRET
+
+---
+# 2. THE SERVICE (Handles Networking for Port 5025)
+apiVersion: v1
+kind: Service
+metadata:
+  name: doctor-service
+spec:
+  type: ClusterIP
+  selector:
+    app: doctor
+  ports:
+  - protocol: TCP
+    port: 5025        
+    targetPort: 5025

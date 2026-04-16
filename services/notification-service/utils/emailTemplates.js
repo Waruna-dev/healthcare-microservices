@@ -7,6 +7,10 @@ const formatAmount = (amount, currency = "LKR") => {
   return `${parsed.toFixed(2)} ${currency}`;
 };
 
+// 🚨 KUBERNETES FIX: Dynamically pull the frontend URL from your K8s environment
+// If it's not set, it defaults to a safe fallback.
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
+
 const buildPaymentSuccessEmail = ({
   patientName,
   orderId,
@@ -72,7 +76,7 @@ const buildDoctorApprovalEmail = ({ name, tempPassword }) => {
         <p style="font-size: 28px; font-weight: bold; color: #111827; margin: 0; font-family: monospace; letter-spacing: 2px;">${tempPassword}</p>
       </div>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="http://localhost:5173/login" style="background-color: #5454e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 16px; display: inline-block;">Access Dashboard</a>
+        <a href="${FRONTEND_URL}/login" style="background-color: #5454e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 16px; display: inline-block;">Access Dashboard</a>
       </div>
       <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 40px 0 20px 0;" />
       <div style="text-align: center; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
@@ -106,7 +110,7 @@ const buildDoctorRejectionEmail = ({ name }) => {
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5; margin-bottom: 20px;">
           If you have updated credentials, obtained a new medical license, or believe your application was rejected in error, you are welcome to submit a new application.
         </p>
-        <a href="http://localhost:5173/doctor/register" style="background-color: #5454e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
+        <a href="${FRONTEND_URL}/doctor/register" style="background-color: #5454e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Submit New Application</a>
       </div>
       <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 40px 0 20px 0;" />
       <div style="text-align: center; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
