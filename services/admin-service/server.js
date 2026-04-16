@@ -1,3 +1,5 @@
+const dns = require('dns');
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 // services/admin-service/server.js
 const express = require('express');
 const dotenv = require('dotenv');

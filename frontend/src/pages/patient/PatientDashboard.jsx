@@ -1,5 +1,5 @@
 // src/pages/patient/PatientDashboard.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -121,6 +121,168 @@ const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => 
   );
 };
 
+const getAppointmentDateTime = (appointment) => {
+  const appointmentDate = new Date(appointment.date);
+  if (appointment.startTime) {
+    const [hours, minutes] = appointment.startTime.split(':').map(Number);
+    appointmentDate.setHours(hours || 0, minutes || 0, 0, 0);
+  }
+  return appointmentDate;
+};
+
+const formatNotificationTime = (timestamp) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  if (sameDay) {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const buildNotifications = (appointments = []) => {
+  const notifications = [];
+
+  appointments.forEach((appointment) => {
+    const doctor = appointment.doctorName ? `Dr. ${appointment.doctorName}` : 'your doctor';
+    const appointmentDateTime = getAppointmentDateTime(appointment);
+    const timestamp = appointment.updatedAt || appointment.createdAt || appointment.date;
+    const eventDate = appointmentDateTime.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+    const eventTime = appointment.startTime ? ` at ${appointment.startTime}` : '';
+
+    if (appointment.status === 'pending') {
+      notifications.push({
+        id: `${appointment._id}-appointment-pending`,
+        level: 'info',
+        title: 'Appointment Pending',
+        message: `Your appointment request with ${doctor} for ${eventDate}${eventTime} is waiting for approval.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'accepted') {
+      notifications.push({
+        id: `${appointment._id}-appointment-accepted`,
+        level: 'success',
+        title: 'Appointment Accepted',
+        message: `Great news. ${doctor} accepted your appointment for ${eventDate}${eventTime}.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'rejected') {
+      notifications.push({
+        id: `${appointment._id}-appointment-rejected`,
+        level: 'error',
+        title: 'Appointment Rejected',
+        message: appointment.rejectionReason
+          ? `${doctor} could not accept your appointment: ${appointment.rejectionReason}`
+          : `${doctor} could not accept your appointment. Please choose a different slot.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'cancelled') {
+      notifications.push({
+        id: `${appointment._id}-appointment-cancelled`,
+        level: 'warning',
+        title: 'Appointment Cancelled',
+        message: appointment.rejectionReason
+          ? `Appointment was cancelled: ${appointment.rejectionReason}`
+          : `Your appointment with ${doctor} was cancelled.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'completed') {
+      notifications.push({
+        id: `${appointment._id}-appointment-completed`,
+        level: 'success',
+        title: 'Appointment Completed',
+        message: `Your consultation with ${doctor} has been marked as completed.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'partial') {
+      notifications.push({
+        id: `${appointment._id}-appointment-partial`,
+        level: 'warning',
+        title: 'Completion Pending',
+        message: `Consultation confirmation is in progress. One side is still pending for this appointment.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'no_show') {
+      notifications.push({
+        id: `${appointment._id}-no-show`,
+        level: 'warning',
+        title: 'No-Show Marked',
+        message: `This appointment was marked as patient no-show.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'doctor_no_show') {
+      notifications.push({
+        id: `${appointment._id}-doctor-no-show`,
+        level: 'warning',
+        title: 'Doctor No-Show',
+        message: `${doctor} did not attend this consultation. Please reschedule if needed.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.paymentStatus === 'pending') {
+      notifications.push({
+        id: `${appointment._id}-payment-pending`,
+        level: 'warning',
+        title: 'Payment Pending',
+        message: `Payment for your appointment with ${doctor} is pending.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.paymentStatus === 'completed') {
+      notifications.push({
+        id: `${appointment._id}-payment-success`,
+        level: 'success',
+        title: 'Payment Successful',
+        message: `Payment completed successfully for your appointment with ${doctor}.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.paymentStatus === 'failed') {
+      notifications.push({
+        id: `${appointment._id}-payment-failed`,
+        level: 'error',
+        title: 'Payment Failed',
+        message: `Payment failed for your appointment with ${doctor}. Please try again.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'accepted' && appointment.paymentStatus === 'completed' && appointment.telemedicineLink) {
+      notifications.push({
+        id: `${appointment._id}-ready-to-join`,
+        level: 'info',
+        title: 'Session Ready',
+        message: `Your online consultation with ${doctor} is ready. You can join from the appointment details.`,
+        timestamp,
+      });
+    }
+  });
+
+  return notifications
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+};
+
 const PatientDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -133,6 +295,11 @@ const PatientDashboard = () => {
   const [reports, setReports] = useState([]);
   const fileInputRef = useRef(null);
   
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notificationRef = useRef(null);
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -141,6 +308,19 @@ const PatientDashboard = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const patientInfo = useMemo(() => {
+    if (!user) {
+      return { patientId: null, patientName: 'Patient', patientEmail: 'patient@example.com' };
+    }
+    return {
+      patientId: user._id || user.id || null,
+      patientName: user.name || 'Patient',
+      patientEmail: user.email || 'patient@example.com'
+    };
+  }, [user]);
+
+  const notificationReadKey = `patientNotificationLastReadAt:${patientInfo.patientId || 'guest'}`;
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -233,10 +413,45 @@ const PatientDashboard = () => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const generated = buildNotifications(appointments);
+    setNotifications(generated);
+
+    const lastReadAt = localStorage.getItem(notificationReadKey);
+    if (!lastReadAt) {
+      setUnreadCount(generated.length);
+      return;
+    }
+
+    const unread = generated.filter(
+      (notification) => new Date(notification.timestamp).getTime() > new Date(lastReadAt).getTime()
+    ).length;
+    setUnreadCount(unread);
+  }, [appointments, notificationReadKey]);
+
+  const markNotificationsRead = () => {
+    localStorage.setItem(notificationReadKey, new Date().toISOString());
+    setUnreadCount(0);
+  };
+
+  const handleNotificationToggle = () => {
+    setIsNotificationOpen((prev) => {
+      const nextState = !prev;
+      if (nextState) {
+        markNotificationsRead();
+      }
+      return nextState;
+    });
+    setIsDropdownOpen(false);
+  };
 
   const handleAppointmentUpdate = (updatedAppointment) => {
     setAppointments(prevAppointments => 
@@ -481,9 +696,75 @@ const PatientDashboard = () => {
           </div>
           
           <div className="flex items-center gap-4">
-            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all">
-              <Bell size={20} />
-            </button>
+            <div className="relative" ref={notificationRef}>
+              <button
+                onClick={handleNotificationToggle}
+                className="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all"
+                aria-label="Patient notifications"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-error text-white rounded-full text-[10px] leading-5 font-bold text-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isNotificationOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 mt-3 w-[340px] max-w-[90vw] bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50"
+                  >
+                    <div className="px-4 py-3 border-b border-outline-variant/30 bg-surface-container-low/50">
+                      <h3 className="font-bold text-on-surface">Notifications</h3>
+                      <p className="text-xs text-on-surface-variant mt-1">
+                        Appointment and payment updates for your account
+                      </p>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-5 text-sm text-on-surface-variant">
+                          No notifications yet.
+                        </div>
+                      ) : (
+                        notifications.slice(0, 20).map((notification) => {
+                          const levelStyles = {
+                            success: 'bg-secondary-container text-secondary',
+                            warning: 'bg-warning-container text-warning',
+                            error: 'bg-error-container text-error',
+                            info: 'bg-primary-fixed text-primary'
+                          };
+
+                          return (
+                            <div key={notification.id} className="px-4 py-3 border-b border-outline-variant/20 last:border-b-0 hover:bg-surface-container-low/40 transition-colors">
+                              <div className="flex items-start gap-3">
+                                <div className={`mt-0.5 w-2.5 h-2.5 rounded-full ${levelStyles[notification.level] || levelStyles.info}`} />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p className="text-sm font-semibold text-on-surface">{notification.title}</p>
+                                    <span className="text-[11px] text-on-surface-variant whitespace-nowrap">
+                                      {formatNotificationTime(notification.timestamp)}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                                    {notification.message}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <div className="relative" ref={dropdownRef}>
               <button 
