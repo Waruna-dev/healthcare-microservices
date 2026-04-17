@@ -1,4 +1,8 @@
 const sendEmail = require("../utils/sendEmail");
+const {
+  sendPaymentConfirmationSMS,
+  sendAppointmentConfirmationSMS,
+} = require("../utils/sendSms");
 const { 
   buildPaymentSuccessEmail, 
   buildDoctorApprovalEmail, 
@@ -88,8 +92,118 @@ const sendDoctorRejectionEmail = async (req, res) => {
   }
 };
 
+/**
+ * Send payment confirmation SMS
+ */
+const sendPaymentConfirmationSMSController = async (req, res) => {
+  try {
+    const {
+      phoneNumber,
+      patientName,
+      orderId,
+      amount,
+      currency = "LKR",
+      doctorName,
+      appointmentDate,
+      appointmentTime,
+      referenceId,
+    } = req.body;
+
+    if (!phoneNumber || !orderId || amount === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "phoneNumber, orderId and amount are required",
+      });
+    }
+
+    const result = await sendPaymentConfirmationSMS({
+      phoneNumber,
+      patientName: patientName || "Valued Customer",
+      orderId,
+      amount,
+      currency,
+      doctorName,
+      appointmentDate,
+      appointmentTime,
+      referenceId,
+    });
+
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: "Payment confirmation SMS sent",
+        messageId: result.messageId,
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send SMS",
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send payment confirmation SMS",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Send appointment confirmation SMS
+ */
+const sendAppointmentConfirmationSMSController = async (req, res) => {
+  try {
+    const {
+      phoneNumber,
+      patientName,
+      doctorName,
+      appointmentDate,
+      appointmentTime,
+    } = req.body;
+
+    if (!phoneNumber || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({
+        success: false,
+        message: "phoneNumber, patientName, doctorName, appointmentDate and appointmentTime are required",
+      });
+    }
+
+    const result = await sendAppointmentConfirmationSMS({
+      phoneNumber,
+      patientName,
+      doctorName,
+      appointmentDate,
+      appointmentTime,
+    });
+
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: "Appointment confirmation SMS sent",
+        messageId: result.messageId,
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send SMS",
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send appointment confirmation SMS",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   sendPaymentSuccessEmail,
   sendDoctorApprovalEmail,
-  sendDoctorRejectionEmail
+  sendDoctorRejectionEmail,
+  sendPaymentConfirmationSMSController,
+  sendAppointmentConfirmationSMSController,
 };

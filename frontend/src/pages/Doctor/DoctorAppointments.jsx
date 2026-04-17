@@ -163,7 +163,7 @@ const DoctorAppointments = () => {
     setLoading(true);
 
     try {
-      const url = `http://localhost:5015/api/appointments/doctor/public/${doctorId}`;
+      const url = `/api/appointments/doctor/public/${doctorId}`;
       const response = await fetch(url);
       const data = await response.json();
 
@@ -259,7 +259,7 @@ const DoctorAppointments = () => {
     setProcessingId(appointment._id);
 
     try {
-      const url = `http://localhost:5015/api/appointments/accept/${appointment._id}`;
+      const url = `/api/appointments/accept/${appointment._id}`;
       const response = await fetch(url, { method: 'PUT' });
       const data = await response.json();
 
@@ -294,7 +294,7 @@ const DoctorAppointments = () => {
     setProcessingId(selectedAppointment._id);
 
     try {
-      const url = `http://localhost:5015/api/appointments/reject/${selectedAppointment._id}`;
+      const url = `/api/appointments/reject/${selectedAppointment._id}`;
       const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

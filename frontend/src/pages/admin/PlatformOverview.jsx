@@ -1,7 +1,8 @@
 // src/pages/admin/PlatformOverview.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+// 🚨 FIX: Import your central API instance instead of raw axios!
+import api from '../../services/api'; 
 import { 
   Users, UserPlus, ShieldAlert, CheckCircle2, 
   Stethoscope, ArrowUpRight, ArrowDownRight, Minus,
@@ -23,17 +24,14 @@ const PlatformOverview = () => {
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
-
-  // Custom Reject Modal State
   const [isRejectConfirmOpen, setIsRejectConfirmOpen] = useState(false);
 
   // Fetch Dashboard Data
   const fetchDashboardStats = async () => {
     try {
-      const token = localStorage.getItem('adminToken');
-      const response = await axios.get('http://localhost:5002/demographics', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // 🚨 FIX: Use the 'api' instance. It automatically goes through your API Gateway
+      // and automatically attaches the adminToken!
+      const response = await api.get('/admin/demographics');
       if (response.data.success) {
         setStats(response.data.data);
         setPendingDoctors(response.data.data.pendingDoctors || []);
@@ -57,11 +55,8 @@ const PlatformOverview = () => {
   // 1. OPEN MODAL & FETCH DOCTOR DETAILS
   const handleReviewClick = async (doctorId) => {
     try {
-      const token = localStorage.getItem('adminToken');
-      const response = await axios.get(`http://localhost:5002/doctors/${doctorId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
+      // 🚨 FIX: Routed through API Gateway
+      const response = await api.get(`/admin/doctors/${doctorId}`);
       if (response.data.success) {
         setSelectedDoctor(response.data.data);
         setIsModalOpen(true);
@@ -75,16 +70,15 @@ const PlatformOverview = () => {
   const handleApprove = async () => {
     setIsActionLoading(true);
     try {
-      const token = localStorage.getItem('adminToken');
-      const response = await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}/approve`, 
-        { name: selectedDoctor.name, email: selectedDoctor.email }, 
-        { headers: { Authorization: `Bearer ${token}` }}
-      );
+      // 🚨 FIX: Routed through API Gateway
+      const response = await api.put(`/admin/doctors/${selectedDoctor._id}/approve`, { 
+        name: selectedDoctor.name, 
+        email: selectedDoctor.email 
+      });
 
       if (response.data.success) {
         showToast("Doctor approved! Temporary password sent via email.");
         setIsModalOpen(false);
-        // FIX: Added 'await' so the UI doesn't refresh until the new data arrives
         await fetchDashboardStats(); 
       }
     } catch (error) {
@@ -98,17 +92,16 @@ const PlatformOverview = () => {
   const confirmReject = async () => {
     setIsActionLoading(true);
     try {
-      const token = localStorage.getItem('adminToken');
-      const response = await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}/reject`, 
-        { name: selectedDoctor.name, email: selectedDoctor.email }, 
-        { headers: { Authorization: `Bearer ${token}` }}
-      );
+      // 🚨 FIX: Routed through API Gateway
+      const response = await api.put(`/admin/doctors/${selectedDoctor._id}/reject`, { 
+        name: selectedDoctor.name, 
+        email: selectedDoctor.email 
+      });
 
       if (response.data.success) {
         showToast("Doctor registration rejected and data deleted.", "error");
         setIsRejectConfirmOpen(false); 
         setIsModalOpen(false); 
-        // FIX: Added 'await' so the UI doesn't refresh until the new data arrives
         await fetchDashboardStats(); 
       }
     } catch (error) {

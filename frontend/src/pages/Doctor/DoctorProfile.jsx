@@ -50,7 +50,7 @@ const DoctorProfile = () => {
     try {
       const token = localStorage.getItem('doctorToken');
       
-      const response = await fetch('http://localhost:5025/api/doctors/profile', {
+      const response = await fetch('/api/doctors/profile', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

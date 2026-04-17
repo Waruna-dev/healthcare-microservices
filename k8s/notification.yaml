@@ -1,0 +1,61 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification
+  template:
+    metadata:
+      labels:
+        app: notification
+    spec:
+      containers:
+      - name: notification-container
+        image: healthcare-microservices-notification-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5035
+        env:
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: PORT
+        - name: RESEND_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: RESEND_API_KEY
+        - name: FROM_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: FROM_EMAIL
+        - name: TEXT_LK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: TEXT_LK_API_KEY
+        - name: TEXT_LK_SENDER_ID
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: TEXT_LK_SENDER_ID
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  type: ClusterIP
+  selector:
+    app: notification
+  ports:
+  - protocol: TCP
+    port: 5035
+    targetPort: 5035

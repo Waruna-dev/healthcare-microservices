@@ -1,0 +1,74 @@
+---
+# 1. THE DEPLOYMENT (Manages the Pods)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: patient
+  template:
+    metadata:
+      labels:
+        app: patient
+    spec:
+      containers:
+      - name: patient-container
+        image: healthcare-microservices-patient-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5005  
+        env:
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: PORT
+        # --- SECRETS FETCHED FROM KUBERNETES VAULT ---
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: MONGO_URI
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: JWT_SECRET
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: GEMINI_API_KEY
+        - name: CLOUDINARY_CLOUD_NAME
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: CLOUDINARY_CLOUD_NAME
+        - name: CLOUDINARY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: CLOUDINARY_API_KEY
+        - name: CLOUDINARY_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: patient-secrets
+              key: CLOUDINARY_API_SECRET
+
+---
+# 2. THE SERVICE (Handles Networking)
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-service
+spec:
+  type: ClusterIP
+  selector:
+    app: patient
+  ports:
+  - protocol: TCP
+    port: 5005        
+    targetPort: 5005

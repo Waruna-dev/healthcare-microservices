@@ -190,7 +190,7 @@ const DoctorRegister = () => {
         console.log(key, value);
       }
 
-      const response = await fetch('http://localhost:5025/api/doctors/register', {
+      const response = await fetch('/api/doctors/register', {
         method: 'POST',
         body: payload
       });

@@ -36,7 +36,7 @@ const SystemSettings = () => {
     setIsUpdating(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await axios.put('http://localhost:5002/profile', profile, {
+      const response = await axios.put('/api/admin/profile', profile, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -58,7 +58,7 @@ const SystemSettings = () => {
     setIsAdding(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await axios.post('http://localhost:5002/register', newAdmin, {
+      const response = await axios.post('/api/admin/register', newAdmin, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -84,7 +84,7 @@ const SystemSettings = () => {
     setIsDeleting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await axios.delete('http://localhost:5002/profile', {
+      const response = await axios.delete('/api/admin/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
 

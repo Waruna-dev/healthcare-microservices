@@ -61,7 +61,7 @@ const AppointmentDetailsModal = ({ appointment, type, onClose, onPaymentComplete
 
   const handleDownloadReport = (report) => {
     // Implement report download logic
-    window.open(`http://localhost:5015/${report.filePath}`, '_blank');
+    window.open(`/uploads/${report.filePath}`, '_blank');
   };
 
   return (

@@ -223,7 +223,7 @@ const AppointmentDetail = () => {
                                     {appointment.uploadedReports.map((report, idx) => (
                                         <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                             <span className="text-sm">{report.fileName}</span>
-                                            <a href={`http://localhost:5015/${report.filePath}`} target="_blank" rel="noopener noreferrer" className="text-primary text-sm hover:underline">
+                                            <a href={`/uploads/${report.filePath}`} target="_blank" rel="noopener noreferrer" className="text-primary text-sm hover:underline">
                                                 View
                                             </a>
                                         </div>

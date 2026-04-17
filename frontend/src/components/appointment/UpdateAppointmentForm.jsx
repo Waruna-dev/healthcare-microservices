@@ -105,7 +105,7 @@ const UpdateAppointmentForm = ({ appointment, onClose, onUpdate }) => {
         submitFormData.append('reports', file);
       });
       
-      const response = await fetch(`http://localhost:5015/api/appointments/${appointment._id}/update`, {
+      const response = await fetch(`/api/appointments/${appointment._id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`

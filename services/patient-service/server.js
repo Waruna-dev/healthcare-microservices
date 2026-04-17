@@ -1,3 +1,5 @@
+const dns = require('dns');
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 // server.js
 require('dotenv').config();
 const express = require('express');
@@ -15,6 +17,14 @@ app.use(express.json()); // Allows us to accept JSON data in the body
 
 // Make the 'uploads' folder accessible via URL
 app.use('/uploads', express.static('uploads'));
+
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    service: 'patient-service',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Connect our real patient routes (Registration & Login)
 //app.use('/api/patients', require('./routes/patientRoutes'));

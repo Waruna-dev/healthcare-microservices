@@ -1,3 +1,5 @@
+const dns = require('dns');
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 // services/admin-service/server.js
 const express = require('express');
 const dotenv = require('dotenv');
@@ -12,6 +14,14 @@ connectDB();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    service: 'admin-service',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ==========================================
 // ADMIN DATABASE SCHEMA (No models folder needed)

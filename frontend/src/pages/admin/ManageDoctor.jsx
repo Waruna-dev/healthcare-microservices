@@ -35,7 +35,7 @@ const ManageDoctor = () => {
       setIsLoading(true);
       const token = localStorage.getItem('adminToken');
       
-      const response = await axios.get('http://localhost:5002/doctors', {
+      const response = await axios.get('/api/admin/doctors', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -78,7 +78,7 @@ const ManageDoctor = () => {
     try {
       setIsProcessing(true); // Disable button
       const token = localStorage.getItem('adminToken');
-      await axios.put(`http://localhost:5002/doctors/${selectedDoctor._id}`, selectedDoctor, {
+      await axios.put(`/api/admin/doctors/${selectedDoctor._id}`, selectedDoctor, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -104,7 +104,7 @@ const ManageDoctor = () => {
     try {
       setIsProcessing(true); // Disable button
       const token = localStorage.getItem('adminToken');
-      await axios.delete(`http://localhost:5002/doctors/${doctorToDelete._id}`, {
+      await axios.delete(`/api/admin/doctors/${doctorToDelete._id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

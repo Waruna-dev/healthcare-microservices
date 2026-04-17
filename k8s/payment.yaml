@@ -1,0 +1,71 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment
+  template:
+    metadata:
+      labels:
+        app: payment
+    spec:
+      containers:
+      - name: payment-container
+        image: healthcare-microservices-payment-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5004
+        env:
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: PORT
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: MONGODB_URI
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: STRIPE_SECRET_KEY
+        - name: STRIPE_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: STRIPE_WEBHOOK_SECRET
+        - name: CLIENT_URL
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: CLIENT_URL
+        - name: APPOINTMENT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: APPOINTMENT_SERVICE_URL
+        - name: NOTIFICATION_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: payment-secrets
+              key: NOTIFICATION_SERVICE_URL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+spec:
+  type: ClusterIP
+  selector:
+    app: payment
+  ports:
+  - protocol: TCP
+    port: 5004
+    targetPort: 5004

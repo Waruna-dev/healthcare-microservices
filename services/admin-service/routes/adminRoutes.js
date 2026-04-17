@@ -56,10 +56,19 @@ router.post('/login', async (req, res) => {
 // ==========================================
 router.get('/patients', protectAdmin, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
-    res.status(200).json({ success: true, count: response.data.length, data: response.data });
+    // 1. Hit the root route because Patient Service strips the path!
+    const targetUrl = `${process.env.PATIENT_SERVICE_URL}/`;
+    const response = await axios.get(targetUrl);
+
+    // 2. Bulletproof Array Extraction (Fixes the empty frontend table)
+    let patientsArray = [];
+    if (Array.isArray(response.data)) patientsArray = response.data;
+    else if (Array.isArray(response.data.data)) patientsArray = response.data.data;
+    else if (Array.isArray(response.data.patients)) patientsArray = response.data.patients;
+
+    res.status(200).json({ success: true, count: patientsArray.length, data: patientsArray });
   } catch (error) {
-    console.error("MICROSERVICE CONNECTION FAILED!", error.message);
+    console.error("🚨 GET /patients - MICROSERVICE FAILED:", error.message);
     res.status(500).json({ message: "Failed to fetch patients." });
   }
 });
@@ -99,12 +108,15 @@ router.get('/demographics', protectAdmin, async (req, res) => {
 
     let patientsCount = 0;
     try {
+      // Hit the root route for patients
       const patientRes = await axios.get(`${process.env.PATIENT_SERVICE_URL}/`);
-      if (patientRes.data.patients) patientsCount = patientRes.data.patients.length;
-      else if (patientRes.data.data) patientsCount = patientRes.data.data.length;
-      else if (Array.isArray(patientRes.data)) patientsCount = patientRes.data.length;
+      
+      // Robustly extract the count
+      if (Array.isArray(patientRes.data)) patientsCount = patientRes.data.length;
+      else if (Array.isArray(patientRes.data.data)) patientsCount = patientRes.data.data.length;
+      else if (Array.isArray(patientRes.data.patients)) patientsCount = patientRes.data.patients.length;
     } catch (err) {
-      console.error("Demographics: Failed to fetch patients count");
+      console.error("🚨 Demographics: Failed to fetch patients count. Reason:", err.message);
     }
 
     let specialistsCount = 0; 
@@ -112,31 +124,23 @@ router.get('/demographics', protectAdmin, async (req, res) => {
     
     try {
       if (process.env.DOCTOR_SERVICE_URL) {
+        // Hit the full /api/doctors route because Doctor Service keeps the path
         const doctorRes = await axios.get(`${process.env.DOCTOR_SERVICE_URL}/api/doctors/?limit=1000`);
         
         let allDoctors = [];
-        
-        if (doctorRes.data.doctors && Array.isArray(doctorRes.data.doctors)) {
-            allDoctors = doctorRes.data.doctors;
-        } else if (doctorRes.data.data && Array.isArray(doctorRes.data.data)) {
-            allDoctors = doctorRes.data.data; 
-        } else if (Array.isArray(doctorRes.data)) {
-            allDoctors = doctorRes.data; 
-        }
+        if (Array.isArray(doctorRes.data)) allDoctors = doctorRes.data;
+        else if (Array.isArray(doctorRes.data.data)) allDoctors = doctorRes.data.data;
+        else if (Array.isArray(doctorRes.data.doctors)) allDoctors = doctorRes.data.doctors;
         
         const approvedDoctors = allDoctors.filter(doc => doc.status === 'approved');
         specialistsCount = approvedDoctors.length;
 
         pendingDoctorsList = allDoctors
           .filter(doc => doc.status === 'pending')
-          .map(doc => ({
-            _id: doc._id,
-            name: doc.name,
-            email: doc.email
-          }));
+          .map(doc => ({ _id: doc._id, name: doc.name, email: doc.email }));
       }
     } catch (err) {
-      console.error("Demographics: Failed to fetch specialists count", err.message);
+      console.error("🚨 Demographics: Failed to fetch specialists count. Reason:", err.message);
     }
 
     const totalUsers = supportStaffCount + patientsCount + specialistsCount;

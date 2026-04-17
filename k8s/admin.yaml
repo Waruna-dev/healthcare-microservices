@@ -1,0 +1,72 @@
+---
+# 1. THE DEPLOYMENT (Runs your Docker Image)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin
+  template:
+    metadata:
+      labels:
+        app: admin
+    spec:
+      containers:
+      - name: admin-container
+        image: healthcare-microservices-admin-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5002
+        env:
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: PORT
+          
+        # --- MICROSERVICE URLS (Internal Kubernetes DNS) ---
+        # These allow the Admin pod to talk to the other pods directly!
+        - name: DOCTOR_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: DOCTOR_SERVICE_URL
+        - name: PATIENT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: PATIENT_SERVICE_URL
+        - name: NOTIFICATION_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: NOTIFICATION_SERVICE_URL
+
+        # --- SECRETS FETCHED FROM KUBERNETES VAULT ---
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: MONGO_URI
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: caresync-secrets
+              key: JWT_SECRET
+
+---
+# 2. THE SERVICE (Gives it an internal network IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+spec:
+  type: ClusterIP # Means it is only accessible inside the K8s cluster
+  selector:
+    app: admin
+  ports:
+    - port: 5002
+      targetPort: 5002
