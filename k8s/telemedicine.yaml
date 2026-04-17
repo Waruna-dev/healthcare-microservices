@@ -1,31 +1,12 @@
-<<<<<<< HEAD
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: telemedicine-service
-=======
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: telemedicine-deployment
->>>>>>> origin/message-docker
 spec:
   replicas: 1
   selector:
     matchLabels:
-<<<<<<< HEAD
-      app: telemedicine-service
-  template:
-    metadata:
-      labels:
-        app: telemedicine-service
-    spec:
-      containers:
-      - name: telemedicine-service
-        image: telemedicine-service:latest
-        imagePullPolicy: Never
-=======
       app: telemedicine
   template:
     metadata:
@@ -36,19 +17,14 @@ spec:
       - name: telemedicine-container
         image: healthcare-microservices-telemedicine-service:latest
         imagePullPolicy: IfNotPresent
->>>>>>> origin/message-docker
         ports:
         - containerPort: 5018
         env:
         - name: PORT
-<<<<<<< HEAD
-          value: "5018"
-=======
           valueFrom:
             secretKeyRef:
               name: telemedicine-secrets
               key: PORT
->>>>>>> origin/message-docker
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:
@@ -60,13 +36,6 @@ spec:
               name: telemedicine-secrets
               key: JWT_SECRET
         - name: APPOINTMENT_SERVICE_URL
-<<<<<<< HEAD
-          value: "http://appointment-service:5015"
-        - name: JITSI_DOMAIN
-          value: "meet.jit.si"
-        - name: JITSI_ROOM_PREFIX
-          value: "care-sync"
-=======
           valueFrom:
             secretKeyRef:
               name: telemedicine-secrets
@@ -92,21 +61,12 @@ spec:
               name: telemedicine-secrets
               key: PATIENT_SERVICE_URL
 
->>>>>>> origin/message-docker
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: telemedicine-service
 spec:
-<<<<<<< HEAD
-  selector:
-    app: telemedicine-service
-  ports:
-  - port: 5018
-    targetPort: 5018
-  type: ClusterIP
-=======
   type: ClusterIP
   selector:
     app: telemedicine
@@ -114,4 +74,3 @@ spec:
   - protocol: TCP
     port: 5018
     targetPort: 5018
->>>>>>> origin/message-docker

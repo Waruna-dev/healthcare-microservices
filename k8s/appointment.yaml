@@ -1,31 +1,12 @@
-<<<<<<< HEAD
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: appointment-service
-=======
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: appointment-deployment
->>>>>>> origin/message-docker
 spec:
   replicas: 1
   selector:
     matchLabels:
-<<<<<<< HEAD
-      app: appointment-service
-  template:
-    metadata:
-      labels:
-        app: appointment-service
-    spec:
-      containers:
-      - name: appointment-service
-        image: appointment-service:latest
-        imagePullPolicy: Never
-=======
       app: appointment
   template:
     metadata:
@@ -36,19 +17,14 @@ spec:
       - name: appointment-container
         image: healthcare-microservices-appointment-service:latest
         imagePullPolicy: IfNotPresent
->>>>>>> origin/message-docker
         ports:
         - containerPort: 5015
         env:
         - name: PORT
-<<<<<<< HEAD
-          value: "5015"
-=======
           valueFrom:
             secretKeyRef:
               name: appointment-secrets
               key: PORT
->>>>>>> origin/message-docker
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:
@@ -59,25 +35,6 @@ spec:
             secretKeyRef:
               name: appointment-secrets
               key: JWT_SECRET
-<<<<<<< HEAD
-        - name: CLOUDINARY_CLOUD_NAME
-          valueFrom:
-            secretKeyRef:
-              name: appointment-secrets
-              key: CLOUDINARY_CLOUD_NAME
-        - name: CLOUDINARY_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: appointment-secrets
-              key: CLOUDINARY_API_KEY
-        - name: CLOUDINARY_API_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: appointment-secrets
-              key: CLOUDINARY_API_SECRET
-        - name: TELEMEDICINE_SERVICE_URL
-          value: "http://telemedicine-service:5018"
-=======
         - name: GEMINI_API_KEY
           valueFrom:
             secretKeyRef:
@@ -109,21 +66,12 @@ spec:
               name: appointment-secrets
               key: NOTIFICATION_SERVICE_URL
 
->>>>>>> origin/message-docker
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: appointment-service
 spec:
-<<<<<<< HEAD
-  selector:
-    app: appointment-service
-  ports:
-  - port: 5015
-    targetPort: 5015
-  type: ClusterIP
-=======
   type: ClusterIP
   selector:
     app: appointment
@@ -131,4 +79,3 @@ spec:
   - protocol: TCP
     port: 5015
     targetPort: 5015
->>>>>>> origin/message-docker
