@@ -1,0 +1,1089 @@
+// src/pages/patient/PatientDashboard.jsx
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Heart, Activity, Moon, Footprints, 
+  BrainCircuit, FileText, UploadCloud, ShieldCheck, 
+  Bell, Settings, LogOut, ChevronRight, AlertTriangle, CheckCircle2,
+  ClipboardList, Stethoscope, User, Calendar, X, Clock, Trash2 
+} from 'lucide-react';
+import api from '../../services/api';
+
+// Sparkles component for AI icon
+const Sparkles = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+    <path d="M5 3v4M3 5h4"/>
+  </svg>
+);
+
+// Appointment Card Component
+const AppointmentCard = ({ appointment, onStatusUpdate, onPaymentComplete }) => {
+  const navigate = useNavigate();
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-warning-container text-warning';
+      case 'accepted': return 'bg-primary-fixed text-primary';
+      case 'completed': return 'bg-secondary-container text-secondary';
+      case 'rejected': return 'bg-error-container text-error';
+      case 'cancelled': return 'bg-surface-container-low text-on-surface-variant';
+      default: return 'bg-surface-container-low text-on-surface-variant';
+    }
+  };
+
+  const getPaymentStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-warning-container text-warning';
+      case 'completed': return 'bg-secondary-container text-secondary';
+      case 'failed': return 'bg-error-container text-error';
+      default: return 'bg-surface-container-low text-on-surface-variant';
+    }
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const handleJoinCall = () => {
+    navigate(`/telemedicine/${appointment._id}`);
+  };
+
+  const canJoinCall = appointment.paymentStatus === 'completed' && 
+                      appointment.status === 'accepted' &&
+                      appointment.telemedicineLink;
+
+  const handleViewDetails = () => {
+    navigate(`/appointments/${appointment._id}`);
+  };
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl shadow-ambient border border-outline-variant/30 overflow-hidden hover:shadow-elevated transition-all duration-300 h-full flex flex-col">
+      <div className={`h-1.5 ${
+        appointment.status === 'pending' ? 'bg-yellow-500' :
+        appointment.status === 'accepted' ? 'bg-blue-500' :
+        appointment.status === 'completed' ? 'bg-secondary' :
+        'bg-outline'
+      }`} />
+      
+      <div className="p-5 flex flex-col flex-grow">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-secondary-container -fixed rounded-xl">
+              <Stethoscope className="w-5 h-5  text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-on-surface">Dr. {appointment.doctorName}</h3>
+              <p className="text-sm text-on-surface-variant">{appointment.doctorSpecialty}</p>
+            </div>
+          </div>
+          
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
+            {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-4">
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <Calendar className="w-4 h-4 text-outline" />
+            <span>{formatDate(appointment.date)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <Clock className="w-4 h-4 text-outline" />
+            <span>{appointment.startTime} - {appointment.endTime}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-t border-outline-variant/30 mb-4">
+          <div>
+            <p className="text-xs text-on-surface-variant">Consultation Fee</p>
+            <p className="font-semibold text-green-700">LKR {appointment.consultationFee?.toLocaleString() || 0}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-on-surface-variant underline ">Payment Status</p>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getPaymentStatusColor(appointment.paymentStatus)}`}>
+              {appointment.paymentStatus === 'pending' ? 'Payment Pending' : 
+               appointment.paymentStatus === 'completed' ? 'Paid' : 
+               appointment.paymentStatus === 'failed' ? 'Failed' : 'Pending'}
+            </span>
+          </div>
+        </div>
+
+        
+      </div>
+    </div>
+  );
+};
+
+const getAppointmentDateTime = (appointment) => {
+  const appointmentDate = new Date(appointment.date);
+  if (appointment.startTime) {
+    const [hours, minutes] = appointment.startTime.split(':').map(Number);
+    appointmentDate.setHours(hours || 0, minutes || 0, 0, 0);
+  }
+  return appointmentDate;
+};
+
+const formatNotificationTime = (timestamp) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  if (sameDay) {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const buildNotifications = (appointments = []) => {
+  const notifications = [];
+
+  appointments.forEach((appointment) => {
+    const doctor = appointment.doctorName ? `Dr. ${appointment.doctorName}` : 'your doctor';
+    const appointmentDateTime = getAppointmentDateTime(appointment);
+    const timestamp = appointment.updatedAt || appointment.createdAt || appointment.date;
+    const eventDate = appointmentDateTime.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+    const eventTime = appointment.startTime ? ` at ${appointment.startTime}` : '';
+
+    if (appointment.status === 'pending') {
+      notifications.push({
+        id: `${appointment._id}-appointment-pending`,
+        level: 'info',
+        title: 'Appointment Pending',
+        message: `Your appointment request with ${doctor} for ${eventDate}${eventTime} is waiting for approval.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'accepted') {
+      notifications.push({
+        id: `${appointment._id}-appointment-accepted`,
+        level: 'success',
+        title: 'Appointment Accepted',
+        message: `Great news. ${doctor} accepted your appointment for ${eventDate}${eventTime}.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'rejected') {
+      notifications.push({
+        id: `${appointment._id}-appointment-rejected`,
+        level: 'error',
+        title: 'Appointment Rejected',
+        message: appointment.rejectionReason
+          ? `${doctor} could not accept your appointment: ${appointment.rejectionReason}`
+          : `${doctor} could not accept your appointment. Please choose a different slot.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'cancelled') {
+      notifications.push({
+        id: `${appointment._id}-appointment-cancelled`,
+        level: 'warning',
+        title: 'Appointment Cancelled',
+        message: appointment.rejectionReason
+          ? `Appointment was cancelled: ${appointment.rejectionReason}`
+          : `Your appointment with ${doctor} was cancelled.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'completed') {
+      notifications.push({
+        id: `${appointment._id}-appointment-completed`,
+        level: 'success',
+        title: 'Appointment Completed',
+        message: `Your consultation with ${doctor} has been marked as completed.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'partial') {
+      notifications.push({
+        id: `${appointment._id}-appointment-partial`,
+        level: 'warning',
+        title: 'Completion Pending',
+        message: `Consultation confirmation is in progress. One side is still pending for this appointment.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'no_show') {
+      notifications.push({
+        id: `${appointment._id}-no-show`,
+        level: 'warning',
+        title: 'No-Show Marked',
+        message: `This appointment was marked as patient no-show.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'doctor_no_show') {
+      notifications.push({
+        id: `${appointment._id}-doctor-no-show`,
+        level: 'warning',
+        title: 'Doctor No-Show',
+        message: `${doctor} did not attend this consultation. Please reschedule if needed.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.paymentStatus === 'pending') {
+      notifications.push({
+        id: `${appointment._id}-payment-pending`,
+        level: 'warning',
+        title: 'Payment Pending',
+        message: `Payment for your appointment with ${doctor} is pending.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.paymentStatus === 'completed') {
+      notifications.push({
+        id: `${appointment._id}-payment-success`,
+        level: 'success',
+        title: 'Payment Successful',
+        message: `Payment completed successfully for your appointment with ${doctor}.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.paymentStatus === 'failed') {
+      notifications.push({
+        id: `${appointment._id}-payment-failed`,
+        level: 'error',
+        title: 'Payment Failed',
+        message: `Payment failed for your appointment with ${doctor}. Please try again.`,
+        timestamp,
+      });
+    }
+
+    if (appointment.status === 'accepted' && appointment.paymentStatus === 'completed' && appointment.telemedicineLink) {
+      notifications.push({
+        id: `${appointment._id}-ready-to-join`,
+        level: 'info',
+        title: 'Session Ready',
+        message: `Your online consultation with ${doctor} is ready. You can join from the appointment details.`,
+        timestamp,
+      });
+    }
+  });
+
+  return notifications
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+};
+
+const PatientDashboard = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [user, setUser] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  const [isUploading, setIsUploading] = useState(false);
+  const [reports, setReports] = useState([]);
+  const fileInputRef = useRef(null);
+  
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notificationRef = useRef(null);
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // --- DELETE CONFIRMATION STATES ---
+  const [reportToDelete, setReportToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const patientInfo = useMemo(() => {
+    if (!user) {
+      return { patientId: null, patientName: 'Patient', patientEmail: 'patient@example.com' };
+    }
+    return {
+      patientId: user._id || user.id || null,
+      patientName: user.name || 'Patient',
+      patientEmail: user.email || 'patient@example.com'
+    };
+  }, [user]);
+
+  const notificationReadKey = `patientNotificationLastReadAt:${patientInfo.patientId || 'guest'}`;
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
+  };
+
+  const getPatientInfo = () => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        const patient = userData.patient || userData;
+        return {
+          patientId: patient._id || patient.id,
+          patientName: patient.name || 'Patient',
+          patientEmail: patient.email || 'patient@example.com'
+        };
+      } catch (e) {
+        console.error('Error parsing user:', e);
+      }
+    }
+    return { patientId: null, patientName: 'Patient', patientEmail: 'patient@example.com' };
+  };
+
+  const fetchAppointments = async () => {
+    const patientInfo = getPatientInfo();
+    if (!patientInfo.patientId) {
+      const savedAppointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+      setAppointments(savedAppointments);
+      return;
+    }
+    
+    try {
+      setLoadingAppointments(true);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`/api/appointments/patient/${patientInfo.patientId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setAppointments(data.appointments || []);
+        localStorage.setItem('appointments', JSON.stringify(data.appointments || []));
+      } else {
+        const savedAppointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+        setAppointments(savedAppointments);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      const savedAppointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+      setAppointments(savedAppointments);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          const patient = parsedUser.patient || parsedUser;
+          setUser(patient);
+          if (patient.uploadedReports) {
+            setReports(patient.uploadedReports);
+          }
+        } else {
+          navigate('/login');
+          return;
+        }
+        
+        await fetchAppointments();
+      } catch (error) {
+        console.error('Initialization error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    init();
+  }, [navigate]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const generated = buildNotifications(appointments);
+    setNotifications(generated);
+
+    const lastReadAt = localStorage.getItem(notificationReadKey);
+    if (!lastReadAt) {
+      setUnreadCount(generated.length);
+      return;
+    }
+
+    const unread = generated.filter(
+      (notification) => new Date(notification.timestamp).getTime() > new Date(lastReadAt).getTime()
+    ).length;
+    setUnreadCount(unread);
+  }, [appointments, notificationReadKey]);
+
+  const markNotificationsRead = () => {
+    localStorage.setItem(notificationReadKey, new Date().toISOString());
+    setUnreadCount(0);
+  };
+
+  const handleNotificationToggle = () => {
+    setIsNotificationOpen((prev) => {
+      const nextState = !prev;
+      if (nextState) {
+        markNotificationsRead();
+      }
+      return nextState;
+    });
+    setIsDropdownOpen(false);
+  };
+
+  const handleAppointmentUpdate = (updatedAppointment) => {
+    setAppointments(prevAppointments => 
+      prevAppointments.map(a => a._id === updatedAppointment._id ? updatedAppointment : a)
+    );
+    const updatedAppointments = appointments.map(a => 
+      a._id === updatedAppointment._id ? updatedAppointment : a
+    );
+    localStorage.setItem('appointments', JSON.stringify(updatedAppointments));
+    showToast(`Appointment ${updatedAppointment.status} successfully!`, 'success');
+  };
+
+  const handlePaymentComplete = (appointment) => {
+    navigate(`/payment/${appointment._id}`, { state: { appointment } });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('appointments');
+    navigate('/login');
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      showToast("Please upload a valid PDF document.", "error");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('reportFile', file);
+
+    setIsUploading(true);
+    try {
+      const response = await api.post('/patients/upload-report', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      
+      setReports(response.data.reports);
+      
+      const storedUserString = localStorage.getItem('user');
+      if (storedUserString) {
+        const storedUser = JSON.parse(storedUserString);
+        if (storedUser.patient) {
+          storedUser.patient.uploadedReports = response.data.reports;
+        } else {
+          storedUser.uploadedReports = response.data.reports;
+        }
+        localStorage.setItem('user', JSON.stringify(storedUser));
+      }
+
+      showToast("Report uploaded and AI analysis complete!", "success");
+      
+    } catch (error) {
+      console.error("Upload failed:", error);
+      showToast(error.response?.data?.message || "Failed to upload report.", "error");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDownload = async (file) => {
+    if (!file) return;
+    try {
+      const actualFilename = file.filePath?.split(/[\\/]/).pop();
+      if (!actualFilename) return;
+      
+      const response = await api.get(`/patients/reports/${actualFilename}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', file.fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download failed:", error);
+      showToast("Failed to securely download the report.", "error");
+    }
+  };
+
+  const executeDeleteReport = async () => {
+    if (!reportToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const actualFilename = reportToDelete.filePath?.split(/[\\/]/).pop() || reportToDelete.fileName;
+      
+      const response = await api.delete(`/patients/reports/${actualFilename}`);
+
+      if (response.data.success) {
+        const updatedReports = response.data.reports;
+        setReports(updatedReports);
+
+        const storedUserString = localStorage.getItem('user');
+        if (storedUserString) {
+          const storedUser = JSON.parse(storedUserString);
+          if (storedUser.patient) {
+            storedUser.patient.uploadedReports = updatedReports;
+          } else {
+            storedUser.uploadedReports = updatedReports;
+          }
+          localStorage.setItem('user', JSON.stringify(storedUser));
+        }
+
+        showToast("Report deleted successfully.", "success");
+      }
+    } catch (error) {
+      console.error("Failed to delete report", error);
+      showToast(error.response?.data?.message || "Failed to delete report.", "error");
+    } finally {
+      setIsDeleting(false);
+      setReportToDelete(null); 
+    }
+  };
+
+  const containerVars = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVars = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 50 } } };
+
+  const latestReport = reports?.length > 0 ? reports[reports.length - 1] : null;
+  const aiData = latestReport?.aiAnalysis;
+
+  const upcomingAppointment = appointments.find(
+    apt => apt.status === 'pending' || apt.status === 'accepted'
+  );
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-surface">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  return (
+    <div className="bg-surface min-h-screen font-body text-on-surface antialiased flex flex-col relative overflow-hidden">
+      
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-elevated flex items-center gap-3 font-bold text-sm backdrop-blur-md border ${
+              toast.type === 'success' 
+                ? 'bg-primary/90 text-white border-white/20' 
+                : 'bg-error/90 text-white border-white/20'
+            }`}
+          >
+            {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+            {toast.message}
+            <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-70">
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* DELETE REPORT CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {reportToDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface-container-lowest w-full max-w-md rounded-[2rem] shadow-2xl border border-outline-variant/30 overflow-hidden p-6 text-center"
+            >
+              <div className="w-16 h-16 bg-error-container text-error rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <AlertTriangle size={32} />
+              </div>
+              
+              <h3 className="text-xl font-bold font-headline text-on-surface mb-2">Delete Report?</h3>
+              <p className="text-on-surface-variant mb-6 text-sm leading-relaxed">
+                Are you sure you want to permanently delete <span className="font-bold text-on-surface">{reportToDelete.fileName}</span>? This action cannot be undone and will remove the associated AI analysis.
+              </p>
+
+              <div className="flex gap-3 justify-center">
+                <button 
+                  onClick={() => setReportToDelete(null)} 
+                  disabled={isDeleting}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-on-surface hover:bg-surface-container-low transition-colors border border-outline-variant/50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={executeDeleteReport} 
+                  disabled={isDeleting}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold bg-error text-white shadow-md hover:bg-error/90 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <header className="sticky top-0 w-full z-50 bg-white/70 backdrop-blur-24 border-b border-outline-variant/30 shadow-ambient">
+        <div className="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+          <div className="flex items-center gap-12">
+            <Link to="/" className="text-2xl font-extrabold text-primary font-headline tracking-tighter hover:opacity-80 transition-opacity">
+              CareSync
+            </Link>
+            <nav className="hidden md:flex items-center gap-8 font-headline font-semibold text-sm text-on-surface-variant">
+<Link 
+  to="/patient/dashboard" 
+  className={`${location.pathname === '/patient/dashboard' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Dashboard
+</Link>
+
+<Link 
+  to="/doctor/listing" 
+  className={`${location.pathname === '/doctor/listing' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Specialists
+</Link>
+
+<Link 
+  to="/appointments/all" 
+  className={`${location.pathname === '/appointments/all' ? 'text-primary border-b-2 border-primary pb-1' : ''} hover:text-primary cursor-pointer transition-colors`}
+>
+  Appointments
+</Link>
+
+<Link 
+  to="/prescriptions" 
+  className={`${location.pathname === '/prescriptions' ? 'text-primary border-b-2 border-primary pb-1' : ''} flex items-center gap-2 hover:text-primary cursor-pointer transition-colors`}
+>
+  <FileText size={16} />
+  Prescriptions
+</Link>
+            </nav>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative" ref={notificationRef}>
+              <button
+                onClick={handleNotificationToggle}
+                className="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-xl transition-all"
+                aria-label="Patient notifications"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-error text-white rounded-full text-[10px] leading-5 font-bold text-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isNotificationOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 mt-3 w-[340px] max-w-[90vw] bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50"
+                  >
+                    <div className="px-4 py-3 border-b border-outline-variant/30 bg-surface-container-low/50">
+                      <h3 className="font-bold text-on-surface">Notifications</h3>
+                      <p className="text-xs text-on-surface-variant mt-1">
+                        Appointment and payment updates for your account
+                      </p>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-5 text-sm text-on-surface-variant">
+                          No notifications yet.
+                        </div>
+                      ) : (
+                        notifications.slice(0, 20).map((notification) => {
+                          const levelStyles = {
+                            success: 'bg-secondary-container text-secondary',
+                            warning: 'bg-warning-container text-warning',
+                            error: 'bg-error-container text-error',
+                            info: 'bg-primary-fixed text-primary'
+                          };
+
+                          return (
+                            <div key={notification.id} className="px-4 py-3 border-b border-outline-variant/20 last:border-b-0 hover:bg-surface-container-low/40 transition-colors">
+                              <div className="flex items-start gap-3">
+                                <div className={`mt-0.5 w-2.5 h-2.5 rounded-full ${levelStyles[notification.level] || levelStyles.info}`} />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p className="text-sm font-semibold text-on-surface">{notification.title}</p>
+                                    <span className="text-[11px] text-on-surface-variant whitespace-nowrap">
+                                      {formatNotificationTime(notification.timestamp)}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                                    {notification.message}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-center bg-primary-container text-primary font-bold shadow-sm hover:shadow-md"
+              >
+                {user.profilePicture ? (
+                  <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  user.name?.charAt(0) || <User size={20} />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 mt-3 w-56 bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant/30 overflow-hidden z-50"
+                  >
+                    <div className="p-4 border-b border-outline-variant/30 bg-surface-container-low/50">
+                      <p className="font-bold text-on-surface truncate">{user.name}</p>
+                      <p className="text-xs text-on-surface-variant truncate mt-0.5">{user.email || 'Patient Account'}</p>
+                    </div>
+                    <div className="p-2 flex flex-col gap-1">
+                      <Link 
+                        to="/profile" 
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-low text-sm font-bold text-on-surface-variant hover:text-primary transition-colors"
+                      >
+                        <Settings size={18} /> Account Settings
+                      </Link>
+                      <button 
+                        onClick={handleLogout} 
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-error-container/50 text-sm font-bold text-error transition-colors w-full text-left"
+                      >
+                        <LogOut size={18} /> Logout
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 py-10 px-6 md:px-8 max-w-7xl mx-auto w-full">
+        <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+          <div className="space-y-2">
+            <h1 className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface">
+              Welcome Back, <span className="text-primary">{user.name?.split(' ')[0] || 'Patient'}</span>
+            </h1>
+            <p className="text-on-surface-variant font-medium text-lg">Your digital sanctuary is secure and optimized.</p>
+          </div>
+          <div className="bg-surface-container-lowest p-4 rounded-2xl flex items-center gap-4 shadow-ambient border border-outline-variant/30">
+            <div className="relative flex items-center justify-center">
+              <ShieldCheck className="text-secondary" size={24} />
+            </div>
+            <div>
+              <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant block mb-1">System Status</span>
+              <span className="text-sm font-bold text-secondary">E2E Encryption Active</span>
+            </div>
+          </div>
+        </section>
+
+        <motion.div variants={containerVars} initial="hidden" animate="show" className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          <div className="lg:col-span-8 space-y-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {[
+                { title: "Heart Rate", val: "72", unit: "bpm", icon: <Heart size={24} />, color: "text-error", bg: "bg-error-container" },
+                { title: "Blood Pressure", val: "118/78", unit: "mmHg", icon: <Activity size={24} />, color: "text-primary", bg: "bg-primary-fixed" },
+                { title: "O2 Saturation", val: "99", unit: "%", icon: <BrainCircuit size={24} />, color: "text-secondary", bg: "bg-secondary-container" },
+                { title: "Daily Steps", val: "6,240", unit: "steps", icon: <Footprints size={24} />, color: "text-tertiary", bg: "bg-tertiary-fixed" },
+              ].map((metric, idx) => (
+                <motion.div key={idx} variants={itemVars} className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-ambient hover:shadow-elevated transition-all border border-outline-variant/30 group cursor-pointer">
+                  <div className={`w-12 h-12 rounded-2xl ${metric.bg} flex items-center justify-center mb-6 ${metric.color} group-hover:scale-110 transition-transform`}>
+                    {metric.icon}
+                  </div>
+                  <span className="text-sm font-bold text-on-surface-variant block mb-2">{metric.title}</span>
+                  <div className="flex items-baseline gap-1">
+                    <h3 className="text-3xl font-black font-headline">{metric.val}</h3>
+                    <span className="text-xs font-bold text-on-surface-variant">{metric.unit}</span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* AI Analysis Card */}
+            <motion.div variants={itemVars} className="bg-primary p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden text-on-primary shadow-elevated">
+              <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+              
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-10 flex-wrap gap-4">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold tracking-widest uppercase mb-4">
+                      <Sparkles size={14} /> AI Analysis Engine
+                    </div>
+                    <h2 className="text-3xl font-black font-headline leading-tight">Proactive Insights</h2>
+                  </div>
+                  
+                  <button 
+                    onClick={() => latestReport && handleDownload(latestReport)}
+                    className="px-5 py-2.5 rounded-full bg-white text-primary font-bold text-sm shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
+                    disabled={!latestReport || isUploading}
+                  >
+                    View Full Report
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {isUploading && (
+                    <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 animate-pulse">
+                      <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                        <BrainCircuit size={20} className="animate-spin-slow" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-lg mb-1">Analyzing Document...</h4>
+                        <p className="text-white/80 text-sm leading-relaxed">CareSync AI is extracting and processing your lab results.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isUploading && aiData?.status === 'completed' && (
+                    <>
+                      <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
+                        <div className="w-12 h-12 rounded-full bg-secondary text-white flex items-center justify-center shrink-0">
+                          <ClipboardList size={20} />
+                        </div>
+                        <div className="w-full">
+                          <h4 className="font-bold text-lg mb-1">{aiData.summaryTitle || 'Health Analysis Complete'}</h4>
+                          <p className="text-white/80 text-sm leading-relaxed">{aiData.summaryDescription || 'Your health metrics have been analyzed successfully.'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-white ${aiData.urgencyLevel === 'high' ? 'bg-error' : 'bg-tertiary'}`}>
+                          {aiData.urgencyLevel === 'high' ? <AlertTriangle size={20} /> : <Stethoscope size={20} />}
+                        </div>
+                        <div className="w-full">
+                          <h4 className="font-bold text-lg mb-1">Recommended Action</h4>
+                          
+                          {aiData.abnormalitiesFound?.length > 0 ? (
+                            <div className="mb-4 mt-2">
+                              <p className="text-white/90 text-sm font-semibold mb-2">Flagged Findings:</p>
+                              <ul className="space-y-2 mb-3 bg-black/10 rounded-xl p-4 border border-white/10">
+                                {aiData.abnormalitiesFound.slice(0, 3).map((metric, i) => (
+                                  <li key={i} className="text-white/80 text-sm flex items-start gap-3">
+                                    <span className="opacity-50 mt-0.5">•</span>
+                                    <span className="leading-snug">{metric}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <p className="text-white/80 text-sm leading-relaxed">
+                                Consider consulting a <strong>{aiData.recommendedSpecialization || 'specialist'}</strong> for a detailed review.
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-white/80 text-sm leading-relaxed mb-3">
+                              No major abnormalities detected. Consider consulting a <strong>{aiData.recommendedSpecialization || 'specialist'}</strong> for a standard review.
+                            </p>
+                          )}
+
+                          <Link to="/doctor/listing" className="inline-block px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold transition-colors">
+                            Book {aiData.recommendedSpecialization || 'Appointment'}
+                          </Link>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {!isUploading && aiData?.status === 'failed' && (
+                    <div className="flex gap-5 p-5 rounded-2xl bg-error-container/20 backdrop-blur-md border border-error/30 transition-colors">
+                      <div className="w-12 h-12 rounded-full bg-error text-white flex items-center justify-center shrink-0">
+                        <AlertTriangle size={20} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-lg mb-1 text-white">Analysis Failed</h4>
+                        <p className="text-white/80 text-sm leading-relaxed">
+                          We safely stored your document in the vault, but our AI couldn't read the text. Ensure the PDF is a text document, not a scanned image.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isUploading && (!aiData || aiData.status === 'pending') && reports.length === 0 && (
+                    <div className="flex gap-5 p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
+                      <div className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center shrink-0">
+                        <UploadCloud size={20} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-lg mb-1">Awaiting Data</h4>
+                        <p className="text-white/80 text-sm leading-relaxed">Upload a medical report or lab result in the Records Vault to unlock proactive, AI-driven health insights.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* UPCOMING APPOINTMENT SECTION */}
+            <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-primary-fixed text-primary rounded-lg"><Calendar size={20} /></div>
+                <h2 className="text-xl font-bold font-headline">Upcoming Appointment</h2>
+                {appointments.length > 1 && (
+                  <Link 
+                    to="/appointments/all" 
+                    className="ml-auto text-sm text-primary hover:text-primary-hover font-medium"
+                  >
+                    View All ({appointments.length})
+                  </Link>
+                )}
+              </div>
+              
+              {loadingAppointments ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : upcomingAppointment ? (
+                <AppointmentCard
+                  appointment={upcomingAppointment}
+                  onStatusUpdate={handleAppointmentUpdate}
+                  onPaymentComplete={handlePaymentComplete}
+                />
+              ) : appointments.length > 0 ? (
+                <div className="text-center py-8">
+                  <Calendar size={48} className="text-outline mx-auto mb-3" />
+                  <p className="text-on-surface-variant">No active appointments</p>
+                  <p className="text-sm text-on-surface-variant/70 mt-1">All your appointments are completed</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar size={48} className="text-outline mx-auto mb-3" />
+                  <p className="text-on-surface-variant text-sm">No appointments scheduled</p>
+                  <Link 
+                    to="/doctor/listing" 
+                    className="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-colors"
+                  >
+                    Book Your First Appointment
+                  </Link>
+                </div>
+              )}
+            </motion.div>
+            
+          </div>
+
+          <div className="lg:col-span-4 space-y-8">
+            {/* Records Vault */}
+            <motion.div variants={itemVars} className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-ambient border border-outline-variant/30">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-primary-fixed text-primary rounded-lg"><FileText size={20} /></div>
+                <h2 className="text-xl font-bold font-headline">Records Vault</h2>
+              </div>
+              
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="application/pdf" className="hidden" />
+
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed border-outline-variant/50 rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-surface-container-low/50 hover:bg-surface-container-low transition-colors cursor-pointer group mb-6 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                <div className="w-14 h-14 bg-white rounded-full shadow-sm flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
+                  {isUploading ? <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div> : <UploadCloud size={28} />}
+                </div>
+                <h4 className="font-bold text-on-surface mb-2">{isUploading ? 'Uploading securely...' : 'Upload Medical Report'}</h4>
+                <p className="text-xs text-on-surface-variant max-w-[200px]">Securely upload PDF lab results or doctor notes for AI analysis.</p>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Recently Processed</h5>
+                {reports.length > 0 ? (
+                  [...reports].reverse().slice(0, 3).map((file, idx) => (
+                    <div 
+                      key={idx} 
+                      onClick={() => handleDownload(file)} 
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-error-container text-error flex items-center justify-center"><FileText size={16} /></div>
+                        <div>
+                          <p className="text-sm font-bold text-on-surface truncate max-w-[150px]">{file.fileName}</p>
+                          <p className="text-[10px] text-primary font-bold uppercase tracking-wider mt-1">Click to download</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation(); 
+                            setReportToDelete(file);
+                          }}
+                          className="p-2 text-on-surface-variant hover:text-error hover:bg-error-container/50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete Report"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <ChevronRight size={16} className="text-outline" />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-outline-variant/20 rounded-2xl bg-surface-container-lowest/50">
+                    <div className="w-10 h-10 bg-surface-container-low rounded-full flex items-center justify-center text-outline mb-3">
+                      <FileText size={18} />
+                    </div>
+                    <p className="text-sm font-bold text-on-surface">Vault is empty</p>
+                    <p className="text-xs text-on-surface-variant mt-1 max-w-[180px]">Your securely processed medical reports will appear here.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      </main>
+    </div>
+  );
+};
+
+export default PatientDashboard;
