@@ -44,7 +44,36 @@ const validateCheckoutPayload = ({ orderId, customerName, customerEmail, amount 
   return null;
 };
 
-const getClientUrl = () => process.env.CLIENT_URL || "http://localhost:5173";
+const normalizeBaseUrl = (value) => `${value || ""}`.trim().replace(/\/+$/, "");
+
+const isHttpUrl = (value) => /^https?:\/\//i.test(`${value || ""}`.trim());
+
+const getClientUrl = (req) => {
+  const origin = normalizeBaseUrl(req.headers.origin);
+  if (isHttpUrl(origin)) {
+    return origin;
+  }
+
+  const configuredUrl = normalizeBaseUrl(process.env.CLIENT_URL);
+  if (isHttpUrl(configuredUrl)) {
+    return configuredUrl;
+  }
+
+  const forwardedHost = `${req.headers["x-forwarded-host"] || ""}`.trim();
+  const forwardedProto = `${req.headers["x-forwarded-proto"] || req.protocol || "http"}`
+    .split(",")[0]
+    .trim();
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`.replace(/\/+$/, "");
+  }
+
+  const host = `${req.get("host") || ""}`.trim();
+  if (host) {
+    return `${req.protocol || "http"}://${host}`.replace(/\/+$/, "");
+  }
+
+  return "http://localhost:5173";
+};
 
 const triggerPaymentSuccessEmail = async (payment) => {
   if (!payment || payment.successEmailSentAt) {
@@ -289,8 +318,8 @@ export const createCheckoutSession = async (req, res) => {
           customerName,
         },
       },
-      success_url: `${getClientUrl()}${paymentPagePath}?payment=success&orderId=${orderId}`,
-      cancel_url: `${getClientUrl()}${paymentPagePath}?payment=cancel&orderId=${orderId}`,
+      success_url: `${getClientUrl(req)}${paymentPagePath}?payment=success&orderId=${orderId}`,
+      cancel_url: `${getClientUrl(req)}${paymentPagePath}?payment=cancel&orderId=${orderId}`,
     });
 
     const payment = await Payment.create({
